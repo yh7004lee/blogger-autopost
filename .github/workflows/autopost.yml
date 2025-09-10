@@ -1,0 +1,56 @@
+name: Blogger Autopost
+
+on:
+  schedule:
+    - cron: "*/48 * * * *"   # 48분마다 실행 → 하루 약 30회
+  workflow_dispatch:        # 수동 실행 버튼
+
+permissions:
+  contents: write           # ✅ git push 권한
+
+jobs:
+  autopost:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0    # push 시 안전
+
+      - name: Show workspace (debug)
+        run: |
+          pwd
+          ls -la
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ✅ base64 로 복원 (pickle 손상 방지)
+      - name: Restore cc.json from base64
+        run: |
+          echo "${{ secrets.CC_JSON_B64 }}" | base64 -d > cc.json
+
+      - name: Restore blogger_token.pickle from base64
+        run: |
+          echo "${{ secrets.BLOGGER_TOKEN_PKL_B64 }}" | base64 -d > blogger_token.pickle
+
+      - name: Run autopost script
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python bloger_movie_autopost.py
+
+      # ✅ movies_discover.xlsx 수정 후 자동 푸시
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name  "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add movies_discover.xlsx
+          git commit -m "update: mark posted movies as 완료" || echo "No changes to commit"
+          git push origin main
