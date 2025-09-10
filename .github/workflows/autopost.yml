@@ -1,0 +1,33 @@
+name: Blogger Autopost
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"   # 5분마다 실행
+  workflow_dispatch:        # 수동 실행 버튼도 제공
+
+jobs:
+  autopost:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore cc.json
+        run: |
+          echo "${{ secrets.CC_JSON }}" > cc.json
+
+      - name: Restore blogger_token.pickle
+        run: |
+          echo "${{ secrets.BLOGGER_TOKEN_PICKLE }}" > blogger_token.pickle
+
+      - name: Run autopost script
+        run: python bloger_movie_autopost.py
