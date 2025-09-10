@@ -2,7 +2,7 @@ name: Blogger Autopost
 
 on:
   schedule:
-    - cron: "*/5 * * * *"   # 5분마다 실행
+    - cron: "*/48 * * * *"   # 48분마다 실행 → 하루 약 30회
   workflow_dispatch:        # 수동 실행 버튼
 
 permissions:
