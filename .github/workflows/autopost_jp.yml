@@ -44,7 +44,7 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          python bloger_movie_autopost.py
+          python bloger_movie_autopost_jp.py
 
       # ✅ movies_discover.xlsx 수정 후 자동 푸시
       - name: Commit and Push changes
