@@ -12,6 +12,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}   # 레포 push 권한 부여
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -31,3 +33,12 @@ jobs:
 
       - name: Run autopost script
         run: python bloger_movie_autopost.py
+
+      # ✅ movies_discover.xlsx 수정사항을 다시 커밋 & 푸시
+      - name: Commit and Push changes
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add movies_discover.xlsx
+          git commit -m "update: mark posted movies as 완료" || echo "No changes to commit"
+          git push origin main
