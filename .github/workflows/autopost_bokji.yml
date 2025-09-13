@@ -45,11 +45,17 @@ jobs:
           echo "${{ secrets.OPENAI_JSON_B64 }}" > openai.json.b64
           certutil -decode openai.json.b64 openai.json
 
-      # ✅ 2nd.json (Google Drive 키) 복원
+      # ✅ 2nd.json (Google Drive OAuth 키) 복원
       - name: Restore 2nd.json
         run: |
           echo "${{ secrets.DRIVE_JSON_B64 }}" > 2nd.json.b64
           certutil -decode 2nd.json.b64 2nd.json
+
+      # ✅ drive_token_2nd.pickle (Google Drive 인증토큰) 복원
+      - name: Restore drive_token_2nd.pickle
+        run: |
+          echo "${{ secrets.DRIVE_TOKEN_2ND_B64 }}" > drive_token_2nd.pickle.b64
+          certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
 
       - name: Run autopost
         run: python blogger_bokj.py
