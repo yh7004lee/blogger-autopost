@@ -1029,28 +1029,28 @@ def build_html(post, cast_count=10, stills_count=8):
 
 # ===============================
 # Blogger 認証/投稿
-def get_blogger_service():
-    creds = None
-    if os.path.exists(BLOGGER_TOKEN_PICKLE):
-        with open(BLOGGER_TOKEN_PICKLE, 'rb') as token:
-            creds = pickle.load(token)
-    if not creds or not getattr(creds, "valid", False):
-        if creds and getattr(creds, "expired", False) and getattr(creds, "refresh_token", None):
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(BLOGGER_TOKEN_PICKLE, 'wb') as token:
-            pickle.dump(creds, token)
-    return build('blogger', 'v3', credentials=creds)
+from googleapiclient.discovery import build
+import google.oauth2.credentials
 
-def post_to_blogger(service, blog_id, title, html_content, labels=None, is_draft=False):
-    body = {"title": title, "content": html_content}
-    if labels:
-        body["labels"] = labels
-    posts = service.posts()
-    res = posts.insert(blogId=blog_id, body=body, isDraft=is_draft, fetchImages=True).execute()
-    return res
+CLIENT_SECRET_FILE = r"cc.json"   # 기존 cc.json 유지 (로컬 refresh_token 발급용)
+BLOGGER_TOKEN_JSON = "blogger_token.json"  # 새 JSON 토큰 파일
+SCOPES = ["https://www.googleapis.com/auth/blogger"]
+
+# Blogger 인증 (JSON 토큰 방식)
+def get_blogger_service():
+    try:
+        if not os.path.exists(BLOGGER_TOKEN_JSON):
+            raise FileNotFoundError("❌ blogger_token.json 파일이 없습니다. 먼저 로컬에서 발급해 업로드하세요.")
+
+        with open(BLOGGER_TOKEN_JSON, "r", encoding="utf-8") as f:
+            token_data = json.load(f)
+
+        creds = google.oauth2.credentials.Credentials.from_authorized_user_info(token_data, SCOPES)
+        return build("blogger", "v3", credentials=creds)
+    except Exception as e:
+        print(f"❌ Blogger 인증 실패: {e}", file=sys.stderr)
+        raise
+
 
 # ===============================
 # Excel ヘルパー（G列に '완'）
@@ -1177,4 +1177,5 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
