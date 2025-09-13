@@ -5,3 +5,6 @@ openpyxl
 requests
 feedparser
 gspread
+beautifulsoup4
+Pillow
+pyperclip
