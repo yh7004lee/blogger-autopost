@@ -20,7 +20,8 @@ import io
 import textwrap
 from PIL import Image, ImageDraw, ImageFont
 import glob
-
+import sys
+sys.stdout.reconfigure(encoding='utf-8')
 # ================================
 # 환경 변수 / 기본 경로 설정
 # ================================
