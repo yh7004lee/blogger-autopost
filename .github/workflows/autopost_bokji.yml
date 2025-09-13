@@ -1,0 +1,43 @@
+name: Blogger Autopost
+
+on:
+  schedule:
+    - cron: "0 * * * *"   # 매시간 실행 (예시)
+  workflow_dispatch:
+
+jobs:
+  autopost:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # ✅ blogger_token.pickle 복원
+      - name: Restore blogger_token.pickle
+        run: |
+          echo "${{ secrets.BLOGGER_TOKEN_PKL_B64 }}" > blogger_token.pickle.b64
+          certutil -decode blogger_token.pickle.b64 blogger_token.pickle
+
+      # ✅ cc.json 복원
+      - name: Restore cc.json
+        run: |
+          echo "${{ secrets.CC_JSON_B64 }}" > cc.json.b64
+          certutil -decode cc.json.b64 cc.json
+
+      # ✅ sheetapi.json 복원
+      - name: Restore sheetapi.json
+        run: |
+          echo "${{ secrets.SHEETAPI_JSON }}" > sheetapi.json.b64
+          certutil -decode sheetapi.json.b64 sheetapi.json
+
+      - name: Run autopost
+        run: python blogger_bokj.py
