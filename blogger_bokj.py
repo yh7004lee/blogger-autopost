@@ -31,12 +31,14 @@ sys.stdout.reconfigure(encoding='utf-8')
 # OpenAI 키 불러오기 (openai.json → fallback: ENV)
 # ================================
 OPENAI_API_KEY = ""
+
+# 🔑 openai.json 파일에서 API 키 불러오기
 if os.path.exists("openai.json"):
-    try:
-        with open("openai.json", "r", encoding="utf-8") as f:
-            OPENAI_API_KEY = json.load(f).get("api_key", "").strip()
-    except Exception as e:
-        print("⚠ openai.json 읽기 실패:", e)
+    with open("openai.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+        OPENAI_API_KEY = data.get("api_key", "").strip()
+
+# fallback: 환경변수에서도 시도
 if not OPENAI_API_KEY:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 
