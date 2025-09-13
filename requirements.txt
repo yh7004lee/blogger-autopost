@@ -8,3 +8,4 @@ gspread
 beautifulsoup4
 Pillow
 pyperclip
+openai
