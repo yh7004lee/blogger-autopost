@@ -8,11 +8,25 @@ from googleapiclient.http import MediaFileUpload
 import gspread
 from google.oauth2.service_account import Credentials
 from openai import OpenAI
+import traceback
 
 # ================================
 # 출력 한글 깨짐 방지
 # ================================
 sys.stdout.reconfigure(encoding="utf-8")
+
+# ================================
+# 단계별 로그 기록 함수
+# ================================
+def log_step(msg):
+    """단계별 로그를 구글시트 P열에 누적 기록"""
+    try:
+        if target_row:
+            prev = ws.cell(target_row, 16).value or ""  # P열 값 읽기
+            new_log = prev + f"{msg}\n"
+            ws.update_cell(target_row, 16, new_log)
+    except Exception as e:
+        print("⚠️ 로그 기록 실패:", e)
 
 # ================================
 # OpenAI 키 로드
@@ -29,12 +43,17 @@ client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 # ================================
 # Google Sheets 인증
 # ================================
-SERVICE_ACCOUNT_FILE = "sheetapi.json"
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-gc = gspread.authorize(creds)
-SHEET_ID = os.getenv("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
-ws = gc.open_by_key(SHEET_ID).sheet1
+try:
+    SERVICE_ACCOUNT_FILE = "sheetapi.json"
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    gc = gspread.authorize(creds)
+    SHEET_ID = os.getenv("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
+    ws = gc.open_by_key(SHEET_ID).sheet1
+    log_step("1단계: Google Sheets 인증 성공")
+except Exception as e:
+    log_step(f"1단계: Google Sheets 인증 실패: {e}")
+    raise
 
 ASSETS_BG_DIR = "assets/backgrounds"
 ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
@@ -43,18 +62,22 @@ THUMB_DIR = "thumbnails"
 # ================================
 # Google Sheet에서 URL 가져오기
 # ================================
-rows = ws.get_all_values()
 target_row, my_url = None, None
-for i, row in enumerate(rows[1:], start=2):
-    url_cell = row[4] if len(row) > 4 else ""
-    status_cell = row[8] if len(row) > 8 else ""
-    if url_cell and (not status_cell or status_cell.strip() != "완"):
-        my_url, target_row = url_cell, i
-        break
-if not my_url:
-    print("🔔 처리할 새로운 URL이 없습니다.")
-    exit()
-print("👉 이번에 처리할 URL:", my_url)
+try:
+    rows = ws.get_all_values()
+    for i, row in enumerate(rows[1:], start=2):
+        url_cell = row[4] if len(row) > 4 else ""
+        status_cell = row[8] if len(row) > 8 else ""
+        if url_cell and (not status_cell or status_cell.strip() != "완"):
+            my_url, target_row = url_cell, i
+            break
+    if not my_url:
+        log_step("2단계: 처리할 URL 없음 (모든 행 완료)")
+        exit()
+    log_step(f"2단계: URL 추출 성공 ({my_url})")
+except Exception as e:
+    log_step(f"2단계: URL 추출 실패: {e}")
+    raise
 
 # ================================
 # 썸네일 생성
@@ -85,7 +108,6 @@ def make_thumb(save_path: str, var_title: str):
         var_y_point += 40
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
-    print("✅ 썸네일 생성 완료:", save_path)
 
 # ================================
 # Google Drive 인증 (서비스 계정)
@@ -98,16 +120,21 @@ def get_drive_service():
 # ================================
 # Google Drive 업로드
 # ================================
-DRIVE_FOLDER_ID = "1Z6WF4Lt-Ou8S70SKkE5M4tTHxrXJHxKU"  # ✅ 지정된 blogger 폴더 ID
+DRIVE_FOLDER_ID = "1Z6WF4Lt-Ou8S70SKkE5M4tTHxrXJHxKU"
 
 def upload_to_drive(file_path, file_name):
-    drive_service = get_drive_service()
-    file_metadata = {"name": file_name, "parents": [DRIVE_FOLDER_ID]}
-    media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
-    file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-    drive_service.permissions().create(fileId=file["id"], body={"role": "reader", "type": "anyone"}).execute()
-    file_id = file["id"]
-    return f"https://lh3.googleusercontent.com/d/{file_id}"
+    try:
+        drive_service = get_drive_service()
+        file_metadata = {"name": file_name, "parents": [DRIVE_FOLDER_ID]}
+        media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
+        file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+        drive_service.permissions().create(fileId=file["id"], body={"role": "reader", "type": "anyone"}).execute()
+        file_id = file["id"]
+        log_step("3단계: 구글드라이브 업로드 성공")
+        return f"https://lh3.googleusercontent.com/d/{file_id}"
+    except Exception as e:
+        log_step(f"3단계: 구글드라이브 업로드 실패: {e}")
+        raise
 
 # ================================
 # 복지 데이터 가져오기
@@ -130,6 +157,7 @@ def clean_html(raw_html):
 # ================================
 def process_with_gpt(section_title, raw_text, keyword):
     if not client:
+        log_step("4단계: GPT 미사용 (API 키 없음)")
         return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
     try:
         resp = client.chat.completions.create(
@@ -141,11 +169,10 @@ def process_with_gpt(section_title, raw_text, keyword):
             temperature=0.7,
             max_tokens=800,
         )
+        log_step(f"4단계: GPT 변환 성공 ({section_title})")
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        err = f"❌ GPT 실패: {e}"
-        if target_row:
-            ws.update_cell(target_row, 16, err)
+        log_step(f"4단계: GPT 변환 실패 ({section_title}): {e}")
         return f"<p data-ke-size='size18'>{clean_html(raw_text)}</p>"
 
 # ================================
@@ -165,60 +192,56 @@ def get_blogger_service():
     return build("blogger", "v3", credentials=creds)
 
 blog_handler = get_blogger_service()
+log_step("5단계: Blogger 인증 성공")
 
 # ================================
 # 본문 생성 + 포스팅
 # ================================
-parsed = urlparse(my_url)
-params = parse_qs(parsed.query)
-wlfareInfoId = params.get("wlfareInfoId", [""])[0]
-data = fetch_welfare_info(wlfareInfoId)
-keyword = clean_html(data.get("wlfareInfoNm", "복지 서비스"))
-title = f"2025 {keyword} 지원 자격 신청방법"
-safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", keyword)
-
-os.makedirs(THUMB_DIR, exist_ok=True)
-thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
-make_thumb(thumb_path, title)
-
-# ✅ Google Drive 업로드
-img_url = upload_to_drive(thumb_path, f"{safe_keyword}.png")
-
-html = f"""
-<div id="jm">&nbsp;</div>
-<p data-ke-size="size18">{keyword}은 많은 분들이 관심을 갖는 제도입니다.</p><br />
-<p style="text-align:center;">
-  <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
-</p>
-<span><!--more--></span><br />
-"""
-
-fields = {"개요":"wlfareInfoOutlCn","지원대상":"wlfareSprtTrgtCn","서비스내용":"wlfareSprtBnftCn","신청방법":"aplyMtdDc","추가정보":"etct"}
-for title_k, key in fields.items():
-    value = data.get(key, "")
-    if value and value.strip() not in ["", "정보 없음"]:
-        processed = process_with_gpt(title_k, clean_html(value), keyword)
-        html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br />{processed}<br /><br />"
-
-BLOG_ID = os.getenv("BLOG_ID", "5711594645656469839")
-post_body = {"content": html, "title": title, "labels": ["복지","정부지원"], "blog": {"id": BLOG_ID}}
-
 try:
+    parsed = urlparse(my_url)
+    params = parse_qs(parsed.query)
+    wlfareInfoId = params.get("wlfareInfoId", [""])[0]
+    data = fetch_welfare_info(wlfareInfoId)
+    keyword = clean_html(data.get("wlfareInfoNm", "복지 서비스"))
+    title = f"2025 {keyword} 지원 자격 신청방법"
+    safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", keyword)
+
+    os.makedirs(THUMB_DIR, exist_ok=True)
+    thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
+    make_thumb(thumb_path, title)
+    log_step("6단계: 썸네일 생성 성공")
+
+    img_url = upload_to_drive(thumb_path, f"{safe_keyword}.png")
+
+    html = f"""
+    <div id="jm">&nbsp;</div>
+    <p data-ke-size="size18">{keyword}은 많은 분들이 관심을 갖는 제도입니다.</p><br />
+    <p style="text-align:center;">
+      <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
+    </p>
+    <span><!--more--></span><br />
+    """
+
+    fields = {"개요":"wlfareInfoOutlCn","지원대상":"wlfareSprtTrgtCn","서비스내용":"wlfareSprtBnftCn","신청방법":"aplyMtdDc","추가정보":"etct"}
+    for title_k, key in fields.items():
+        value = data.get(key, "")
+        if value and value.strip() not in ["", "정보 없음"]:
+            processed = process_with_gpt(title_k, clean_html(value), keyword)
+            html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br />{processed}<br /><br />"
+
+    BLOG_ID = os.getenv("BLOG_ID", "5711594645656469839")
+    post_body = {"content": html, "title": title, "labels": ["복지","정부지원"], "blog": {"id": BLOG_ID}}
+
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False, fetchImages=True).execute()
     ws.update_cell(target_row, 9, "완")
 
-    # ✅ 업로드 후 최종 이미지 URL 확인
     final_html = res.get("content", "")
     soup = BeautifulSoup(final_html, "html.parser")
     img_tag = soup.find("img")
     final_url = img_tag["src"] if img_tag else ""
-    ws.update_cell(target_row, 16, f"IMG={final_url}")
+    ws.update_cell(target_row, 16, f"{ws.cell(target_row,16).value}\n7단계: 업로드 성공 → IMG={final_url}")
 
     print(f"[완료] 블로그 포스팅: {res['url']}")
-    print("최종 이미지 URL:", final_url)
-
 except Exception as e:
-    err = f"❌ Blogger 업로드 실패: {e}"
-    print(err)
-    if target_row:
-        ws.update_cell(target_row, 16, err)
+    tb = traceback.format_exc()
+    log_step(f"7단계: 블로그 업로드 실패: {e}\n{tb}")
