@@ -6,7 +6,7 @@ import random
 from bs4 import BeautifulSoup
 import os
 import pickle
-import urllib.parse
+from urllib.parse import urlparse, parse_qs
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -199,8 +199,8 @@ blog_handler = get_blogger_service()
 # ================================
 # 본문 생성
 # ================================
-parsed = urllib.parse.urlparse(my_url)
-params = urllib.parse_qs(parsed.query)
+parsed = urlparse(my_url)
+params = parse_qs(parsed.query)
 wlfareInfoId = params.get("wlfareInfoId", [""])[0]
 data = fetch_welfare_info(wlfareInfoId)
 keyword = clean_html(data.get("wlfareInfoNm","복지 서비스"))
