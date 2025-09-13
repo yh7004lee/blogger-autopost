@@ -1,11 +1,11 @@
 import re
 import json
 import requests
-import time
 import random
 from bs4 import BeautifulSoup
 import os
 import pickle
+import urllib.parse
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -19,7 +19,7 @@ import textwrap
 from PIL import Image, ImageDraw, ImageFont
 import glob
 import sys
-from urllib.parse import urlparse, parse_qs  # ✅ 수정된 부분
+from urllib.parse import urlparse, parse_qs
 
 # ================================
 # 출력 한글 깨짐 방지
@@ -30,14 +30,20 @@ sys.stdout.reconfigure(encoding='utf-8')
 # OpenAI 키 불러오기 (openai.json → fallback: ENV)
 # ================================
 OPENAI_API_KEY = ""
+
 if os.path.exists("openai.json"):
     with open("openai.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-        OPENAI_API_KEY = data.get("api_key", "").strip()
+        try:
+            data = json.load(f)
+            OPENAI_API_KEY = data.get("api_key", "").strip()
+        except Exception as e:
+            print("⚠️ openai.json 읽기 실패:", e)
+
 if not OPENAI_API_KEY:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+print("🔑 OpenAI Key Loaded:", bool(OPENAI_API_KEY))
 
 # ================================
 # 구글시트 인증
@@ -133,12 +139,13 @@ def clean_html(raw_html):
     return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
 
 # ================================
-# ChatGPT API로 본문 가공 (에러 시 구글시트 P열 기록)
+# ChatGPT API로 본문 가공 (에러시 시트에 기록)
 # ================================
-def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
+def process_with_gpt(section_title: str, raw_text: str, keyword: str, row: int) -> str:
+    if not client:
+        ws.update_cell(row, 16, "❌ OpenAI Key Missing")
+        return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
     try:
-        if not client:
-            return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
         system_msg = (
             "너는 한국어 블로그 글을 쓰는 카피라이터야. "
             "주제는 정부 복지서비스이고, 주어진 원문을 "
@@ -152,13 +159,17 @@ def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
         user_msg = f"[섹션 제목] {keyword} {section_title}\n[원문]\n{raw_text}"
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
-            messages=[{"role": "system", "content": system_msg},{"role": "user", "content": user_msg}],
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg}
+            ],
             temperature=0.7,
             max_tokens=800,
         )
+        ws.update_cell(row, 16, "✅ GPT Success")
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        ws.update_cell(target_row, 16, f"GPT Error: {str(e)}")  # ✅ P열 (16번째 열)
+        ws.update_cell(row, 16, f"❌ GPT Error: {e}")
         return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
 
 # ================================
@@ -202,26 +213,6 @@ def get_blogger_service():
 blog_handler = get_blogger_service()
 
 # ================================
-# Blogger에 이미지 업로드
-# ================================
-def upload_image_to_blogger(blog_service, blog_id, image_path, title="thumbnail"):
-    with open(image_path, "rb") as img_file:
-        media = img_file.read()
-    req = blog_service.posts().insert(
-        blogId=blog_id,
-        body={
-            "kind": "blogger#post",
-            "title": f"Image Upload - {title}",
-            "content": f"<img src='data:image/png;base64,{media}' />"
-        },
-        isDraft=True
-    )
-    res = req.execute()
-    # Blogger가 이미지 자동 저장 후 content 안에 실제 URL을 넣어줌
-    img_url = re.search(r'src="([^"]+)"', res["content"])
-    return img_url.group(1) if img_url else ""
-
-# ================================
 # 본문 생성
 # ================================
 parsed = urlparse(my_url)
@@ -236,11 +227,12 @@ safe_keyword = sanitize_filename(keyword)
 intro = make_intro(keyword)
 last  = make_last(keyword)
 
-# 썸네일 생성 + Blogger 업로드
+# 썸네일 생성
 os.makedirs(THUMB_DIR, exist_ok=True)
 thumb_path = os.path.join(THUMB_DIR,f"{safe_keyword}.png")
 make_thumb(thumb_path,title)
-img_url = upload_image_to_blogger(blog_handler, os.getenv("BLOG_ID","5711594645656469839"), thumb_path, title)
+
+img_url = ""  # 임시 (Blogger 업로드는 추후 개선)
 
 fields = {
     "개요":"wlfareInfoOutlCn",
@@ -263,7 +255,7 @@ for title_k,key in fields.items():
     value = data.get(key,"")
     if not value or value.strip() in ["","정보 없음"]: continue
     text = clean_html(value)
-    processed = process_with_gpt(title_k,text,keyword)
+    processed = process_with_gpt(title_k,text,keyword,target_row)
     html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br />{processed}<br /><br />"
 
 html += f"""
