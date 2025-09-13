@@ -1,10 +1,11 @@
 from urllib.parse import urlparse, parse_qs
-import re, json, requests, random, os, pickle, textwrap, glob, sys, base64
+import re, json, requests, random, os, pickle, textwrap, glob, sys
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+from googleapiclient.http import MediaFileUpload
 import gspread
 from google.oauth2.service_account import Credentials
 from openai import OpenAI
@@ -88,6 +89,28 @@ def make_thumb(save_path: str, var_title: str):
     print("✅ 썸네일 생성 완료:", save_path)
 
 # ================================
+# Google Drive 인증 (2nd.json)
+# ================================
+def get_drive_service():
+    flow = InstalledAppFlow.from_client_secrets_file("2nd.json", ["https://www.googleapis.com/auth/drive.file"])
+    creds = flow.run_local_server(port=0)
+    return build("drive", "v3", credentials=creds)
+
+# ================================
+# Google Drive 업로드
+# ================================
+DRIVE_FOLDER_ID = "1Z6WF4Lt-Ou8S70SKkE5M4tTHxrXJHxKU"  # ✅ 지정된 blogger 폴더 ID
+
+def upload_to_drive(file_path, file_name):
+    drive_service = get_drive_service()
+    file_metadata = {"name": file_name, "parents": [DRIVE_FOLDER_ID]}
+    media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
+    file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+    drive_service.permissions().create(fileId=file["id"], body={"role": "reader", "type": "anyone"}).execute()
+    file_id = file["id"]
+    return f"https://lh3.googleusercontent.com/d/{file_id}"
+
+# ================================
 # 복지 데이터 가져오기
 # ================================
 def fetch_welfare_info(wlfareInfoId):
@@ -123,7 +146,7 @@ def process_with_gpt(section_title, raw_text, keyword):
     except Exception as e:
         err = f"❌ GPT 실패: {e}"
         if target_row:
-            ws.update_cell(target_row, 16, err)  # P열
+            ws.update_cell(target_row, 16, err)
         return f"<p data-ke-size='size18'>{clean_html(raw_text)}</p>"
 
 # ================================
@@ -161,11 +184,14 @@ os.makedirs(THUMB_DIR, exist_ok=True)
 thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
 make_thumb(thumb_path, title)
 
+# ✅ Google Drive 업로드
+img_url = upload_to_drive(thumb_path, f"{safe_keyword}.png")
+
 html = f"""
 <div id="jm">&nbsp;</div>
 <p data-ke-size="size18">{keyword}은 많은 분들이 관심을 갖는 제도입니다.</p><br />
 <p style="text-align:center;">
-  <img src="file://{os.path.abspath(thumb_path)}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
+  <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
 </p>
 <span><!--more--></span><br />
 """
@@ -184,12 +210,12 @@ try:
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False, fetchImages=True).execute()
     ws.update_cell(target_row, 9, "완")
 
-    # ✅ 업로드 후 HTML에서 최종 이미지 URL 추출
+    # ✅ 업로드 후 최종 이미지 URL 확인
     final_html = res.get("content", "")
     soup = BeautifulSoup(final_html, "html.parser")
     img_tag = soup.find("img")
     final_url = img_tag["src"] if img_tag else ""
-    ws.update_cell(target_row, 16, f"IMG={final_url}")  # P열에 최종 URL 기록
+    ws.update_cell(target_row, 16, f"IMG={final_url}")
 
     print(f"[완료] 블로그 포스팅: {res['url']}")
     print("최종 이미지 URL:", final_url)
@@ -198,4 +224,4 @@ except Exception as e:
     err = f"❌ Blogger 업로드 실패: {e}"
     print(err)
     if target_row:
-        ws.update_cell(target_row, 16, err)  # P열
+        ws.update_cell(target_row, 16, err)
