@@ -1,14 +1,13 @@
 from urllib.parse import urlparse, parse_qs
-import re, json, requests, random, os, pickle, textwrap, glob, sys
+import re, json, requests, random, os, textwrap, glob, sys, traceback
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 from googleapiclient.discovery import build
-from google.auth.transport.requests import Request
 from googleapiclient.http import MediaFileUpload
 import gspread
 from google.oauth2.service_account import Credentials
 from openai import OpenAI
-import traceback
+from google.oauth2.credentials import Credentials as UserCredentials
 
 # ================================
 # 출력 한글 깨짐 방지
@@ -109,7 +108,6 @@ def make_thumb(save_path: str, var_title: str):
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
 
-
 # ================================
 # Google Drive 인증 (서비스 계정)
 # ================================
@@ -122,8 +120,6 @@ def get_drive_service():
     except Exception as e:
         log_step(f"구글 드라이브 인증 실패: {e}")
         raise
-
-
 
 # ================================
 # Google Drive 업로드
@@ -143,6 +139,27 @@ def upload_to_drive(file_path, file_name):
     except Exception as e:
         log_step(f"3단계: 구글드라이브 업로드 실패: {e}")
         raise
+
+# ================================
+# Blogger 인증 (refresh_token 사용)
+# ================================
+def get_blogger_service():
+    try:
+        if not os.path.exists("blogger_token.json"):
+            raise FileNotFoundError("blogger_token.json 파일이 없습니다. 먼저 로컬에서 발급하세요.")
+
+        with open("blogger_token.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        creds = UserCredentials.from_authorized_user_info(data, ["https://www.googleapis.com/auth/blogger"])
+        return build("blogger", "v3", credentials=creds)
+
+    except Exception as e:
+        log_step(f"블로거 인증 실패: {e}")
+        raise
+
+blog_handler = get_blogger_service()
+log_step("5단계: Blogger 인증 성공")
 
 # ================================
 # 복지 데이터 가져오기
@@ -182,25 +199,6 @@ def process_with_gpt(section_title, raw_text, keyword):
     except Exception as e:
         log_step(f"4단계: GPT 변환 실패 ({section_title}): {e}")
         return f"<p data-ke-size='size18'>{clean_html(raw_text)}</p>"
-
-# ================================
-# Blogger 인증
-# ================================
-def get_blogger_service():
-    creds = None
-    if os.path.exists("blogger_token.pickle"):
-        with open("blogger_token.pickle", "rb") as token:
-            creds = pickle.load(token)
-    if not creds or not creds.valid:
-        from google_auth_oauthlib.flow import InstalledAppFlow
-        flow = InstalledAppFlow.from_client_secrets_file("cc.json", ["https://www.googleapis.com/auth/blogger"])
-        creds = flow.run_local_server(port=0)
-        with open("blogger_token.pickle", "wb") as token:
-            pickle.dump(creds, token)
-    return build("blogger", "v3", credentials=creds)
-
-blog_handler = get_blogger_service()
-log_step("5단계: Blogger 인증 성공")
 
 # ================================
 # 본문 생성 + 포스팅
