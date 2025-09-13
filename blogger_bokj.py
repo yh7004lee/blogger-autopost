@@ -3,7 +3,6 @@ import re, json, requests, random, os, pickle, textwrap, glob, sys
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 from googleapiclient.discovery import build
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.http import MediaFileUpload
 import gspread
@@ -89,11 +88,11 @@ def make_thumb(save_path: str, var_title: str):
     print("✅ 썸네일 생성 완료:", save_path)
 
 # ================================
-# Google Drive 인증 (2nd.json)
+# Google Drive 인증 (서비스 계정)
 # ================================
 def get_drive_service():
-    flow = InstalledAppFlow.from_client_secrets_file("2nd.json", ["https://www.googleapis.com/auth/drive.file"])
-    creds = flow.run_local_server(port=0)
+    SCOPES = ["https://www.googleapis.com/auth/drive.file"]
+    creds = Credentials.from_service_account_file("2nd.json", scopes=SCOPES)
     return build("drive", "v3", credentials=creds)
 
 # ================================
@@ -158,11 +157,9 @@ def get_blogger_service():
         with open("blogger_token.pickle", "rb") as token:
             creds = pickle.load(token)
     if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file("cc.json", ["https://www.googleapis.com/auth/blogger"])
-            creds = flow.run_local_server(port=0)
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        flow = InstalledAppFlow.from_client_secrets_file("cc.json", ["https://www.googleapis.com/auth/blogger"])
+        creds = flow.run_local_server(port=0)
         with open("blogger_token.pickle", "wb") as token:
             pickle.dump(creds, token)
     return build("blogger", "v3", credentials=creds)
