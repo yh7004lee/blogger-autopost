@@ -1160,20 +1160,31 @@ def build_html(post, cast_count=10, stills_count=8):
 
 # ===============================
 # Blogger 인증/발행
+from google.oauth2.credentials import Credentials
+
+BLOGGER_TOKEN_JSON = "blogger_token.json"  # refresh_token 포함 JSON 파일
+SCOPES = ["https://www.googleapis.com/auth/blogger"]
+
 def get_blogger_service():
-    creds = None
-    if os.path.exists(BLOGGER_TOKEN_PICKLE):
-        with open(BLOGGER_TOKEN_PICKLE, 'rb') as token:
-            creds = pickle.load(token)
-    if not creds or not getattr(creds, "valid", False):
-        if creds and getattr(creds, "expired", False) and getattr(creds, "refresh_token", None):
+    try:
+        if not os.path.exists(BLOGGER_TOKEN_JSON):
+            raise FileNotFoundError("❌ blogger_token.json 파일이 없습니다. 먼저 발급 받아주세요.")
+
+        creds = Credentials.from_authorized_user_file(BLOGGER_TOKEN_JSON, SCOPES)
+
+        # 액세스 토큰이 만료되었으면 자동으로 새로고침
+        if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(CLIENT_SECRET_FILE, SCOPES)
-            creds = flow.run_local_server(port=0)
-        with open(BLOGGER_TOKEN_PICKLE, 'wb') as token:
-            pickle.dump(creds, token)
-    return build('blogger', 'v3', credentials=creds)
+            # 갱신된 토큰을 다시 저장
+            with open(BLOGGER_TOKEN_JSON, "w", encoding="utf-8") as f:
+                f.write(creds.to_json())
+
+        return build("blogger", "v3", credentials=creds)
+
+    except Exception as e:
+        print(f"❌ Blogger 인증 실패: {e}", file=sys.stderr)
+        raise
+
 
 def post_to_blogger(service, blog_id, title, html_content, labels=None, is_draft=False):
     body = {
@@ -1294,3 +1305,4 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
