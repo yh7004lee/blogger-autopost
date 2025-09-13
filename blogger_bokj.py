@@ -113,9 +113,20 @@ def make_thumb(save_path: str, var_title: str):
 # Google Drive 인증 (서비스 계정)
 # ================================
 def get_drive_service():
-    SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-    creds = Credentials.from_service_account_file("2nd.json", scopes=SCOPES)
+    creds = None
+    if os.path.exists("drive_token_2nd.pickle"):
+        with open("drive_token_2nd.pickle", "rb") as token:
+            creds = pickle.load(token)
+    if not creds or not creds.valid:
+        from google_auth_oauthlib.flow import InstalledAppFlow
+        flow = InstalledAppFlow.from_client_secrets_file(
+            "2nd.json", ["https://www.googleapis.com/auth/drive.file"]
+        )
+        creds = flow.run_local_server(port=0)
+        with open("drive_token_2nd.pickle", "wb") as token:
+            pickle.dump(creds, token)
     return build("drive", "v3", credentials=creds)
+
 
 # ================================
 # Google Drive 업로드
