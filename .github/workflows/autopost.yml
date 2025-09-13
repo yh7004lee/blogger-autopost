@@ -2,11 +2,11 @@ name: Blogger Autopost
 
 on:
   schedule:
-    - cron: "*/48 * * * *"   # 48분마다 실행 → 하루 약 30회
-  workflow_dispatch:        # 수동 실행 버튼
+    - cron: "*/144 * * * *"   # 144분마다 실행 → 하루 약 10회
+  workflow_dispatch:
 
 permissions:
-  contents: write           # ✅ git push 권한
+  contents: write
 
 jobs:
   autopost:
@@ -16,7 +16,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0    # push 시 안전
+          fetch-depth: 0
 
       - name: Show workspace (debug)
         run: |
@@ -31,14 +31,15 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ✅ base64 로 복원 (pickle 손상 방지)
-      - name: Restore cc.json from base64
+      # ✅ cc.json 복원
+      - name: Restore cc.json
         run: |
           echo "${{ secrets.CC_JSON_B64 }}" | base64 -d > cc.json
 
-      - name: Restore blogger_token.pickle from base64
+      # ✅ blogger_token.json 복원
+      - name: Restore blogger_token.json
         run: |
-          echo "${{ secrets.BLOGGER_TOKEN_PKL_B64 }}" | base64 -d > blogger_token.pickle
+          echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" | base64 -d > blogger_token.json
 
       - name: Run autopost script
         env:
@@ -46,7 +47,7 @@ jobs:
         run: |
           python bloger_movie_autopost.py
 
-      # ✅ movies_discover.xlsx 수정 후 자동 푸시 (강제 push 버전)
+      # ✅ movies_discover.xlsx 수정 후 자동 푸시
       - name: Commit and Push changes
         run: |
           git config --global user.name  "github-actions[bot]"
