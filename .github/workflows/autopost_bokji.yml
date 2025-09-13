@@ -39,5 +39,11 @@ jobs:
           echo "${{ secrets.SHEETAPI_JSON }}" > sheetapi.json.b64
           certutil -decode sheetapi.json.b64 sheetapi.json
 
+      # ✅ openai.json 복원
+      - name: Restore openai.json
+        run: |
+          echo "${{ secrets.OPENAI_JSON_B64 }}" > openai.json.b64
+          certutil -decode openai.json.b64 openai.json
+
       - name: Run autopost
         run: python blogger_bokj.py
