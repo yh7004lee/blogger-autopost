@@ -21,13 +21,30 @@ import textwrap
 from PIL import Image, ImageDraw, ImageFont
 import glob
 import sys
+
+# ================================
+# 출력 한글 깨짐 방지
+# ================================
 sys.stdout.reconfigure(encoding='utf-8')
+
 # ================================
-# 환경 변수 / 기본 경로 설정
+# OpenAI 키 불러오기 (openai.json → fallback: ENV)
 # ================================
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+OPENAI_API_KEY = ""
+if os.path.exists("openai.json"):
+    try:
+        with open("openai.json", "r", encoding="utf-8") as f:
+            OPENAI_API_KEY = json.load(f).get("api_key", "").strip()
+    except Exception as e:
+        print("⚠ openai.json 읽기 실패:", e)
+if not OPENAI_API_KEY:
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
+# ================================
+# 구글시트 인증
+# ================================
 SERVICE_ACCOUNT_FILE = "sheetapi.json"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
@@ -62,7 +79,7 @@ if not my_url:
 print("👉 이번에 처리할 URL:", my_url)
 
 # ================================
-# 썸네일 생성 (배경: assets/backgrounds, 폰트: KimNamyun.ttf)
+# 썸네일 생성
 # ================================
 def pick_random_background() -> str:
     files = []
@@ -144,7 +161,7 @@ def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
     return resp.choices[0].message.content.strip()
 
 # ================================
-# 서론·마무리 문구 (랜덤 조합)
+# 서론·마무리 문구
 # ================================
 synonyms = {
     "도움": ["도움","지원","혜택","보탬","이익","유익","보호","후원"],
@@ -204,8 +221,8 @@ os.makedirs(THUMB_DIR, exist_ok=True)
 thumb_path = os.path.join(THUMB_DIR,f"{safe_keyword}.png")
 make_thumb(thumb_path,title)
 
-# GitHub Pages에서 썸네일 불러오기 (Actions 환경에서 사용)
-img_url = f"https://raw.githubusercontent.com/{os.getenv('GITHUB_REPOSITORY','user/repo')}/{os.getenv('GITHUB_REF_NAME','main')}/{thumb_path}"
+# GitHub Pages에서 썸네일 불러오기
+img_url = f"https://raw.githubusercontent.com/{os.getenv('GITHUB_REPOSITORY','user/repo')}/{os.getenv('GITHUB_REF_NAME','main')}/{thumb_path.replace(os.sep,'/')}"
 
 fields = {
     "개요":"wlfareInfoOutlCn",
