@@ -1,12 +1,14 @@
 import re
 import json
 import requests
+import time
 import random
 from bs4 import BeautifulSoup
 import os
 import pickle
 import urllib.parse
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
@@ -30,20 +32,14 @@ sys.stdout.reconfigure(encoding='utf-8')
 # OpenAI 키 불러오기 (openai.json → fallback: ENV)
 # ================================
 OPENAI_API_KEY = ""
-
 if os.path.exists("openai.json"):
     with open("openai.json", "r", encoding="utf-8") as f:
-        try:
-            data = json.load(f)
-            OPENAI_API_KEY = data.get("api_key", "").strip()
-        except Exception as e:
-            print("⚠️ openai.json 읽기 실패:", e)
-
+        data = json.load(f)
+        OPENAI_API_KEY = data.get("api_key", "").strip()
 if not OPENAI_API_KEY:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
-print("🔑 OpenAI Key Loaded:", bool(OPENAI_API_KEY))
 
 # ================================
 # 구글시트 인증
@@ -88,9 +84,7 @@ def pick_random_background() -> str:
     files = []
     for ext in ("*.png", "*.jpg", "*.jpeg"):
         files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
-    if not files:
-        return ""
-    return random.choice(files)
+    return random.choice(files) if files else ""
 
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -139,13 +133,12 @@ def clean_html(raw_html):
     return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
 
 # ================================
-# ChatGPT API로 본문 가공 (에러시 시트에 기록)
+# ChatGPT API로 본문 가공
 # ================================
-def process_with_gpt(section_title: str, raw_text: str, keyword: str, row: int) -> str:
-    if not client:
-        ws.update_cell(row, 16, "❌ OpenAI Key Missing")
-        return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
+def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
     try:
+        if not client:
+            raise RuntimeError("❌ OpenAI Key Missing")
         system_msg = (
             "너는 한국어 블로그 글을 쓰는 카피라이터야. "
             "주제는 정부 복지서비스이고, 주어진 원문을 "
@@ -159,17 +152,16 @@ def process_with_gpt(section_title: str, raw_text: str, keyword: str, row: int) 
         user_msg = f"[섹션 제목] {keyword} {section_title}\n[원문]\n{raw_text}"
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
-            messages=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": user_msg}
-            ],
+            messages=[{"role": "system", "content": system_msg},{"role": "user", "content": user_msg}],
             temperature=0.7,
             max_tokens=800,
         )
-        ws.update_cell(row, 16, "✅ GPT Success")
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        ws.update_cell(row, 16, f"❌ GPT Error: {e}")
+        err = f"❌ GPT 처리 실패: {e}"
+        print(err)
+        if target_row:
+            ws.update_cell(target_row, 16, err)  # P열
         return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
 
 # ================================
@@ -232,8 +224,6 @@ os.makedirs(THUMB_DIR, exist_ok=True)
 thumb_path = os.path.join(THUMB_DIR,f"{safe_keyword}.png")
 make_thumb(thumb_path,title)
 
-img_url = ""  # 임시 (Blogger 업로드는 추후 개선)
-
 fields = {
     "개요":"wlfareInfoOutlCn",
     "지원대상":"wlfareSprtTrgtCn",
@@ -246,7 +236,7 @@ html = f"""
 <div id="jm">&nbsp;</div>
 <p data-ke-size="size18">{intro}</p><br />
 <p style="text-align:center;">
-  <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
+  <img src="" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
 </p>
 <span><!--more--></span><br />
 """
@@ -255,7 +245,7 @@ for title_k,key in fields.items():
     value = data.get(key,"")
     if not value or value.strip() in ["","정보 없음"]: continue
     text = clean_html(value)
-    processed = process_with_gpt(title_k,text,keyword,target_row)
+    processed = process_with_gpt(title_k,text,keyword)
     html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br />{processed}<br /><br />"
 
 html += f"""
@@ -265,15 +255,27 @@ html += f"""
 </div>
 """
 
-labels = ["복지","정부지원"]
-for word in ["청년","장애인","소상공인","여성","임산부","지원금"]:
-    if word in title: labels.append(word)
-
+# ================================
+# Blogger 업로드 (이미지 포함)
+# ================================
 BLOG_ID = os.getenv("BLOG_ID","5711594645656469839")
-post_body = {'content':html,'title':title,'labels':labels,'blog':{'id':BLOG_ID}}
-res = blog_handler.posts().insert(blogId=BLOG_ID,body=post_body,isDraft=False,fetchImages=True).execute()
+post_body = {'content':html,'title':title,'labels':["복지","정부지원"],'blog':{'id':BLOG_ID}}
 
-ws.update_cell(target_row,9,"완")
+try:
+    media = MediaFileUpload(thumb_path, mimetype="image/png")
+    res = blog_handler.posts().insert(
+        blogId=BLOG_ID,
+        body=post_body,
+        isDraft=False,
+        fetchImages=True,
+        media_body=media
+    ).execute()
+    ws.update_cell(target_row,9,"완")  # I열 = 완료
+    print(f"[완료] 블로그 포스팅: {res['url']}")
+    print(title)
+except Exception as e:
+    err = f"❌ Blogger 업로드 실패: {e}"
+    print(err)
+    if target_row:
+        ws.update_cell(target_row, 16, err)  # P열
 
-print(f"[완료] 블로그 포스팅: {res['url']}")
-print(title)
