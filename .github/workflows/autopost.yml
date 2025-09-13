@@ -2,7 +2,9 @@ name: Blogger Autopost
 
 on:
   schedule:
-    - cron: "*/144 * * * *"   # 144분마다 실행 → 하루 약 10회
+    # 한국시간(KST) 1시,3시,5시,...,19시 실행
+    # (UTC 기준: 전날 16,18,20,22시 / 당일 0,2,4,6,8,10시)
+    - cron: "0 16,18,20,22,0,2,4,6,8,10 * * *"
   workflow_dispatch:
 
 permissions:
