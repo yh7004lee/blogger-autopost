@@ -12,7 +12,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -23,42 +23,42 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ✅ Blogger 인증 파일 복원
+      # ✅ blogger_token.json 복원 (refresh_token 포함)
       - name: Restore blogger_token.json
         run: |
           echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" > blogger_token.json.b64
           certutil -decode blogger_token.json.b64 blogger_token.json
 
-      # ✅ Google OAuth 클라이언트 복원 (필요시)
+      # ✅ cc.json 복원 (OAuth client ID, client secret)
       - name: Restore cc.json
         run: |
           echo "${{ secrets.CC_JSON_B64 }}" > cc.json.b64
           certutil -decode cc.json.b64 cc.json
 
-      # ✅ Google Sheets 서비스 계정 JSON 복원
+      # ✅ sheetapi.json 복원 (Google Sheets 서비스 계정)
       - name: Restore sheetapi.json
         run: |
-          echo "${{ secrets.SHEETAPI_JSON_B64 }}" > sheetapi.json.b64
+          echo "${{ secrets.SHEETAPI_JSON }}" > sheetapi.json.b64
           certutil -decode sheetapi.json.b64 sheetapi.json
 
-      # ✅ OpenAI API key JSON 복원
+      # ✅ openai.json 복원
       - name: Restore openai.json
         run: |
           echo "${{ secrets.OPENAI_JSON_B64 }}" > openai.json.b64
           certutil -decode openai.json.b64 openai.json
 
-      # ✅ Google Drive OAuth JSON 복원
+      # ✅ 2nd.json 복원 (Google Drive OAuth 키, 서비스계정 아님)
       - name: Restore 2nd.json
         run: |
           echo "${{ secrets.DRIVE_JSON_B64 }}" > 2nd.json.b64
           certutil -decode 2nd.json.b64 2nd.json
 
-      # ✅ Google Drive OAuth pickle 복원
+      # ✅ drive_token_2nd.pickle 복원 (Drive 인증토큰)
       - name: Restore drive_token_2nd.pickle
         run: |
           echo "${{ secrets.DRIVE_TOKEN_2ND_B64 }}" > drive_token_2nd.pickle.b64
           certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
 
-      # ✅ 실행할 파이썬 파일 (여기만 파일명 바꾸면 됨)
-      - name: Run autopost
+      # ✅ 실행할 파이썬 파일 (여기만 변경)
+      - name: Run autopost script
         run: python app_galaxy_3th.py
