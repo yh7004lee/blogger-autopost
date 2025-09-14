@@ -1,4 +1,4 @@
-name: Blogger Autopost JP
+name: Movie Autopost JP
 
 on:
   schedule:
