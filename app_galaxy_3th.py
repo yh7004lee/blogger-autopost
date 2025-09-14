@@ -77,6 +77,15 @@ blog_handler = get_blogger_service()
 # ================================
 # 썸네일 로깅 함수
 # ================================
+import glob
+
+# ================================
+# 배경 이미지 랜덤 선택
+# ================================
+
+# ================================
+# 썸네일 로깅 함수 (H열 사용)
+# ================================
 def log_thumb_step(ws, row_idx, message):
     try:
         prev = ws.cell(row_idx, 8).value or ""   # H열
@@ -86,48 +95,119 @@ def log_thumb_step(ws, row_idx, message):
         print("[로깅 실패]", e)
 
 # ================================
-# 썸네일 생성
+# 배경 이미지 랜덤 선택
+# ================================
+def pick_random_background() -> str:
+    files = []
+    for ext in ("*.png", "*.jpg", "*.jpeg"):
+        files.extend(glob.glob(os.path.join("assets/backgrounds", ext)))
+    return random.choice(files) if files else ""
+
+# ================================
+# 썸네일 생성 (랜덤 배경 + 반투명 박스 + 중앙정렬 텍스트)
 # ================================
 def make_thumb(save_path: str, var_title: str):
     try:
-        bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+        os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
+
+        bg_path = pick_random_background()
+        if bg_path and os.path.exists(bg_path):
+            bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
+        else:
+            bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+
         try:
             font = ImageFont.truetype("assets/fonts/KimNamyun.ttf", 48)
         except:
             font = ImageFont.load_default()
-        draw = ImageDraw.Draw(bg)
 
+        canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
+        canvas.paste(bg, (0, 0))
+
+        # 검은 반투명 박스
+        rectangle = Image.new("RGBA", (500, 250), (0, 0, 0, 200))
+        canvas.paste(rectangle, (0, 125), rectangle)
+
+        draw = ImageDraw.Draw(canvas)
+
+        # 텍스트 줄바꿈 처리
         var_title_wrap = textwrap.wrap(var_title, width=12)
         bbox = font.getbbox("가")
         line_height = (bbox[3] - bbox[1]) + 12
         total_text_height = len(var_title_wrap) * line_height
-        y = (500 - total_text_height) // 2
+        y = 500 / 2 - total_text_height / 2
 
         for line in var_title_wrap:
             text_bbox = draw.textbbox((0, 0), line, font=font)
             text_width = text_bbox[2] - text_bbox[0]
-            x = (500 - text_width) // 2
-            draw.text((x, y), line, fill=(0, 0, 0), font=font)
+            x = (500 - text_width) / 2
+            draw.text((x, y), line, "#FFEECB", font=font)
             y += line_height
 
-        bg.save(save_path, "PNG")
+        # 최종 크기 축소 및 저장
+        canvas = canvas.resize((400, 400))
+        canvas.save(save_path, "PNG")
         return True
     except Exception as e:
-        print(f"에러:썸네일 생성 실패: {e}")
+        print(f"에러: 썸네일 생성 실패: {e}")
         return False
 
+# ================================
+# Google Drive 업로드
+# ================================
+def upload_to_drive(file_path, file_name):
+    try:
+        drive_service = get_drive_service()
+        folder_id = DRIVE_FOLDER_ID
+
+        if not folder_id or folder_id == "YOUR_DRIVE_FOLDER_ID":
+            query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
+            results = drive_service.files().list(q=query, fields="files(id, name)").execute()
+            items = results.get("files", [])
+            if items:
+                folder_id = items[0]["id"]
+            else:
+                folder_metadata = {"name": "blogger", "mimeType": "application/vnd.google-apps.folder"}
+                folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
+                folder_id = folder.get("id")
+
+        file_metadata = {"name": file_name, "parents": [folder_id]}
+        media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
+        file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+
+        drive_service.permissions().create(
+            fileId=file["id"],
+            body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
+        ).execute()
+
+        return f"https://lh3.googleusercontent.com/d/{file['id']}"
+    except Exception as e:
+        print(f"에러: 구글드라이브 업로드 실패: {e}")
+        return ""
+
+# ================================
+# 썸네일 생성 + 로그 기록 + 업로드 → URL 반환
+# ================================
 def make_thumb_with_logging(ws, row_idx, save_path, title):
     try:
-        log_thumb_step(ws, row_idx, "시작")
+        log_thumb_step(ws, row_idx, "썸네일 시작")
         ok = make_thumb(save_path, title)
         if ok:
-            log_thumb_step(ws, row_idx, "완료")
+            log_thumb_step(ws, row_idx, "썸네일 완료")
+            url = upload_to_drive(save_path, os.path.basename(save_path))
+            if url:
+                log_thumb_step(ws, row_idx, "업로드 완료")
+                return url
+            else:
+                log_thumb_step(ws, row_idx, "업로드 실패")
+                return ""
         else:
-            log_thumb_step(ws, row_idx, "실패")
-        return ok
+            log_thumb_step(ws, row_idx, "썸네일 실패")
+            return ""
     except Exception as e:
         log_thumb_step(ws, row_idx, f"에러:{e}")
-        return False
+        return ""
+
 
 # ================================
 # OpenAI GPT 처리
@@ -250,14 +330,25 @@ try:
     print(f"이번 실행: {title}")
 
     # 썸네일 생성
-    thumb_path = f"thumb_{keyword}.png"
-    make_thumb_with_logging(ws, target_row, thumb_path, title)
+    thumb_dir = "thumbnails"
+    os.makedirs(thumb_dir, exist_ok=True)
+    thumb_path = os.path.join(thumb_dir, f"{keyword}.png")
+    img_url = make_thumb_with_logging(ws, target_row, thumb_path, title)
+    
+    html = make_intro(title, keyword)
+    if img_url:
+        html += f"""
+        <p style="text-align:center;">
+          <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
+        </p>
+        """
+
 
     # 앱 크롤링
     app_links = crawl_apps(keyword)
     print(f"수집된 앱 링크: {len(app_links)}개")
 
-    html = make_intro(title, keyword)
+   
     for j, app_url in enumerate(app_links, 1):
         if j > 7: break
         resp = requests.get(app_url, headers={"User-Agent":"Mozilla/5.0"})
@@ -296,3 +387,4 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
