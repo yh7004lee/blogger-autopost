@@ -81,32 +81,61 @@ except Exception as e:
 # ================================
 # 썸네일 생성
 # ================================
+# ================================
+# 썸네일 생성 (좌우/상하 정렬 개선)
+# ================================
 def pick_random_background() -> str:
     files = []
     for ext in ("*.png", "*.jpg", "*.jpeg"):
         files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
     return random.choice(files) if files else ""
 
+
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     bg_path = pick_random_background()
-    bg = Image.open(bg_path).convert("RGBA").resize((500, 500)) if (bg_path and os.path.exists(bg_path)) else Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+
+    # 배경 불러오기 (없으면 흰색)
+    if bg_path and os.path.exists(bg_path):
+        bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
+    else:
+        bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+
     try:
         font = ImageFont.truetype(ASSETS_FONT_TTF, 48)
     except:
         font = ImageFont.load_default()
+
     canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
     canvas.paste(bg, (0, 0))
+
+    # 검은 반투명 박스
     rectangle = Image.new("RGBA", (500, 250), (0, 0, 0, 200))
     canvas.paste(rectangle, (0, 125), rectangle)
+
     draw = ImageDraw.Draw(canvas)
+
+    # 줄바꿈 처리
     var_title_wrap = textwrap.wrap(var_title, width=12)
-    var_y_point = 500/2 - (len(var_title_wrap) * 30) / 2
+
+    # 줄 간격 계산 (getbbox 사용)
+    bbox = font.getbbox("가")  # (xmin, ymin, xmax, ymax)
+    line_height = (bbox[3] - bbox[1]) + 12
+    total_text_height = len(var_title_wrap) * line_height
+    var_y_point = 500 / 2 - total_text_height / 2
+
     for line in var_title_wrap:
-        draw.text((250, var_y_point), line, "#FFEECB", anchor="mm", font=font)
-        var_y_point += 40
+        # 텍스트 폭 계산 후 중앙 정렬
+        text_bbox = draw.textbbox((0, 0), line, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        x = (500 - text_width) / 2
+        draw.text((x, var_y_point), line, "#FFEECB", font=font)
+        var_y_point += line_height
+
+    # 최종 리사이즈
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
+
 
 # ================================
 # Google Drive 인증 (서비스 계정)
