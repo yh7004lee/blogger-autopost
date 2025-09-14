@@ -365,7 +365,9 @@ try:
         html += f"""
         <h2 data-ke-size="size26">{j}. {h1} 어플 소개</h2>
         {desc}
-        <p data-ke-size="size18"><a href="{app_url}">앱 다운로드</a></p>
+        <p style="text-align: center;" data-ke-size="size18">
+          <a class="myButton" href="{app_url}">{h1} 앱 다운로드</a>
+        </p>
         """
     html += make_last(title)
 
@@ -393,5 +395,6 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
