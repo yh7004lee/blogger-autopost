@@ -85,39 +85,49 @@ def log_thumb_step(ws, row_idx, message):
 # ================================
 from PIL import Image, ImageDraw, ImageFont
 
+from PIL import Image, ImageDraw, ImageFont
+
 def make_thumb(save_path: str, var_title: str):
     try:
-        bg = Image.new("RGB", (500, 500), (240, 240, 240))
-        font = ImageFont.truetype("arial.ttf", 36)
+        # 배경 (흰색 500x500)
+        bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+
+        # 폰트 설정
+        try:
+            font = ImageFont.truetype("assets/fonts/KimNamyun.ttf", 48)
+        except:
+            font = ImageFont.load_default()
+
         draw = ImageDraw.Draw(bg)
 
         # 줄바꿈 처리
-        lines = []
-        words = var_title.split()
-        line = ""
-        for word in words:
-            test_line = f"{line} {word}".strip()
-            w, h = draw.textsize(test_line, font=font)
-            if w <= 460:
-                line = test_line
-            else:
-                lines.append(line)
-                line = word
-        if line:
-            lines.append(line)
+        import textwrap
+        var_title_wrap = textwrap.wrap(var_title, width=12)
 
-        total_h = len(lines) * (h + 10)
-        y = (500 - total_h) // 2
+        # 줄 높이 계산 (getbbox 사용)
+        bbox = font.getbbox("가")  # (xmin, ymin, xmax, ymax)
+        line_height = (bbox[3] - bbox[1]) + 12
+        total_text_height = len(var_title_wrap) * line_height
+        y = (500 - total_text_height) // 2
 
-        for line in lines:
-            w, _ = draw.textsize(line, font=font)
-            x = (500 - w) // 2
-            draw.text((x, y), line, fill="black", font=font)
-            y += h + 10
+        for line in var_title_wrap:
+            # 텍스트 폭 계산 → 중앙정렬
+            text_bbox = draw.textbbox((0, 0), line, font=font)
+            text_width = text_bbox[2] - text_bbox[0]
+            x = (500 - text_width) // 2
 
-        bg.save(save_path)
+            draw.text((x, y), line, fill=(0, 0, 0), font=font)
+            y += line_height
+
+        # 최종 저장
+        bg.save(save_path, "PNG")
+
+        return True
+
     except Exception as e:
-        raise RuntimeError(f"썸네일 생성 실패: {e}")
+        print(f"에러:썸네일 생성 실패: {e}")
+        return False
+
 
 def make_thumb_with_logging(ws, row_idx, save_path, title):
     try:
@@ -303,5 +313,6 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
