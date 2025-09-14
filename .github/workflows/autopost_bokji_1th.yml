@@ -1,13 +1,14 @@
-name: Welfare Blogger Autopost
+name: Welfare Blogger Autopost 1th
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # 매일 한국시간 오전 10시 (UTC+9 → 01:00)
+    - cron: "0 1 * * *"   # 매일 한국시간 10시 (UTC+9 → 01:00)
   workflow_dispatch:
 
 jobs:
   autopost:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,14 +21,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # Blogger 인증 JSON 복원
       - name: Restore blogger_token.json
         run: echo "${{ secrets.BLOGGER_TOKEN_JSON }}" > blogger_token.json
 
+      # OpenAI API 키 저장
       - name: Restore openai.json
         run: echo "${{ secrets.OPENAI_JSON }}" > openai.json
+
+      # Excel 파일도 GitHub에 포함시켰다면 그대로 사용됨
+      # Google Sheet 방식이면 따로 수정 필요
 
       - name: Run autopost script
         env:
           BLOG_ID: "4737456424227083027"
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python your_script.py
+        run: python blogger_bokj_1th.py
