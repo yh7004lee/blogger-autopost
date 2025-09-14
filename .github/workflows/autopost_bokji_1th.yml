@@ -7,10 +7,10 @@ on:
 
 jobs:
   autopost:
-    runs-on: windows-latest
+    runs-on: windows-latest   # certutil 쓰려면 windows 가 안전합니다
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -21,19 +21,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ✅ blogger_token.json 복원 (refresh_token 포함)
+      # ✅ blogger_token.json 복원
       - name: Restore blogger_token.json
         run: |
           echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" > blogger_token.json.b64
           certutil -decode blogger_token.json.b64 blogger_token.json
 
-      # ✅ cc.json 복원 (OAuth client ID, client secret)
-      - name: Restore cc.json
-        run: |
-          echo "${{ secrets.CC_JSON_B64 }}" > cc.json.b64
-          certutil -decode cc.json.b64 cc.json
-
-      # ✅ sheetapi.json 복원 (Google Sheets 서비스 계정)
+      # ✅ sheetapi.json 복원 (Google Sheets 서비스 계정 키)
       - name: Restore sheetapi.json
         run: |
           echo "${{ secrets.SHEETAPI_JSON_B64 }}" > sheetapi.json.b64
@@ -44,18 +38,6 @@ jobs:
         run: |
           echo "${{ secrets.OPENAI_JSON_B64 }}" > openai.json.b64
           certutil -decode openai.json.b64 openai.json
-
-      # ✅ 2nd.json 복원 (Google Drive OAuth 키, 서비스계정 아님)
-      - name: Restore 2nd.json
-        run: |
-          echo "${{ secrets.DRIVE_JSON_B64 }}" > 2nd.json.b64
-          certutil -decode 2nd.json.b64 2nd.json
-
-      # ✅ drive_token_2nd.pickle 복원 (Drive 인증토큰)
-      - name: Restore drive_token_2nd.pickle
-        run: |
-          echo "${{ secrets.DRIVE_TOKEN_2ND_B64 }}" > drive_token_2nd.pickle.b64
-          certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
 
       - name: Run autopost script
         env:
