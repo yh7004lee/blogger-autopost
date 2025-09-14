@@ -31,14 +31,15 @@ client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 # Google Sheets 인증
 # ================================
 def get_sheet():
-    creds = Credentials.from_service_account_file(
-        "sheetapi.json",
-        scopes=["https://www.googleapis.com/auth/spreadsheets"]
-    )
+    SERVICE_ACCOUNT_FILE = "sheetapi.json"
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
+    SHEET_ID = os.getenv("SHEET_ID", "1SeQogbinIrDTMKjWhGgWPEQq8xv6ARv5n3I-2BsMrSc")
     return gc.open_by_key(SHEET_ID).sheet1
 
 ws = get_sheet()
+
 
 # ================================
 # Google Drive 인증
@@ -302,4 +303,5 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
