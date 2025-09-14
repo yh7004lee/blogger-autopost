@@ -19,7 +19,8 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.firefox.service import Service
 from webdriver_manager.firefox import GeckoDriverManager
-
+import sys, io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 # ================================
 # OpenAI 인증
 # ================================
@@ -247,3 +248,4 @@ print("✅ 업로드 성공:", res["url"])
 ws.update_cell(row_idx, 4, "완")
 
 chrome.quit()
+
