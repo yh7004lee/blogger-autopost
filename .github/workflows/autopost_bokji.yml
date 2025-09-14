@@ -2,8 +2,10 @@ name: Blogger Autopost Bokji
 
 on:
   schedule:
-    - cron: "0 18 * * *"   # 매일 UTC 18시 → 한국시간(UTC+9) 새벽 3시 실행
-  workflow_dispatch:
+    - cron: "0 2 * * *"   # 매일 11:00 KST 실행 (02:00 UTC)
+    - cron: "0 8 * * *"   # 매일 17:00 KST 실행 (08:00 UTC)
+    - cron: "0 14 * * *"  # 매일 23:00 KST 실행 (14:00 UTC)
+  workflow_dispatch:       # 수동 실행도 가능
 
 jobs:
   autopost:
