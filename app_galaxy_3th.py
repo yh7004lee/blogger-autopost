@@ -231,8 +231,7 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
     )
     return resp.choices[0].message.content.strip()
 
-tag_list = title.split()
-tag_str = " ".join([f"#{t}" for t in tag_list])
+
 # ================================
 # 서론·마무리 랜덤 (SEO 최적화 + 문장 확장)
 # ================================
@@ -401,7 +400,9 @@ try:
     app_links = crawl_apps(keyword)
     print(f"수집된 앱 링크: {len(app_links)}개")
 
-   
+    # 해시태그 문자열 생성
+    tag_list = title.split()
+    tag_str = " ".join([f"#{t}" for t in tag_list])
     for j, app_url in enumerate(app_links, 1):
         if j > 7: break
         resp = requests.get(app_url, headers={"User-Agent":"Mozilla/5.0"})
@@ -444,6 +445,7 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
 
