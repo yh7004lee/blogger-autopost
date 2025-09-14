@@ -2,15 +2,15 @@ name: Blogger Autopost Bokji_1th
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # 매일 한국시간 오전 10시 (UTC+9 → 01:00)
+    - cron: "0 1 * * *"   # 매일 한국시간 10시 (UTC+9 → 01:00)
   workflow_dispatch:
 
 jobs:
   autopost:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest   # ✅ certutil 쓰려면 windows 필요
 
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -21,17 +21,23 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Blogger 인증 JSON 복원
+      # ✅ blogger_token.json 복원
       - name: Restore blogger_token.json
-        run: echo "${{ secrets.BLOGGER_TOKEN_JSON }}" > blogger_token.json
+        run: |
+          echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" > blogger_token.json.b64
+          certutil -decode blogger_token.json.b64 blogger_token.json
 
-      # OpenAI API 키 JSON 복원 (Base64 → JSON 디코딩)
-      - name: Restore openai.json
-        run: echo "${{ secrets.OPENAI_JSON_B64 }}" | base64 -d > openai.json
-
-      # Google Sheets 인증 JSON 복원 (서비스 계정)
+      # ✅ sheetapi.json 복원 (Google Sheets 서비스 계정)
       - name: Restore sheetapi.json
-        run: echo "${{ secrets.SHEETAPI_JSON }}" | base64 -d > sheetapi.json
+        run: |
+          echo "${{ secrets.SHEETAPI_JSON_B64 }}" > sheetapi.json.b64
+          certutil -decode sheetapi.json.b64 sheetapi.json
+
+      # ✅ openai.json 복원
+      - name: Restore openai.json
+        run: |
+          echo "${{ secrets.OPENAI_JSON_B64 }}" > openai.json.b64
+          certutil -decode openai.json.b64 openai.json
 
       - name: Run autopost script
         env:
