@@ -30,7 +30,7 @@ jobs:
       # ✅ sheetapi.json 복원 (Google Sheets 서비스 계정 키)
       - name: Restore sheetapi.json
         run: |
-          echo "${{ secrets.SHEETAPI_JSON_B64 }}" > sheetapi.json.b64
+          echo "${{ secrets.SHEETAPI_JSON }}" > sheetapi.json.b64
           certutil -decode sheetapi.json.b64 sheetapi.json
 
       # ✅ openai.json 복원
