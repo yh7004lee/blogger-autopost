@@ -316,18 +316,24 @@ def crawl_apps(keyword):
 # ================================
 try:
     rows = ws.get_all_values()
-    target_row, keyword = None, None
-    for i, row in enumerate(rows[1:], start=2):
-        if row[0] and (not row[3] or row[3].strip() != "완"):
-            keyword, target_row = row[0], i
+    target_row, keyword, title = None, None, None
+    
+    for i, row in enumerate(rows[1:], start=2):  # 2행부터 확인
+        if row[1] and (not row[3] or row[3].strip() != "완"):  # B열 값 있고, D열이 '완' 아니면 대상
+            target_row = i
+            a_val = row[0].strip() if len(row) > 0 else ""  # A열
+            b_val = row[1].strip() if len(row) > 1 else ""  # B열
+            c_val = row[2].strip() if len(row) > 2 else ""  # C열
+            keyword = b_val
+            title = f"{a_val} {b_val} {c_val}".strip()
             break
-
-    if not keyword:
+    
+    if not keyword or not title:
         print("처리할 키워드 없음")
         exit()
-
-    title = f"{keyword} 어플 추천 앱"
+    
     print(f"이번 실행: {title}")
+
 
     # 썸네일 생성
     thumb_dir = "thumbnails"
@@ -387,4 +393,5 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
