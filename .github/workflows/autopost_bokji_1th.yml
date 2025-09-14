@@ -1,4 +1,4 @@
-name: Welfare autopost_bokji_1th
+name: autopost_bokji_1th
 
 on:
   schedule:
