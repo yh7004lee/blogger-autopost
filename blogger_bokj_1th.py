@@ -194,7 +194,7 @@ for title_k, key in fields.items():
 
 html += f"""
 <div class="custom-button">
-  <a href="{my_url}" target="_blank">👉 {title} 자세히 알아보기</a>
+  <a href="{my_url}" target="_blank">👉 {keyword} 자세히 알아보기</a>
 </div>
 </div>
 """
@@ -222,3 +222,4 @@ except Exception as e:
 ws.update_cell(target_row, 8, "완")  # ✅ H열은 8번째
 print("✅ 구글시트 업데이트 완료 (H열 '완' 기록)")
 print(title)
+
