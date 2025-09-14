@@ -1,4 +1,4 @@
-name: Blogger Autopost
+name: Movie Autopost
 
 on:
   schedule:
