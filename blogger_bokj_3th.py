@@ -212,6 +212,18 @@ except Exception as e:
 # ================================
 # ✅ 구글시트 업데이트 (G열 "완")
 # ================================
+
+
+# ✅ 구글시트 업데이트 (G열 "완")
 ws.update_cell(target_row, 7, "완")  # G열
 print("✅ 구글시트 업데이트 완료 (G열 '완' 기록)")
+
+# ✅ 마지막 포스팅 URL O2에 저장
+try:
+    ws.update_acell("O2", res['url'])
+    print("✅ 구글시트 업데이트 완료 (O2에 마지막 포스팅 URL 기록)")
+except Exception as e:
+    print("[WARN] O2 셀 업데이트 실패:", e)
+
 print(title)
+
