@@ -6,6 +6,12 @@ requests
 feedparser
 gspread
 beautifulsoup4
+lxml
 Pillow
 pyperclip
 openai
+selenium
+webdriver-manager
+urllib3
+
+
