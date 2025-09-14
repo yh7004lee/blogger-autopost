@@ -1,1 +1,44 @@
-gg
+name: Blogger Autopost Galaxy_3th
+
+on:
+  schedule:
+    - cron: "0 0 * * *"   # 매일 09:00 KST 실행 (00:00 UTC)
+    - cron: "0 8 * * *"   # 매일 17:00 KST 실행 (08:00 UTC)
+    - cron: "0 16 * * *"  # 매일 01:00 KST 실행 (16:00 UTC)
+  workflow_dispatch:       # 수동 실행 버튼도 가능
+
+jobs:
+  autopost:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install selenium webdriver-manager openai google-api-python-client google-auth google-auth-oauthlib beautifulsoup4
+
+      # ✅ 구글 시트 API JSON 복원
+      - name: Restore sheetapi.json
+        run: |
+          echo "${{ secrets.SHEETAPI_JSON_B64 }}" | base64 -d > sheetapi.json
+
+      # ✅ Blogger 토큰 JSON 복원
+      - name: Restore blogger_token.json
+        run: |
+          echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" | base64 -d > blogger_token.json
+
+      - name: Run autopost script
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+        run: python app_galaxy_3th.py
