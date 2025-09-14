@@ -150,20 +150,24 @@ def make_thumb(save_path: str, var_title: str):
     # 글자 줄바꿈 처리
     var_title_wrap = textwrap.wrap(var_title, width=12)
 
-    # 줄 간격 계산 (getbbox 이용)
-    bbox = font.getbbox("가")  # (xmin, ymin, xmax, ymax)
-    line_height = (bbox[3] - bbox[1]) + 12  # 글자 높이 + 여유 간격
-
+    # 줄 간격 계산
+    bbox = font.getbbox("가")
+    line_height = (bbox[3] - bbox[1]) + 12
     total_text_height = len(var_title_wrap) * line_height
     var_y_point = 500 / 2 - total_text_height / 2
 
     for line in var_title_wrap:
-        draw.text((250, var_y_point), line, "#FFEECB", anchor="mm", font=font)
+        # 텍스트 폭 계산 후 중앙 정렬
+        text_bbox = draw.textbbox((0, 0), line, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        x = (500 - text_width) / 2  # 가운데 정렬 좌표
+        draw.text((x, var_y_point), line, "#FFEECB", font=font)
         var_y_point += line_height
 
     # 최종 크기 조정
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
+
 
 
 # ================================
@@ -436,6 +440,7 @@ except Exception as e:
     tb = traceback.format_exc().replace("\n", " | ")
     log_step(f"7단계: 블로그 업로드 실패: {e} | {tb}")
     raise
+
 
 
 
