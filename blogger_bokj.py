@@ -140,28 +140,60 @@ def make_thumb(save_path: str, var_title: str):
 # ================================
 # Google Drive 인증 (서비스 계정)
 # ================================
+import pickle
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+
+# ================================
+# Google Drive 인증 (OAuth: 2nd.json + drive_token_2nd.pickle)
+# ================================
 def get_drive_service():
-    try:
-        SERVICE_ACCOUNT_FILE = "sheetapi.json"
-        SCOPES = ["https://www.googleapis.com/auth/drive.file"]
-        creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-        return build("drive", "v3", credentials=creds)
-    except Exception as e:
-        log_step(f"구글 드라이브 인증 실패: {e}")
-        raise
+    creds = None
+    if os.path.exists("drive_token_2nd.pickle"):
+        with open("drive_token_2nd.pickle", "rb") as token:
+            creds = pickle.load(token)
+
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            # GitHub Actions에서는 로컬 서버 실행 불가 → 반드시 사전 복원 필요
+            raise RuntimeError("drive_token_2nd.pickle이 없거나 만료됨. GitHub Secrets에서 복원 필요.")
+        with open("drive_token_2nd.pickle", "wb") as token:
+            pickle.dump(creds, token)
+
+    return build("drive", "v3", credentials=creds)
+
 
 # ================================
-# Google Drive 업로드
+# Google Drive 업로드 (blogger 폴더)
 # ================================
-DRIVE_FOLDER_ID = "1Z6WF4Lt-Ou8S70SKkE5M4tTHxrXJHxKU"
-
 def upload_to_drive(file_path, file_name):
     try:
         drive_service = get_drive_service()
-        file_metadata = {"name": file_name, "parents": [DRIVE_FOLDER_ID]}
+
+        # blogger 폴더 확인
+        query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
+        results = drive_service.files().list(q=query, fields="files(id, name)").execute()
+        items = results.get("files", [])
+        if items:
+            folder_id = items[0]["id"]
+        else:
+            folder_metadata = {"name": "blogger", "mimeType": "application/vnd.google-apps.folder"}
+            folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
+            folder_id = folder.get("id")
+
+        # 파일 업로드
+        file_metadata = {"name": file_name, "parents": [folder_id]}
         media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
         file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-        drive_service.permissions().create(fileId=file["id"], body={"role": "reader", "type": "anyone"}).execute()
+
+        # anyone 권한 부여
+        drive_service.permissions().create(
+            fileId=file["id"],
+            body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
+        ).execute()
+
         file_id = file["id"]
         log_step("3단계: 구글드라이브 업로드 성공")
         return f"https://lh3.googleusercontent.com/d/{file_id}"
