@@ -215,7 +215,19 @@ def process_with_gpt(section_title, raw_text, keyword):
     except Exception as e:
         log_step(f"4단계: GPT 변환 실패 ({section_title}): {e}")
         return f"<p data-ke-size='size18'>{clean_html(raw_text)}</p>"
-
+# ================================
+# 단계별 로그 기록 함수 (P열, 줄바꿈 → | 처리)
+# ================================
+def log_step(msg):
+    """단계별 로그를 구글시트 P열에 누적 기록 (행 높이 증가 방지: 줄바꿈 대신 | 사용)"""
+    try:
+        if target_row:
+            prev = ws.cell(target_row, 16).value or ""  # P열 값 읽기
+            # 줄바꿈 대신 | 사용 → 행 높이 증가 방지
+            new_log = (prev + " | " + msg).strip()
+            ws.update_cell(target_row, 16, new_log)
+    except Exception as e:
+        print("⚠️ 로그 기록 실패:", e)
 # ================================
 # 본문 생성 + 포스팅
 # ================================
@@ -256,6 +268,9 @@ try:
 
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False, fetchImages=True).execute()
     ws.update_cell(target_row, 7, "완")  # ✅ G열에 완료 표시
+    # ✅ 엑셀 업데이트 (완료 처리 + 블로그 URL 저장 + 로그)
+    ws.update_cell(target_row, 15, res['url'])  # O열 블로그 주소
+    log_step("7단계: 업로드 성공")
 
     final_html = res.get("content", "")
     soup = BeautifulSoup(final_html, "html.parser")
@@ -263,7 +278,10 @@ try:
     final_url = img_tag["src"] if img_tag else ""
     ws.update_cell(target_row, 15, f"{ws.cell(target_row,15).value}\n7단계: 업로드 성공 → IMG={final_url}")
 
-    print(f"[완료] 블로그 포스팅: {res['url']}")
+    
+
+
 except Exception as e:
-    tb = traceback.format_exc()
-    log_step(f"7단계: 블로그 업로드 실패: {e}\n{tb}")
+    tb = traceback.format_exc().replace("\n", " | ")
+    log_step(f"7단계: 블로그 업로드 실패: {e} | {tb}")
+
