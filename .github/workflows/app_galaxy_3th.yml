@@ -1,21 +1,19 @@
-name: Blogger Autopost Galaxy_3th
+name: Blogger Autopost
 
 on:
   schedule:
-    - cron: "0 0 * * *"   # 매일 09:00 KST 실행 (00:00 UTC)
-    - cron: "0 8 * * *"   # 매일 17:00 KST 실행 (08:00 UTC)
-    - cron: "0 16 * * *"  # 매일 01:00 KST 실행 (16:00 UTC)
-  workflow_dispatch:       # 수동 실행 버튼도 가능
+    - cron: "0 2 * * *"    # 매일 11:00 KST (02:00 UTC)
+    - cron: "0 8 * * *"    # 매일 17:00 KST (08:00 UTC)
+    - cron: "0 14 * * *"   # 매일 23:00 KST (14:00 UTC)
+  workflow_dispatch:        # 수동 실행 가능
 
 jobs:
   autopost:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -23,22 +21,44 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
-          pip install selenium webdriver-manager openai google-api-python-client google-auth google-auth-oauthlib beautifulsoup4
+        run: pip install -r requirements.txt
 
-      # ✅ 구글 시트 API JSON 복원
-      - name: Restore sheetapi.json
-        run: |
-          echo "${{ secrets.SHEETAPI_JSON_B64 }}" | base64 -d > sheetapi.json
-
-      # ✅ Blogger 토큰 JSON 복원
+      # ✅ Blogger 인증 파일 복원
       - name: Restore blogger_token.json
         run: |
-          echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" | base64 -d > blogger_token.json
+          echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" > blogger_token.json.b64
+          certutil -decode blogger_token.json.b64 blogger_token.json
 
-      - name: Run autopost script
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          SHEET_ID: ${{ secrets.SHEET_ID }}
+      # ✅ Google OAuth 클라이언트 복원 (필요시)
+      - name: Restore cc.json
+        run: |
+          echo "${{ secrets.CC_JSON_B64 }}" > cc.json.b64
+          certutil -decode cc.json.b64 cc.json
+
+      # ✅ Google Sheets 서비스 계정 JSON 복원
+      - name: Restore sheetapi.json
+        run: |
+          echo "${{ secrets.SHEETAPI_JSON_B64 }}" > sheetapi.json.b64
+          certutil -decode sheetapi.json.b64 sheetapi.json
+
+      # ✅ OpenAI API key JSON 복원
+      - name: Restore openai.json
+        run: |
+          echo "${{ secrets.OPENAI_JSON_B64 }}" > openai.json.b64
+          certutil -decode openai.json.b64 openai.json
+
+      # ✅ Google Drive OAuth JSON 복원
+      - name: Restore 2nd.json
+        run: |
+          echo "${{ secrets.DRIVE_JSON_B64 }}" > 2nd.json.b64
+          certutil -decode 2nd.json.b64 2nd.json
+
+      # ✅ Google Drive OAuth pickle 복원
+      - name: Restore drive_token_2nd.pickle
+        run: |
+          echo "${{ secrets.DRIVE_TOKEN_2ND_B64 }}" > drive_token_2nd.pickle.b64
+          certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
+
+      # ✅ 실행할 파이썬 파일 (여기만 파일명 바꾸면 됨)
+      - name: Run autopost
         run: python app_galaxy_3th.py
