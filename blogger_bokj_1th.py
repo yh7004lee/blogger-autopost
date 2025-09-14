@@ -18,9 +18,13 @@ import sys, traceback
 # ================================
 OPENAI_API_KEY = ""
 if os.path.exists("openai.json"):
-    with open("openai.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-        OPENAI_API_KEY = data.get("api_key", "").strip()
+    try:
+        with open("openai.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+            OPENAI_API_KEY = data.get("api_key", "").strip()
+    except Exception as e:
+        print("❌ openai.json 파싱 실패:", e)
+
 if not OPENAI_API_KEY:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 
@@ -36,7 +40,16 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 SERVICE_ACCOUNT_FILE = "sheetapi.json"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+if not os.path.exists(SERVICE_ACCOUNT_FILE):
+    print(f"❌ {SERVICE_ACCOUNT_FILE} 파일이 없습니다. GitHub Secrets 복원을 확인하세요.")
+    sys.exit(1)
+
+try:
+    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+except Exception as e:
+    print(f"❌ {SERVICE_ACCOUNT_FILE} 파싱 실패: {e}")
+    sys.exit(1)
+
 gc = gspread.authorize(creds)
 
 SHEET_ID = os.getenv("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
@@ -47,8 +60,8 @@ my_url = None
 
 rows = ws.get_all_values()
 for i, row in enumerate(rows[1:], start=2):  # 2행부터
-    url_cell = row[4] if len(row) > 4 else ""   # F열 (5번째 인덱스)
-    status_cell = row[7] if len(row) > 7 else "" # H열 (8번째 인덱스)
+    url_cell = row[4] if len(row) > 4 else ""   # F열
+    status_cell = row[7] if len(row) > 7 else "" # H열
     if url_cell and (not status_cell or status_cell.strip() != "완"):
         my_url, target_row = url_cell, i
         break
@@ -135,7 +148,7 @@ def get_blogger_service():
     return build("blogger", "v3", credentials=creds)
 
 # ================================
-# 5. 본문 생성
+# 5. 본문 생성 및 업로드
 # ================================
 data = fetch_welfare_info(wlfareInfoId)
 keyword = clean_html(data.get("wlfareInfoNm", "복지 서비스"))
@@ -184,9 +197,6 @@ html += f"""
 </div>
 """
 
-# ================================
-# 6. 블로그 업로드
-# ================================
 BLOG_ID = os.getenv("BLOG_ID", "4737456424227083027")
 
 data_post = {
@@ -205,7 +215,7 @@ except Exception as e:
     sys.exit(1)
 
 # ================================
-# 7. ✅ 구글시트 업데이트 (H열 "완")
+# 6. ✅ 구글시트 업데이트 (H열 "완")
 # ================================
 ws.update_cell(target_row, 8, "완")  # H열은 8번째 열
 print("✅ 구글시트 업데이트 완료 (H열 '완' 기록)")
