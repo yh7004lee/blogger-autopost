@@ -21,19 +21,22 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # Blogger 인증 JSON 복원
+      # ✅ Blogger 인증 JSON 복원 (base64 → 파일)
       - name: Restore blogger_token.json
-        run: echo "${{ secrets.BLOGGER_TOKEN_JSON }}" > blogger_token.json
+        run: |
+          echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" | base64 -d > blogger_token.json
 
-      # OpenAI API 키 저장
+      # ✅ OpenAI API JSON 복원 (base64 → 파일)
       - name: Restore openai.json
-        run: echo "${{ secrets.OPENAI_JSON }}" > openai.json
+        run: |
+          echo "${{ secrets.OPENAI_JSON_B64 }}" | base64 -d > openai.json
 
-      # Excel 파일도 GitHub에 포함시켰다면 그대로 사용됨
-      # Google Sheet 방식이면 따로 수정 필요
+      # ✅ 필요 시 구글 시트 서비스 계정 JSON도 복원 (선택)
+      # - name: Restore sheetapi.json
+      #   run: |
+      #     echo "${{ secrets.SHEETAPI_JSON_B64 }}" | base64 -d > sheetapi.json
 
       - name: Run autopost script
         env:
           BLOG_ID: "4737456424227083027"
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python blogger_bokj_1th.py
