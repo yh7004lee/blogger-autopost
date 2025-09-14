@@ -201,18 +201,32 @@ def fetch_welfare_info(wlfareInfoId):
 def clean_html(raw_html):
     return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
 
-# ================================
-# GPT API 변환 (있으면 사용, 없으면 fallback)
-# ================================
-def process_with_gpt(section_title, raw_text, keyword):
+
+# =================================================================
+# ChatGPT API로 본문 가공
+# =================================================================
+def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
     if not client:
         return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
+
+    system_msg = (
+        "너는 한국어 블로그 글을 쓰는 카피라이터야. "
+        "주제는 정부 복지서비스이고, 주어진 원문을 "
+        "1) 먼저 <b>태그로 굵게 요약(한두 문장)</b>, "
+        "2) 그 아래에 친절하고 자세한 설명을 붙이는 형태로 가공해. "
+        "출력은 반드시 3~4개의 문단으로 나눠서 작성하되, "
+        "각 문단 사이에는 <p data-ke-size=\"size18\"> 태그를 사용하고 "
+        "빈 줄(줄바꿈)으로 구분해. "
+        "마크다운 금지, 반드시 <p data-ke-size=\"size18\"> 태그 사용."
+    )
+    user_msg = f"[섹션 제목] {keyword} {section_title}\n[원문]\n{raw_text}"
+
     try:
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
-                {"role": "system", "content": "너는 한국어 블로그 카피라이터야. HTML만 출력하고, <p data-ke-size='size18'>로 문단을 구성해. 첫 문단은 <b>요약</b>."},
-                {"role": "user", "content": f"[섹션 제목] {keyword} {section_title}\n[원문]\n{raw_text}"}
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
             ],
             temperature=0.7,
             max_tokens=800,
@@ -359,3 +373,4 @@ except Exception as e:
     tb = traceback.format_exc().replace("\n", " | ")
     log_step(f"7단계: 블로그 업로드 실패: {e} | {tb}")
     raise
+
