@@ -9,14 +9,24 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials as UserCredentials
 from google.auth.transport.requests import Request
+from PIL import Image, ImageDraw, ImageFont
+import textwrap
+import pickle
 
 # ================================
 # 환경 변수 및 기본 설정
 # ================================
 SHEET_ID = os.getenv("SHEET_ID", "YOUR_SHEET_ID")
-BLOG_ID = os.getenv("BLOG_ID", "YOUR_BLOG_ID")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
+# 블로그 로테이션 대상 ID
+BLOG_IDS = [
+    "1271002762142343021",
+    "4265887538424434999",
+    "6159101125292617147"
+]
+
+# OpenAI API 키 불러오기
 OPENAI_API_KEY = ""
 if os.path.exists("openai.json"):
     with open("openai.json", "r", encoding="utf-8") as f:
@@ -24,7 +34,6 @@ if os.path.exists("openai.json"):
         OPENAI_API_KEY = data.get("api_key", "").strip()
 if not OPENAI_API_KEY:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # ================================
@@ -35,11 +44,10 @@ def get_sheet():
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    SHEET_ID = os.getenv("SHEET_ID", "1SeQogbinIrDTMKjWhGgWPEQq8xv6ARv5n3I-2BsMrSc")
+    SHEET_ID = os.getenv("SHEET_ID", SHEET_ID)
     return gc.open_by_key(SHEET_ID).sheet1
 
 ws = get_sheet()
-
 
 # ================================
 # Google Drive 인증
@@ -47,7 +55,6 @@ ws = get_sheet()
 def get_drive_service():
     if not os.path.exists("drive_token_2nd.pickle"):
         raise RuntimeError("drive_token_2nd.pickle 없음")
-    import pickle
     with open("drive_token_2nd.pickle", "rb") as f:
         creds = pickle.load(f)
     if not creds.valid and creds.expired and creds.refresh_token:
@@ -70,7 +77,7 @@ def get_blogger_service():
 blog_handler = get_blogger_service()
 
 # ================================
-# 썸네일 로깅 함수
+# 썸네일 로깅 함수 (H열)
 # ================================
 def log_thumb_step(ws, row_idx, message):
     try:
@@ -83,51 +90,35 @@ def log_thumb_step(ws, row_idx, message):
 # ================================
 # 썸네일 생성
 # ================================
-from PIL import Image, ImageDraw, ImageFont
-
-from PIL import Image, ImageDraw, ImageFont
-
 def make_thumb(save_path: str, var_title: str):
     try:
-        # 배경 (흰색 500x500)
         bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
-
-        # 폰트 설정
         try:
             font = ImageFont.truetype("assets/fonts/KimNamyun.ttf", 48)
         except:
             font = ImageFont.load_default()
 
         draw = ImageDraw.Draw(bg)
-
-        # 줄바꿈 처리
-        import textwrap
         var_title_wrap = textwrap.wrap(var_title, width=12)
 
-        # 줄 높이 계산 (getbbox 사용)
-        bbox = font.getbbox("가")  # (xmin, ymin, xmax, ymax)
+        bbox = font.getbbox("가")
         line_height = (bbox[3] - bbox[1]) + 12
         total_text_height = len(var_title_wrap) * line_height
         y = (500 - total_text_height) // 2
 
         for line in var_title_wrap:
-            # 텍스트 폭 계산 → 중앙정렬
             text_bbox = draw.textbbox((0, 0), line, font=font)
             text_width = text_bbox[2] - text_bbox[0]
             x = (500 - text_width) // 2
-
             draw.text((x, y), line, fill=(0, 0, 0), font=font)
             y += line_height
 
-        # 최종 저장
         bg.save(save_path, "PNG")
-
         return True
 
     except Exception as e:
         print(f"에러:썸네일 생성 실패: {e}")
         return False
-
 
 def make_thumb_with_logging(ws, row_idx, save_path, title):
     try:
@@ -162,14 +153,13 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
     return resp.choices[0].message.content.strip()
 
 # ================================
-# 서론·마무리 랜덤 (풍성하게)
+# 서론·마무리 랜덤
 # ================================
 intro_start = [
     "스마트폰 하나만으로도 ", "요즘은 스마트폰만 잘 활용해도 ",
     "현대 생활에서 스마트폰은 ", "하루가 다르게 발전하는 모바일 환경에서 ",
     "이제는 스마트폰을 통해 "
 ]
-
 intro_middle = [
     "일상 속 많은 것들을 손쉽게 해결할 수 있습니다.",
     "생활의 효율을 높이고 시간을 절약할 수 있습니다.",
@@ -177,7 +167,6 @@ intro_middle = [
     "편리함과 동시에 새로운 경험을 제공합니다.",
     "누구나 원하는 기능을 빠르게 활용할 수 있습니다."
 ]
-
 intro_end = [
     "오늘은 그중에서도 꼭 알아두면 좋은 앱들을 정리했습니다.",
     "이번 글에서는 특히 많은 분들이 찾는 앱들을 소개하려 합니다.",
@@ -273,9 +262,24 @@ try:
     title = f"{keyword} 어플 추천 앱"
     print(f"이번 실행: {title}")
 
+    # 블로그 로테이션 (G1 셀)
+    try:
+        current_idx_val = ws.acell("G1").value
+        current_idx = int(current_idx_val) if current_idx_val and current_idx_val.isdigit() else -1
+    except:
+        current_idx = -1
+
+    next_idx = (current_idx + 1) % len(BLOG_IDS)
+    BLOG_ID = BLOG_IDS[next_idx]
+    ws.update_acell("G1", str(next_idx))
+    print(f"이번 포스팅 블로그: {BLOG_ID} (index={next_idx})")
+
     # 썸네일 생성
     thumb_path = f"thumb_{keyword}.png"
-    make_thumb_with_logging(ws, target_row, thumb_path, title)
+    if make_thumb_with_logging(ws, target_row, thumb_path, title):
+        log_thumb_step(ws, target_row, "썸네일 성공")
+    else:
+        log_thumb_step(ws, target_row, "썸네일 실패")
 
     # 앱 크롤링
     app_links = crawl_apps(keyword)
@@ -307,12 +311,12 @@ try:
     print(f"✅ 업로드 성공: {url}")
 
     # 시트 업데이트
-    ws.update_cell(target_row, 4, "완")   # D열 완료 표시
+    ws.update_cell(target_row, 4, "완")   # D열 완료
     ws.update_cell(target_row, 7, url)    # G열 포스팅 URL
+    log_thumb_step(ws, target_row, "포스팅 완료")
 
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
-
-
-
+    if 'target_row' in locals() and target_row:
+        log_thumb_step(ws, target_row, f"에러:{e}")
