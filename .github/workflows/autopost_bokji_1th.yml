@@ -1,8 +1,8 @@
-name: Blogger Autopost bokji_1th
+name: Blogger Autopost Bokji_1th
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # 매일 한국시간 10시 (UTC+9 → 01:00)
+    - cron: "0 1 * * *"   # 매일 한국시간 오전 10시 (UTC+9 → 01:00)
   workflow_dispatch:
 
 jobs:
@@ -21,20 +21,17 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ✅ Blogger 인증 JSON 복원 (base64 → 파일)
+      # Blogger 인증 JSON 복원
       - name: Restore blogger_token.json
-        run: |
-          echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" | base64 -d > blogger_token.json
+        run: echo "${{ secrets.BLOGGER_TOKEN_JSON }}" > blogger_token.json
 
-      # ✅ OpenAI API JSON 복원 (base64 → 파일)
+      # OpenAI API 키 JSON 복원 (Base64 → JSON 디코딩)
       - name: Restore openai.json
-        run: |
-          echo "${{ secrets.OPENAI_JSON_B64 }}" | base64 -d > openai.json
+        run: echo "${{ secrets.OPENAI_JSON_B64 }}" | base64 -d > openai.json
 
-      # ✅ 필요 시 구글 시트 서비스 계정 JSON도 복원 (선택)
-      # - name: Restore sheetapi.json
-      #   run: |
-      #     echo "${{ secrets.SHEETAPI_JSON_B64 }}" | base64 -d > sheetapi.json
+      # Google Sheets 인증 JSON 복원 (서비스 계정)
+      - name: Restore sheetapi.json
+        run: echo "${{ secrets.SHEETAPI_JSON }}" | base64 -d > sheetapi.json
 
       - name: Run autopost script
         env:
