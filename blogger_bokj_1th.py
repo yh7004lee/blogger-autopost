@@ -14,6 +14,11 @@ from openai import OpenAI
 import sys, traceback
 
 # ================================
+# 출력 한글 깨짐 방지
+# ================================
+sys.stdout.reconfigure(encoding="utf-8")
+
+# ================================
 # OpenAI API 키 로드
 # ================================
 OPENAI_API_KEY = ""
@@ -23,13 +28,13 @@ if os.path.exists("openai.json"):
             data = json.load(f)
             OPENAI_API_KEY = data.get("api_key", "").strip()
     except Exception as e:
-        print("❌ openai.json 파싱 실패:", e)
+        print("[ERROR] openai.json 파싱 실패:", e)
 
 if not OPENAI_API_KEY:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 
 if not OPENAI_API_KEY:
-    print("❌ OpenAI API 키가 없습니다. openai.json 또는 환경변수 확인하세요.")
+    print("[ERROR] OpenAI API 키가 없습니다. openai.json 또는 환경변수 확인하세요.")
     sys.exit(1)
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -41,16 +46,15 @@ SERVICE_ACCOUNT_FILE = "sheetapi.json"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 if not os.path.exists(SERVICE_ACCOUNT_FILE):
-    print(f"❌ {SERVICE_ACCOUNT_FILE} 파일이 없습니다. GitHub Secrets 복원을 확인하세요.")
+    print(f"[ERROR] {SERVICE_ACCOUNT_FILE} 파일이 없습니다. GitHub Secrets 복원을 확인하세요.")
     sys.exit(1)
 
 try:
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    gc = gspread.authorize(creds)
 except Exception as e:
-    print(f"❌ {SERVICE_ACCOUNT_FILE} 파싱 실패: {e}")
+    print(f"[ERROR] Google Sheets 인증 실패: {e}")
     sys.exit(1)
-
-gc = gspread.authorize(creds)
 
 SHEET_ID = os.getenv("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
 ws = gc.open_by_key(SHEET_ID).sheet1
@@ -60,8 +64,8 @@ my_url = None
 
 rows = ws.get_all_values()
 for i, row in enumerate(rows[1:], start=2):  # 2행부터
-    url_cell = row[4] if len(row) > 4 else ""   # F열
-    status_cell = row[7] if len(row) > 7 else "" # H열
+    url_cell = row[4] if len(row) > 4 else ""   # ✅ E열 (5번째)
+    status_cell = row[7] if len(row) > 7 else "" # ✅ H열 (8번째)
     if url_cell and (not status_cell or status_cell.strip() != "완"):
         my_url, target_row = url_cell, i
         break
@@ -128,7 +132,7 @@ def process_with_gpt(section_title: str, raw_text: str, keyword: str, icon: str 
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        print("⚠️ GPT 처리 실패:", e)
+        print("[WARN] GPT 처리 실패:", e)
         return f"<section class='custom-section'><h2>{keyword} {section_title}</h2><p>{clean_html(raw_text)}</p></section>"
 
 # ================================
@@ -136,15 +140,13 @@ def process_with_gpt(section_title: str, raw_text: str, keyword: str, icon: str 
 # ================================
 def get_blogger_service():
     if not os.path.exists("blogger_token.json"):
-        raise FileNotFoundError("❌ blogger_token.json 파일이 없습니다. 로컬에서 발급 후 업로드하세요.")
-    creds = UserCredentials.from_authorized_user_file(
-        "blogger_token.json",
+        raise FileNotFoundError("[ERROR] blogger_token.json 파일이 없습니다. 로컬에서 발급 후 업로드하세요.")
+    with open("blogger_token.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    creds = UserCredentials.from_authorized_user_info(
+        data,
         ["https://www.googleapis.com/auth/blogger"]
     )
-    if not creds or not creds.valid:
-        creds.refresh(Request())
-        with open("blogger_token.json", "w", encoding="utf-8") as f:
-            f.write(creds.to_json())
     return build("blogger", "v3", credentials=creds)
 
 # ================================
@@ -210,13 +212,13 @@ try:
     res = posts.insert(blogId=BLOG_ID, body=data_post, isDraft=False, fetchImages=True).execute()
     print(f"[완료] 블로그 포스팅: {res['url']}")
 except Exception as e:
-    print("❌ 블로그 업로드 실패:", e)
+    print("[ERROR] 블로그 업로드 실패:", e)
     traceback.print_exc()
     sys.exit(1)
 
 # ================================
 # 6. ✅ 구글시트 업데이트 (H열 "완")
 # ================================
-ws.update_cell(target_row, 8, "완")  # H열은 8번째 열
+ws.update_cell(target_row, 8, "완")  # ✅ H열은 8번째
 print("✅ 구글시트 업데이트 완료 (H열 '완' 기록)")
 print(title)
