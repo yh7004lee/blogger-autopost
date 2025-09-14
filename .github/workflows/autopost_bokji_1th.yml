@@ -1,4 +1,4 @@
-name: autopost_bokji_1th
+name: blogger_autopost_bokji_1th
 
 on:
   schedule:
