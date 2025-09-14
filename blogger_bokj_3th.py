@@ -119,8 +119,13 @@ def pick_random_background() -> str:
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     bg_path = pick_random_background()
-    bg = Image.open(bg_path).convert("RGBA").resize((500, 500)) if (bg_path and os.path.exists(bg_path)) \
-        else Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+
+    # 배경 불러오기 (없으면 흰색 캔버스)
+    if bg_path and os.path.exists(bg_path):
+        bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
+    else:
+        bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+
     try:
         font = ImageFont.truetype(ASSETS_FONT_TTF, 48)
     except:
@@ -128,16 +133,27 @@ def make_thumb(save_path: str, var_title: str):
 
     canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
     canvas.paste(bg, (0, 0))
+
+    # 검은 반투명 박스
     rectangle = Image.new("RGBA", (500, 250), (0, 0, 0, 200))
     canvas.paste(rectangle, (0, 125), rectangle)
 
     draw = ImageDraw.Draw(canvas)
+
+    # 글자 줄바꿈 처리
     var_title_wrap = textwrap.wrap(var_title, width=12)
-    var_y_point = 500/2 - (len(var_title_wrap) * 30) / 2
+
+    # 줄 간격: 폰트 크기 + 여유 (10px)
+    line_height = font.getsize("가")[1] + 10  
+
+    total_text_height = len(var_title_wrap) * line_height
+    var_y_point = 500 / 2 - total_text_height / 2
+
     for line in var_title_wrap:
         draw.text((250, var_y_point), line, "#FFEECB", anchor="mm", font=font)
-        var_y_point += 40
+        var_y_point += line_height
 
+    # 최종 크기 조정
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
 
@@ -411,3 +427,4 @@ except Exception as e:
     tb = traceback.format_exc().replace("\n", " | ")
     log_step(f"7단계: 블로그 업로드 실패: {e} | {tb}")
     raise
+
