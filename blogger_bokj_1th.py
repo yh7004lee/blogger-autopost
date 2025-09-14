@@ -5,12 +5,13 @@ import random
 from bs4 import BeautifulSoup
 import os
 import urllib.parse
-import openpyxl
-from openpyxl.styles import PatternFill
+import gspread
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials as UserCredentials
 from openai import OpenAI
+import sys, traceback
 
 # ================================
 # OpenAI API 키 로드
@@ -23,36 +24,41 @@ if os.path.exists("openai.json"):
 if not OPENAI_API_KEY:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 
+if not OPENAI_API_KEY:
+    print("❌ OpenAI API 키가 없습니다. openai.json 또는 환경변수 확인하세요.")
+    sys.exit(1)
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ================================
-# 1. 엑셀에서 URL 추출
+# 1. 구글 시트에서 URL 추출
 # ================================
-filename = "복지서비스목록.xlsx"
-wb = openpyxl.load_workbook(filename)
-ws = wb.active
+SERVICE_ACCOUNT_FILE = "sheetapi.json"
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-green_fill = PatternFill(start_color="00FF00", end_color="00FF00", fill_type="solid")
+creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+gc = gspread.authorize(creds)
+
+SHEET_ID = os.getenv("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
+ws = gc.open_by_key(SHEET_ID).sheet1
 
 target_row = None
 my_url = None
 
-for row in ws.iter_rows(min_row=2):  # 2행부터 (헤더 제외)
-    url_cell = row[4]    # F열 (상세URL)
-    status_cell = row[7] # H열 ("완" 여부)
-
-    if url_cell.value and (not status_cell.value or status_cell.value.strip() != "완"):
-        my_url = url_cell.value
-        target_row = row
+rows = ws.get_all_values()
+for i, row in enumerate(rows[1:], start=2):  # 2행부터
+    url_cell = row[4] if len(row) > 4 else ""   # F열 (5번째 인덱스)
+    status_cell = row[7] if len(row) > 7 else "" # H열 (8번째 인덱스)
+    if url_cell and (not status_cell or status_cell.strip() != "완"):
+        my_url, target_row = url_cell, i
         break
 
 if not my_url:
     print("🔔 처리할 새로운 URL이 없습니다. (모든 행 완료됨)")
-    exit()
+    sys.exit(0)
 
 print("👉 이번에 처리할 URL:", my_url)
 
-# 쿼리스트링 파싱
 parsed = urllib.parse.urlparse(my_url)
 params = urllib.parse.parse_qs(parsed.query)
 wlfareInfoId = params.get("wlfareInfoId", [""])[0]
@@ -97,21 +103,27 @@ def process_with_gpt(section_title: str, raw_text: str, keyword: str, icon: str 
     )
     user_msg = f"[섹션 제목] {keyword} {section_title}\n[원문]\n{raw_text}"
 
-    resp = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[
-            {"role": "system", "content": system_msg},
-            {"role": "user", "content": user_msg},
-        ],
-        temperature=0.7,
-        max_tokens=900,
-    )
-    return resp.choices[0].message.content.strip()
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
+            ],
+            temperature=0.7,
+            max_tokens=900,
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        print("⚠️ GPT 처리 실패:", e)
+        return f"<section class='custom-section'><h2>{keyword} {section_title}</h2><p>{clean_html(raw_text)}</p></section>"
 
 # ================================
 # 4. Blogger 인증 (refresh_token JSON 방식)
 # ================================
 def get_blogger_service():
+    if not os.path.exists("blogger_token.json"):
+        raise FileNotFoundError("❌ blogger_token.json 파일이 없습니다. 로컬에서 발급 후 업로드하세요.")
     creds = UserCredentials.from_authorized_user_file(
         "blogger_token.json",
         ["https://www.googleapis.com/auth/blogger"]
@@ -183,18 +195,18 @@ data_post = {
     'labels': ["복지", "정부지원", "복지서비스"],
     'blog': {'id': BLOG_ID},
 }
-posts = blog_handler.posts()
-res = posts.insert(blogId=BLOG_ID, body=data_post, isDraft=False, fetchImages=True).execute()
+try:
+    posts = blog_handler.posts()
+    res = posts.insert(blogId=BLOG_ID, body=data_post, isDraft=False, fetchImages=True).execute()
+    print(f"[완료] 블로그 포스팅: {res['url']}")
+except Exception as e:
+    print("❌ 블로그 업로드 실패:", e)
+    traceback.print_exc()
+    sys.exit(1)
 
 # ================================
-# 7. ✅ 엑셀 업데이트
+# 7. ✅ 구글시트 업데이트 (H열 "완")
 # ================================
-for cell in target_row[:6]:
-    cell.fill = green_fill
-target_row[7].value = "완"
-
-wb.save(filename)
-print("✅ 엑셀 표시 완료: 해당 행 A~F 녹색 + H열 '완' 기록")
-
-print(f"[완료] 블로그 포스팅: {res['url']}")
+ws.update_cell(target_row, 8, "완")  # H열은 8번째 열
+print("✅ 구글시트 업데이트 완료 (H열 '완' 기록)")
 print(title)
