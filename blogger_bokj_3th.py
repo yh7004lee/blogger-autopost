@@ -52,6 +52,7 @@ try:
     gc = gspread.authorize(creds)
     SHEET_ID = os.getenv("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
     ws = gc.open_by_key(SHEET_ID).sheet1
+    log_step("1단계: Google Sheets 인증 성공")
 except Exception as e:
     print("❌ Google Sheets 인증 실패:", e)
     raise
@@ -64,20 +65,47 @@ ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
 THUMB_DIR = "thumbnails"
 
 # ================================
+# 블로그 ID 로테이션 (3개)
+# ================================
+BLOG_IDS = [
+    "1271002762142343021",
+    "4265887538424434999",
+    "6159101125292617147",
+]
+
+# ================================
 # Google Sheet에서 처리할 URL 찾기 (E열=URL, G열='완' 체크)
 # ================================
 target_row, my_url = None, None
 rows = ws.get_all_values()
 for i, row in enumerate(rows[1:], start=2):
-    url_cell = row[4] if len(row) > 4 else ""  # E열
+    url_cell = row[4] if len(row) > 4 else ""   # E열
     status_cell = row[6] if len(row) > 6 else ""  # G열
     if url_cell and (not status_cell or status_cell.strip() != "완"):
         my_url, target_row = url_cell, i
         break
 if not my_url:
-    print("🔔 처리할 URL 없음 (모든 행 완료)")
+    log_step("2단계: 처리할 URL 없음 (모든 행 완료)")
     sys.exit(0)
 log_step(f"2단계: URL 추출 성공 ({my_url})")
+
+# ================================
+# 로테이션 인덱스 읽기 (O1)
+# ================================
+def read_rotation_index():
+    try:
+        val = (ws.acell("O1").value or "").strip()
+        idx = int(val)
+        if idx < -1 or idx >= len(BLOG_IDS):
+            return -1
+        return idx
+    except:
+        return -1
+
+last_index = read_rotation_index()
+next_index = (last_index + 1) % len(BLOG_IDS)
+BLOG_ID = BLOG_IDS[next_index]
+log_step(f"회전 인덱스: last={last_index} -> next={next_index} (BLOG_ID={BLOG_ID})")
 
 # ================================
 # 썸네일 생성 (랜덤 배경)
@@ -126,15 +154,15 @@ def get_drive_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # GitHub Actions에서는 토큰을 미리 복원해둬야 함 (로컬서버 X)
-            raise RuntimeError("drive_token_2nd.pickle이 없거나 만료되었습니다. GitHub Secrets에서 복원하세요.")
+            # 액션 환경에서는 토큰을 사전 복원해야 함 (로컬서버 불가)
+            raise RuntimeError("drive_token_2nd.pickle이 없거나 만료됨. GitHub Secrets에서 복원 필요.")
         with open("drive_token_2nd.pickle", "wb") as token:
             pickle.dump(creds, token)
 
     return build("drive", "v3", credentials=creds)
 
 # ================================
-# Google Drive 업로드 (blogger 폴더 사용)
+# Google Drive 업로드 (blogger 폴더)
 # ================================
 def upload_to_drive(file_path, file_name):
     try:
@@ -201,10 +229,9 @@ def fetch_welfare_info(wlfareInfoId):
 def clean_html(raw_html):
     return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
 
-
-# =================================================================
-# ChatGPT API로 본문 가공
-# =================================================================
+# ================================
+# ChatGPT API로 본문 가공 (요약 + 3~4문단, <p size18> 강제)
+# ================================
 def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
     if not client:
         return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
@@ -260,7 +287,7 @@ def make_intro(keyword):
         "끝까지 읽으시면 제도를 이해하는 데 큰 보탬이 되실 겁니다.",
         "여러분께 꼭 필요한 지식과 혜택을 전해드리겠습니다.",
     ]
-    return " ".join(parts)  # 7문장
+    return " ".join(parts)
 
 def make_last(keyword):
     parts = [
@@ -272,10 +299,10 @@ def make_last(keyword):
         "끝까지 읽어주셔서 감사드리며, 다음 글도 기대해 주세요.",
         "여러분의 생활이 더 나아지길 바라며 글을 마칩니다.",
     ]
-    return " ".join(parts)  # 7문장
+    return " ".join(parts)
 
 # ================================
-# 추천글 박스 (feedparser 없으면 건너뜀)
+# 추천글 박스 (feedparser 필요)
 # ================================
 def get_related_posts(blog_id, count=4):
     try:
@@ -314,16 +341,18 @@ try:
     title = f"2025 {keyword} 지원 자격 신청방법"
     safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", keyword)
 
+    # 썸네일 생성/업로드
     os.makedirs(THUMB_DIR, exist_ok=True)
     thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
     make_thumb(thumb_path, title)
     log_step("6단계: 썸네일 생성 성공")
-
     img_url = upload_to_drive(thumb_path, f"{safe_keyword}.png")
 
+    # 서론/마무리
     intro = make_intro(keyword)
     last = make_last(keyword)
 
+    # HTML 조립
     html = f"""
 <div id="jm">&nbsp;</div>
 <p data-ke-size="size18">{intro}</p><br />
@@ -333,17 +362,21 @@ try:
 <span><!--more--></span><br />
 """
 
-    fields = {"개요":"wlfareInfoOutlCn","지원대상":"wlfareSprtTrgtCn","서비스내용":"wlfareSprtBnftCn","신청방법":"aplyMtdDc","추가정보":"etct"}
+    fields = {
+        "개요": "wlfareInfoOutlCn",
+        "지원대상": "wlfareSprtTrgtCn",
+        "서비스내용": "wlfareSprtBnftCn",
+        "신청방법": "aplyMtdDc",
+        "추가정보": "etct"
+    }
     for title_k, key in fields.items():
         value = data.get(key, "")
         if value and value.strip() not in ["", "정보 없음"]:
             processed = process_with_gpt(title_k, clean_html(value), keyword)
             html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br />{processed}<br /><br />"
 
-    BLOG_ID = os.getenv("BLOG_ID", "5711594645656469839")
+    # CTA + 마무리 + 추천글
     related_box = get_related_posts(BLOG_ID)
-
-    # CTA 버튼(핵심 키워드만)
     html += f"""
 <div style="margin:40px 0 20px 0;">
   <p style="text-align:center;" data-ke-size="size18">
@@ -355,22 +388,26 @@ try:
 """
 
     # 게시
-    post_body = {"content": html, "title": title, "labels": ["복지","정부지원"], "blog": {"id": BLOG_ID}}
+    post_body = {
+        "content": html,
+        "title": title,
+        "labels": ["복지", "정부지원"],
+        "blog": {"id": BLOG_ID}
+    }
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False, fetchImages=True).execute()
 
-    # ✅ 시트 업데이트: G="완", O=블로그 주소만, P=로그
-    ws.update_cell(target_row, 7, "완")         # G열
-    ws.update_cell(target_row, 15, res["url"])  # O열(순수 URL만)
-    # 이미지 URL을 로그에만 남김 (행 높이 증가 방지)
+    # === 포스팅 완료 후 시트 업데이트 ===
+    ws.update_cell(target_row, 7, "완")          # G열: "완"
+    ws.update_cell(target_row, 15, res["url"])   # O열: 포스팅 URL만
     final_html = res.get("content", "")
     soup = BeautifulSoup(final_html, "html.parser")
     img_tag = soup.find("img")
     final_url = img_tag["src"] if img_tag else ""
     log_step(f"7단계: 업로드 성공 → IMG={final_url}")
+    ws.update_acell("O1", str(next_index))       # O1: 사용한 인덱스 저장
 
     print(f"[완료] 블로그 포스팅: {res['url']}")
 except Exception as e:
     tb = traceback.format_exc().replace("\n", " | ")
     log_step(f"7단계: 블로그 업로드 실패: {e} | {tb}")
     raise
-
