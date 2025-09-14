@@ -17,20 +17,21 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 sys.stdout.reconfigure(encoding="utf-8")
 
 # ================================
-# 단계별 로그 기록 함수
+# 단계별 로그 기록 함수 (P열, 한 줄 유지)
 # ================================
-def log_step(msg):
-    """단계별 로그를 구글시트 P열에 누적 기록"""
+def log_step(msg: str):
+    """단계별 로그를 구글시트 P열(16)에 누적 기록. 줄바꿈 대신 ' | ' 사용."""
     try:
-        if target_row:
-            prev = ws.cell(target_row, 16).value or ""  # P열 값 읽기
-            new_log = prev + f"{msg}\n"
-            ws.update_cell(target_row, 16, new_log)
+        tr = globals().get("target_row", None)
+        if tr:
+            prev = ws.cell(tr, 16).value or ""
+            sep = " | " if prev else ""
+            ws.update_cell(tr, 16, f"{prev}{sep}{msg}")
     except Exception as e:
         print("⚠️ 로그 기록 실패:", e)
 
 # ================================
-# OpenAI 키 로드
+# OpenAI 키 로드 (선택)
 # ================================
 OPENAI_API_KEY = ""
 if os.path.exists("openai.json"):
@@ -51,37 +52,35 @@ try:
     gc = gspread.authorize(creds)
     SHEET_ID = os.getenv("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
     ws = gc.open_by_key(SHEET_ID).sheet1
-    log_step("1단계: Google Sheets 인증 성공")
 except Exception as e:
     print("❌ Google Sheets 인증 실패:", e)
     raise
 
+# ================================
+# 경로 및 리소스 설정
+# ================================
 ASSETS_BG_DIR = "assets/backgrounds"
 ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
 THUMB_DIR = "thumbnails"
 
 # ================================
-# Google Sheet에서 URL 가져오기
+# Google Sheet에서 처리할 URL 찾기 (E열=URL, G열='완' 체크)
 # ================================
 target_row, my_url = None, None
-try:
-    rows = ws.get_all_values()
-    for i, row in enumerate(rows[1:], start=2):
-        url_cell = row[4] if len(row) > 4 else ""
-        status_cell = row[6] if len(row) > 6 else ""  # ✅ G열 검사
-        if url_cell and (not status_cell or status_cell.strip() != "완"):
-            my_url, target_row = url_cell, i
-            break
-    if not my_url:
-        log_step("2단계: 처리할 URL 없음 (모든 행 완료)")
-        exit()
-    log_step(f"2단계: URL 추출 성공 ({my_url})")
-except Exception as e:
-    log_step(f"2단계: URL 추출 실패: {e}")
-    raise
+rows = ws.get_all_values()
+for i, row in enumerate(rows[1:], start=2):
+    url_cell = row[4] if len(row) > 4 else ""  # E열
+    status_cell = row[6] if len(row) > 6 else ""  # G열
+    if url_cell and (not status_cell or status_cell.strip() != "완"):
+        my_url, target_row = url_cell, i
+        break
+if not my_url:
+    print("🔔 처리할 URL 없음 (모든 행 완료)")
+    sys.exit(0)
+log_step(f"2단계: URL 추출 성공 ({my_url})")
 
 # ================================
-# 썸네일 생성
+# 썸네일 생성 (랜덤 배경)
 # ================================
 def pick_random_background() -> str:
     files = []
@@ -92,26 +91,30 @@ def pick_random_background() -> str:
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     bg_path = pick_random_background()
-    bg = Image.open(bg_path).convert("RGBA").resize((500, 500)) if (bg_path and os.path.exists(bg_path)) else Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+    bg = Image.open(bg_path).convert("RGBA").resize((500, 500)) if (bg_path and os.path.exists(bg_path)) \
+        else Image.new("RGBA", (500, 500), (255, 255, 255, 255))
     try:
         font = ImageFont.truetype(ASSETS_FONT_TTF, 48)
     except:
         font = ImageFont.load_default()
+
     canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
     canvas.paste(bg, (0, 0))
     rectangle = Image.new("RGBA", (500, 250), (0, 0, 0, 200))
     canvas.paste(rectangle, (0, 125), rectangle)
+
     draw = ImageDraw.Draw(canvas)
     var_title_wrap = textwrap.wrap(var_title, width=12)
     var_y_point = 500/2 - (len(var_title_wrap) * 30) / 2
     for line in var_title_wrap:
         draw.text((250, var_y_point), line, "#FFEECB", anchor="mm", font=font)
         var_y_point += 40
+
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
 
 # ================================
-# Google Drive 인증 (OAuth 2nd.json + token)
+# Google Drive 인증 (OAuth: 2nd.json + drive_token_2nd.pickle)
 # ================================
 def get_drive_service():
     creds = None
@@ -123,20 +126,20 @@ def get_drive_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            flow = InstalledAppFlow.from_client_secrets_file("2nd.json", ["https://www.googleapis.com/auth/drive.file"])
-            creds = flow.run_local_server(port=0)
+            # GitHub Actions에서는 토큰을 미리 복원해둬야 함 (로컬서버 X)
+            raise RuntimeError("drive_token_2nd.pickle이 없거나 만료되었습니다. GitHub Secrets에서 복원하세요.")
         with open("drive_token_2nd.pickle", "wb") as token:
             pickle.dump(creds, token)
 
     return build("drive", "v3", credentials=creds)
 
 # ================================
-# Google Drive 업로드
+# Google Drive 업로드 (blogger 폴더 사용)
 # ================================
 def upload_to_drive(file_path, file_name):
     try:
         drive_service = get_drive_service()
-        # blogger 폴더 확인
+        # blogger 폴더 확인/생성
         query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
         results = drive_service.files().list(q=query, fields="files(id, name)").execute()
         items = results.get("files", [])
@@ -147,11 +150,16 @@ def upload_to_drive(file_path, file_name):
             folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
             folder_id = folder.get("id")
 
-        # 업로드
         file_metadata = {"name": file_name, "parents": [folder_id]}
         media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
         file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-        drive_service.permissions().create(fileId=file["id"], body={"role": "reader", "type": "anyone"}).execute()
+
+        # anyone 읽기 권한
+        drive_service.permissions().create(
+            fileId=file["id"],
+            body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
+        ).execute()
+
         file_id = file["id"]
         log_step("3단계: 구글드라이브 업로드 성공")
         return f"https://lh3.googleusercontent.com/d/{file_id}"
@@ -160,12 +168,12 @@ def upload_to_drive(file_path, file_name):
         raise
 
 # ================================
-# Blogger 인증 (refresh_token 사용)
+# Blogger 인증 (refresh_token JSON)
 # ================================
 def get_blogger_service():
     try:
         if not os.path.exists("blogger_token.json"):
-            raise FileNotFoundError("blogger_token.json 파일이 없습니다.")
+            raise FileNotFoundError("blogger_token.json 파일 없음")
         with open("blogger_token.json", "r", encoding="utf-8") as f:
             data = json.load(f)
         creds = UserCredentials.from_authorized_user_info(data, ["https://www.googleapis.com/auth/blogger"])
@@ -194,17 +202,16 @@ def clean_html(raw_html):
     return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
 
 # ================================
-# GPT API 변환
+# GPT API 변환 (있으면 사용, 없으면 fallback)
 # ================================
 def process_with_gpt(section_title, raw_text, keyword):
     if not client:
-        log_step("4단계: GPT 미사용 (API 키 없음)")
         return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
     try:
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
-                {"role": "system", "content": "너는 한국어 블로그 글을 쓰는 카피라이터야."},
+                {"role": "system", "content": "너는 한국어 블로그 카피라이터야. HTML만 출력하고, <p data-ke-size='size18'>로 문단을 구성해. 첫 문단은 <b>요약</b>."},
                 {"role": "user", "content": f"[섹션 제목] {keyword} {section_title}\n[원문]\n{raw_text}"}
             ],
             temperature=0.7,
@@ -215,19 +222,71 @@ def process_with_gpt(section_title, raw_text, keyword):
     except Exception as e:
         log_step(f"4단계: GPT 변환 실패 ({section_title}): {e}")
         return f"<p data-ke-size='size18'>{clean_html(raw_text)}</p>"
+
 # ================================
-# 단계별 로그 기록 함수 (P열, 줄바꿈 → | 처리)
+# 서론/마무리 7문장 랜덤
 # ================================
-def log_step(msg):
-    """단계별 로그를 구글시트 P열에 누적 기록 (행 높이 증가 방지: 줄바꿈 대신 | 사용)"""
+_syn = {
+    "도움": ["도움", "지원", "혜택", "보탬", "유익"],
+    "안내": ["안내", "소개", "정리", "가이드", "설명"],
+    "중요한": ["중요한", "핵심적인", "필수적인", "꼭 알아야 할"],
+    "쉽게": ["쉽게", "간단히", "수월하게", "편리하게"],
+    "정보": ["정보", "내용", "자료", "소식", "데이터"],
+    "살펴보겠습니다": ["살펴보겠습니다", "알아보겠습니다", "정리하겠습니다"],
+}
+def _c(w): return random.choice(_syn.get(w, [w]))
+
+def make_intro(keyword):
+    parts = [
+        f"{keyword}은 많은 분들이 관심을 갖는 {_c('중요한')} 제도입니다.",
+        "정부는 이를 통해 생활의 어려움을 덜어주고자 합니다.",
+        f"제도를 잘 이해하면 혜택을 더욱 {_c('쉽게')} 받을 수 있습니다.",
+        f"오늘은 {keyword}의 개요부터 신청 방법까지 꼼꼼히 {_c('살펴보겠습니다')}.",
+        "실제 생활에서 어떻게 활용되는지 사례를 통해 설명드리겠습니다.",
+        "끝까지 읽으시면 제도를 이해하는 데 큰 보탬이 되실 겁니다.",
+        "여러분께 꼭 필요한 지식과 혜택을 전해드리겠습니다.",
+    ]
+    return " ".join(parts)  # 7문장
+
+def make_last(keyword):
+    parts = [
+        f"오늘은 {keyword} 제도를 {_c('안내')}했습니다.",
+        f"이 {_c('정보')}를 참고하셔서 실제 신청에 {_c('도움')}이 되시길 바랍니다.",
+        "꼭 필요한 분들이 혜택을 누리시길 바랍니다.",
+        "앞으로도 다양한 복지 정보를 전해드리겠습니다.",
+        "댓글과 의견도 남겨주시면 큰 힘이 됩니다.",
+        "끝까지 읽어주셔서 감사드리며, 다음 글도 기대해 주세요.",
+        "여러분의 생활이 더 나아지길 바라며 글을 마칩니다.",
+    ]
+    return " ".join(parts)  # 7문장
+
+# ================================
+# 추천글 박스 (feedparser 없으면 건너뜀)
+# ================================
+def get_related_posts(blog_id, count=4):
     try:
-        if target_row:
-            prev = ws.cell(target_row, 16).value or ""  # P열 값 읽기
-            # 줄바꿈 대신 | 사용 → 행 높이 증가 방지
-            new_log = (prev + " | " + msg).strip()
-            ws.update_cell(target_row, 16, new_log)
-    except Exception as e:
-        print("⚠️ 로그 기록 실패:", e)
+        import feedparser
+    except ImportError:
+        log_step("추천글 박스 생략(feedparser 미설치)")
+        return ""
+    rss_url = f"https://www.blogger.com/feeds/{blog_id}/posts/default?alt=rss"
+    feed = feedparser.parse(rss_url)
+    if not feed.entries:
+        return ""
+    entries = random.sample(feed.entries, min(count, len(feed.entries)))
+    html_box = """
+<div style="background:#efede9;border-radius:8px;border:2px dashed #a7a297;
+            box-shadow:#efede9 0 0 0 10px;color:#565656;font-weight:bold;
+            margin:2em 10px;padding:2em;">
+  <p data-ke-size="size16"
+     style="border-bottom:1px solid #555;color:#555;font-size:16px;
+            margin-bottom:15px;padding-bottom:5px;">♡♥ 같이 보면 좋은글</p>
+"""
+    for entry in entries:
+        html_box += f'<a href="{entry.link}" style="color:#555;font-weight:normal;">● {entry.title}</a><br>\n'
+    html_box += "</div>\n"
+    return html_box
+
 # ================================
 # 본문 생성 + 포스팅
 # ================================
@@ -236,6 +295,7 @@ try:
     params = parse_qs(parsed.query)
     wlfareInfoId = params.get("wlfareInfoId", [""])[0]
     data = fetch_welfare_info(wlfareInfoId)
+
     keyword = clean_html(data.get("wlfareInfoNm", "복지 서비스"))
     title = f"2025 {keyword} 지원 자격 신청방법"
     safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", keyword)
@@ -247,14 +307,17 @@ try:
 
     img_url = upload_to_drive(thumb_path, f"{safe_keyword}.png")
 
+    intro = make_intro(keyword)
+    last = make_last(keyword)
+
     html = f"""
-    <div id="jm">&nbsp;</div>
-    <p data-ke-size="size18">{keyword}은 많은 분들이 관심을 갖는 제도입니다.</p><br />
-    <p style="text-align:center;">
-      <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
-    </p>
-    <span><!--more--></span><br />
-    """
+<div id="jm">&nbsp;</div>
+<p data-ke-size="size18">{intro}</p><br />
+<p style="text-align:center;">
+  <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
+</p>
+<span><!--more--></span><br />
+"""
 
     fields = {"개요":"wlfareInfoOutlCn","지원대상":"wlfareSprtTrgtCn","서비스내용":"wlfareSprtBnftCn","신청방법":"aplyMtdDc","추가정보":"etct"}
     for title_k, key in fields.items():
@@ -264,28 +327,35 @@ try:
             html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br />{processed}<br /><br />"
 
     BLOG_ID = os.getenv("BLOG_ID", "5711594645656469839")
-    post_body = {"content": html, "title": title, "labels": ["복지","정부지원"], "blog": {"id": BLOG_ID}}
+    related_box = get_related_posts(BLOG_ID)
 
+    # CTA 버튼(핵심 키워드만)
+    html += f"""
+<div style="margin:40px 0 20px 0;">
+  <p style="text-align:center;" data-ke-size="size18">
+    <a class="myButton" href="{my_url}" target="_blank">👉 {keyword} 자세히 보기</a>
+  </p><br />
+  <p data-ke-size="size18">{last}</p>
+</div>
+{related_box}
+"""
+
+    # 게시
+    post_body = {"content": html, "title": title, "labels": ["복지","정부지원"], "blog": {"id": BLOG_ID}}
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False, fetchImages=True).execute()
-    # ✅ G열에 완료 표시
-    ws.update_cell(target_row, 7, "완")
-    
-    # ✅ O열에는 블로그 주소만 저장
-    ws.update_cell(target_row, 15, res['url'])
-    
-    # ✅ P열 로그에 업로드 성공 및 이미지 URL 기록
+
+    # ✅ 시트 업데이트: G="완", O=블로그 주소만, P=로그
+    ws.update_cell(target_row, 7, "완")         # G열
+    ws.update_cell(target_row, 15, res["url"])  # O열(순수 URL만)
+    # 이미지 URL을 로그에만 남김 (행 높이 증가 방지)
     final_html = res.get("content", "")
     soup = BeautifulSoup(final_html, "html.parser")
     img_tag = soup.find("img")
     final_url = img_tag["src"] if img_tag else ""
     log_step(f"7단계: 업로드 성공 → IMG={final_url}")
-    
 
-    
-
-
+    print(f"[완료] 블로그 포스팅: {res['url']}")
 except Exception as e:
     tb = traceback.format_exc().replace("\n", " | ")
     log_step(f"7단계: 블로그 업로드 실패: {e} | {tb}")
-
-
+    raise
