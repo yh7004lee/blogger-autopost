@@ -13,7 +13,8 @@ from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
 from googleapiclient.http import MediaFileUpload
 from openai import OpenAI
-
+import sys
+sys.stdout.reconfigure(encoding="utf-8")
 # ================================
 # OpenAI API Key 로드
 # ================================
@@ -228,3 +229,4 @@ print(f"업로드 성공: {post_url}")
 if row_idx:
     ws.update_cell(row_idx, 4, "완")      # D열
     ws.update_cell(row_idx, 7, post_url)  # G열
+
