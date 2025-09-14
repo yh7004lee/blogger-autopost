@@ -247,9 +247,10 @@ res = blogger.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False, fetc
 print("✅ 업로드 성공:", res["url"])
 
 # ✅ 엑셀/시트에 결과 기록
-ws.update_cell(row_index, 4, "완")       # D열 "완"
-ws.update_cell(row_index, 5, post_url)   # E열에 포스팅 URL 기록
+ws.update_cell(row_idx, 4, "완")       # D열 "완"
+ws.update_cell(row_idx, 5, post_url)   # E열에 포스팅 URL 기록
 
 chrome.quit()
+
 
 
