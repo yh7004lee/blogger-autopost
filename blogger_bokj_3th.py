@@ -110,6 +110,19 @@ log_step(f"회전 인덱스: last={last_index} -> next={next_index} (BLOG_ID={BL
 # ================================
 # 썸네일 생성 (랜덤 배경)
 # ================================
+# ================================
+# 배경 이미지 랜덤 선택
+# ================================
+def pick_random_background() -> str:
+    files = []
+    for ext in ("*.png", "*.jpg", "*.jpeg"):
+        files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
+    return random.choice(files) if files else ""
+
+
+# ================================
+# 썸네일 생성
+# ================================
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     bg_path = pick_random_background()
@@ -137,9 +150,9 @@ def make_thumb(save_path: str, var_title: str):
     # 글자 줄바꿈 처리
     var_title_wrap = textwrap.wrap(var_title, width=12)
 
-    # 줄 간격: 폰트의 높이를 getbbox 로 계산
+    # 줄 간격 계산 (getbbox 이용)
     bbox = font.getbbox("가")  # (xmin, ymin, xmax, ymax)
-    line_height = (bbox[3] - bbox[1]) + 10  # 글자 높이 + 여유 10px
+    line_height = (bbox[3] - bbox[1]) + 12  # 글자 높이 + 여유 간격
 
     total_text_height = len(var_title_wrap) * line_height
     var_y_point = 500 / 2 - total_text_height / 2
@@ -423,5 +436,6 @@ except Exception as e:
     tb = traceback.format_exc().replace("\n", " | ")
     log_step(f"7단계: 블로그 업로드 실패: {e} | {tb}")
     raise
+
 
 
