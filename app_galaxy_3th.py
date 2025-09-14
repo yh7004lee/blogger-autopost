@@ -347,6 +347,7 @@ try:
         <p style="text-align:center;">
           <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
         </p>
+        <br /><br />
         """
 
 
@@ -368,6 +369,7 @@ try:
         <p style="text-align: center;" data-ke-size="size18">
           <a class="myButton" href="{app_url}">{h1} 앱 다운로드</a>
         </p>
+        <br /><br /><br />
         """
     html += make_last(title)
 
@@ -395,6 +397,7 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
 
