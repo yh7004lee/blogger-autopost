@@ -231,7 +231,8 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
     )
     return resp.choices[0].message.content.strip()
 
-
+tag_list = title.split()
+tag_str = " ".join([f"#{t}" for t in tag_list])
 # ================================
 # 서론·마무리 랜덤 (SEO 최적화 + 문장 확장)
 # ================================
@@ -414,6 +415,7 @@ try:
         <p style="text-align: center;" data-ke-size="size18">
           <a class="myButton" href="{app_url}">{h1} 앱 다운로드</a>
         </p>
+        <p data-ke-size="size18">{tag_str}</p>
         <br /><br /><br />
         """
     html += make_last(title)
@@ -442,6 +444,7 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
 
