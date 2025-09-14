@@ -1,6 +1,6 @@
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
-import os, re, json, random, requests, traceback
+import os, re, json, random, requests, traceback, pickle
 from bs4 import BeautifulSoup
 import gspread
 from google.oauth2.service_account import Credentials
@@ -11,22 +11,21 @@ from google.oauth2.credentials import Credentials as UserCredentials
 from google.auth.transport.requests import Request
 from PIL import Image, ImageDraw, ImageFont
 import textwrap
-import pickle
 
 # ================================
 # 환경 변수 및 기본 설정
 # ================================
-SHEET_ID = os.getenv("SHEET_ID", "YOUR_SHEET_ID")
+SHEET_ID = os.getenv("SHEET_ID", "1SeQogbinIrDTMKjWhGgWPEQq8xv6ARv5n3I-2BsMrSc")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
-# 블로그 로테이션 대상 ID
+# 블로그 3개 ID (순환)
 BLOG_IDS = [
     "1271002762142343021",
     "4265887538424434999",
     "6159101125292617147"
 ]
 
-# OpenAI API 키 불러오기
+# OpenAI API Key 로드
 OPENAI_API_KEY = ""
 if os.path.exists("openai.json"):
     with open("openai.json", "r", encoding="utf-8") as f:
@@ -44,7 +43,6 @@ def get_sheet():
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    SHEET_ID = os.getenv("SHEET_ID", SHEET_ID)
     return gc.open_by_key(SHEET_ID).sheet1
 
 ws = get_sheet()
@@ -77,7 +75,7 @@ def get_blogger_service():
 blog_handler = get_blogger_service()
 
 # ================================
-# 썸네일 로깅 함수 (H열)
+# 썸네일 로깅 함수
 # ================================
 def log_thumb_step(ws, row_idx, message):
     try:
@@ -97,10 +95,9 @@ def make_thumb(save_path: str, var_title: str):
             font = ImageFont.truetype("assets/fonts/KimNamyun.ttf", 48)
         except:
             font = ImageFont.load_default()
-
         draw = ImageDraw.Draw(bg)
-        var_title_wrap = textwrap.wrap(var_title, width=12)
 
+        var_title_wrap = textwrap.wrap(var_title, width=12)
         bbox = font.getbbox("가")
         line_height = (bbox[3] - bbox[1]) + 12
         total_text_height = len(var_title_wrap) * line_height
@@ -115,7 +112,6 @@ def make_thumb(save_path: str, var_title: str):
 
         bg.save(save_path, "PNG")
         return True
-
     except Exception as e:
         print(f"에러:썸네일 생성 실패: {e}")
         return False
@@ -123,9 +119,12 @@ def make_thumb(save_path: str, var_title: str):
 def make_thumb_with_logging(ws, row_idx, save_path, title):
     try:
         log_thumb_step(ws, row_idx, "시작")
-        make_thumb(save_path, title)
-        log_thumb_step(ws, row_idx, "완료")
-        return True
+        ok = make_thumb(save_path, title)
+        if ok:
+            log_thumb_step(ws, row_idx, "완료")
+        else:
+            log_thumb_step(ws, row_idx, "실패")
+        return ok
     except Exception as e:
         log_thumb_step(ws, row_idx, f"에러:{e}")
         return False
@@ -174,7 +173,6 @@ intro_end = [
     "필요할 때 바로 활용할 수 있는 인기 앱들을 모아봤습니다.",
     "생활 속에서 자주 쓰이는 실속 있는 앱들을 준비했습니다."
 ]
-
 def make_intro(title, keyword):
     intro = random.choice(intro_start) + random.choice(intro_middle) + " " + random.choice(intro_end)
     return f"""
@@ -182,9 +180,7 @@ def make_intro(title, keyword):
 <p data-ke-size="size18">
 {intro}
 이번 글에서는 특히 "{title}" 관련 앱들을 집중적으로 소개합니다. 
-여러 앱을 직접 사용해보고, 기능과 장단점을 자세히 살펴보았으며, 
-구글플레이스토어에서 "{keyword}" 검색 시 실제 상위 노출되는 앱들을 기준으로 선정했습니다. 
-각 앱의 특징과 실제 사용 후기를 함께 담아 끝까지 읽으시면 앱 선택에 큰 도움이 될 것입니다.
+구글플레이스토어에서 "{keyword}" 검색 시 상위 노출되는 앱들을 기준으로 선정했습니다. 
 </p>
 <span><!--more--></span>
 <p data-ke-size="size18">&nbsp;</p>
@@ -192,25 +188,18 @@ def make_intro(title, keyword):
 
 end_start = [
     "이번 글에서 소개한 앱들이 여러분의 생활에 도움이 되었길 바랍니다.",
-    "오늘 정리한 앱들이 실제로 유용하게 활용되길 바랍니다.",
-    "이번 포스팅에서 소개한 앱들이 실질적인 보탬이 되었으면 합니다."
+    "오늘 정리한 앱들이 실제로 유용하게 활용되길 바랍니다."
 ]
 end_summary = [
     "각 앱의 특징과 장점을 꼼꼼히 다뤘으니 선택에 참고하시기 바랍니다.",
-    "앱들의 기능과 장단점을 함께 살펴본 만큼 현명한 선택에 도움이 되실 겁니다."
+    "앱들의 기능과 장단점을 함께 살펴본 만큼 도움이 되실 겁니다."
 ]
 end_next = [
     "앞으로도 더 다양한 앱 정보를 준비해서 찾아뵙겠습니다.",
     "계속해서 알찬 정보와 추천 앱을 공유하도록 하겠습니다."
 ]
-end_action = [
-    "댓글과 좋아요는 큰 힘이 됩니다.",
-    "궁금한 점이나 의견이 있다면 댓글로 남겨주세요."
-]
-end_greet = [
-    "오늘도 즐겁고 행복한 하루 되시길 바랍니다~ ^^",
-    "읽어주셔서 감사드리며, 늘 건강과 행복이 함께하시길 바랍니다~ ^^"
-]
+end_action = ["댓글과 좋아요는 큰 힘이 됩니다.", "궁금한 점이나 의견이 있다면 댓글로 남겨주세요."]
+end_greet = ["오늘도 즐겁고 행복한 하루 되시길 바랍니다~ ^^", "읽어주셔서 감사드립니다~ ^^"]
 
 def make_last(title):
     return f"""
@@ -228,7 +217,7 @@ def make_last(title):
 """
 
 # ================================
-# 앱 크롤링 (requests + BS)
+# 앱 크롤링
 # ================================
 def crawl_apps(keyword):
     url = f"https://play.google.com/store/search?q={keyword}&c=apps"
@@ -237,12 +226,10 @@ def crawl_apps(keyword):
     source = soup.find_all(class_="ULeU3b")
     app_links = []
     for k, s in enumerate(source):
-        if k == 15:
-            break
+        if k == 15: break
         a = s.find("a")
-        if a:
-            app_links.append("https://play.google.com" + a["href"])
-    return app_links[3:]  # 상위 광고 제거
+        if a: app_links.append("https://play.google.com" + a["href"])
+    return app_links[3:]
 
 # ================================
 # 메인 실행
@@ -251,7 +238,7 @@ try:
     rows = ws.get_all_values()
     target_row, keyword = None, None
     for i, row in enumerate(rows[1:], start=2):
-        if row[0] and (not row[3] or row[3].strip() != "완"):  # A열=키워드, D열=완 여부
+        if row[0] and (not row[3] or row[3].strip() != "완"):
             keyword, target_row = row[0], i
             break
 
@@ -262,47 +249,38 @@ try:
     title = f"{keyword} 어플 추천 앱"
     print(f"이번 실행: {title}")
 
-    # 블로그 로테이션 (G1 셀)
-    try:
-        current_idx_val = ws.acell("G1").value
-        current_idx = int(current_idx_val) if current_idx_val and current_idx_val.isdigit() else -1
-    except:
-        current_idx = -1
-
-    next_idx = (current_idx + 1) % len(BLOG_IDS)
-    BLOG_ID = BLOG_IDS[next_idx]
-    ws.update_acell("G1", str(next_idx))
-    print(f"이번 포스팅 블로그: {BLOG_ID} (index={next_idx})")
-
     # 썸네일 생성
     thumb_path = f"thumb_{keyword}.png"
-    if make_thumb_with_logging(ws, target_row, thumb_path, title):
-        log_thumb_step(ws, target_row, "썸네일 성공")
-    else:
-        log_thumb_step(ws, target_row, "썸네일 실패")
+    make_thumb_with_logging(ws, target_row, thumb_path, title)
 
     # 앱 크롤링
     app_links = crawl_apps(keyword)
     print(f"수집된 앱 링크: {len(app_links)}개")
 
     html = make_intro(title, keyword)
-
     for j, app_url in enumerate(app_links, 1):
-        if j > 7:
-            break
+        if j > 7: break
         resp = requests.get(app_url, headers={"User-Agent":"Mozilla/5.0"})
         soup = BeautifulSoup(resp.text, "html.parser")
         h1 = soup.find("h1").text if soup.find("h1") else f"앱 {j}"
         raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
         desc = rewrite_app_description(raw_desc, h1, keyword)
-
         html += f"""
         <h2 data-ke-size="size26">{j}. {h1} 어플 소개</h2>
         {desc}
         <p data-ke-size="size18"><a href="{app_url}">앱 다운로드</a></p>
         """
-
     html += make_last(title)
+
+    # 현재 블로그 인덱스 읽기 (G1 셀)
+    try:
+        blog_idx_val = ws.cell(1, 7).value  # G1
+        blog_idx = int(blog_idx_val) if blog_idx_val else 0
+    except:
+        blog_idx = 0
+
+    blog_idx = blog_idx % len(BLOG_IDS)
+    BLOG_ID = BLOG_IDS[blog_idx]
 
     # Blogger 업로드
     post_body = {"content": html, "title": title, "labels": ["앱","추천"]}
@@ -311,12 +289,10 @@ try:
     print(f"✅ 업로드 성공: {url}")
 
     # 시트 업데이트
-    ws.update_cell(target_row, 4, "완")   # D열 완료
+    ws.update_cell(target_row, 4, "완")   # D열 완료 표시
     ws.update_cell(target_row, 7, url)    # G열 포스팅 URL
-    log_thumb_step(ws, target_row, "포스팅 완료")
+    ws.update_cell(1, 7, (blog_idx+1) % len(BLOG_IDS))  # 다음 블로그 인덱스 기록
 
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
-    if 'target_row' in locals() and target_row:
-        log_thumb_step(ws, target_row, f"에러:{e}")
