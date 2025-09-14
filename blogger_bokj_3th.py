@@ -267,16 +267,19 @@ try:
     post_body = {"content": html, "title": title, "labels": ["복지","정부지원"], "blog": {"id": BLOG_ID}}
 
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False, fetchImages=True).execute()
-    ws.update_cell(target_row, 7, "완")  # ✅ G열에 완료 표시
-    # ✅ 엑셀 업데이트 (완료 처리 + 블로그 URL 저장 + 로그)
-    ws.update_cell(target_row, 15, res['url'])  # O열 블로그 주소
-    log_step("7단계: 업로드 성공")
-
+    # ✅ G열에 완료 표시
+    ws.update_cell(target_row, 7, "완")
+    
+    # ✅ O열에는 블로그 주소만 저장
+    ws.update_cell(target_row, 15, res['url'])
+    
+    # ✅ P열 로그에 업로드 성공 및 이미지 URL 기록
     final_html = res.get("content", "")
     soup = BeautifulSoup(final_html, "html.parser")
     img_tag = soup.find("img")
     final_url = img_tag["src"] if img_tag else ""
-    ws.update_cell(target_row, 15, f"{ws.cell(target_row,15).value}\n7단계: 업로드 성공 → IMG={final_url}")
+    log_step(f"7단계: 업로드 성공 → IMG={final_url}")
+    
 
     
 
@@ -284,4 +287,5 @@ try:
 except Exception as e:
     tb = traceback.format_exc().replace("\n", " | ")
     log_step(f"7단계: 블로그 업로드 실패: {e} | {tb}")
+
 
