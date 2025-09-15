@@ -357,32 +357,54 @@ def crawl_apps(keyword):
     return app_links[3:]
 
 # ================================
-# 메인 실행 (수정 버전)
+# 메인 실행 (마지막 완 행 기반 순차 로테이션)
 # ================================
 A_CANDIDATES = ["스마트폰", "핸드폰", "휴대폰", "안드로이드"]
 C_CANDIDATES = ["어플 추천 앱", "앱 추천 어플"]
 
+def get_last_completed(ws):
+    rows = ws.get_all_values()
+    last_a, last_c = None, None
+    for i in range(len(rows)-1, 0, -1):  # 마지막 행부터 위로 탐색
+        if len(rows[i]) > 3 and rows[i][3].strip() == "완":  # D열=완
+            last_a = rows[i][0].strip() if len(rows[i]) > 0 else ""
+            last_c = rows[i][2].strip() if len(rows[i]) > 2 else ""
+            break
+    return last_a, last_c
+
 try:
+    # ✅ 마지막 "완" 행의 A, C 값 읽기
+    prev_a, prev_c = get_last_completed(ws)
+
+    # A 후보 순차 선택
+    if prev_a in A_CANDIDATES:
+        a_idx = (A_CANDIDATES.index(prev_a) + 1) % len(A_CANDIDATES)
+    else:
+        a_idx = 0
+    chosen_a = A_CANDIDATES[a_idx]
+
+    # C 후보 순차 선택
+    if prev_c in C_CANDIDATES:
+        c_idx = (C_CANDIDATES.index(prev_c) + 1) % len(C_CANDIDATES)
+    else:
+        c_idx = 0
+    chosen_c = C_CANDIDATES[c_idx]
+
+    # ✅ 이번 대상 행 찾기
     rows = ws.get_all_values()
     target_row, keyword, title = None, None, None
-    
-    for i, row in enumerate(rows[1:], start=2):  # 2행부터 확인
-        if row[1] and (not row[3] or row[3].strip() != "완"):  # B열 값 있고, D열이 '완' 아니면 대상
+    for i, row in enumerate(rows[1:], start=2):
+        if row[1] and (not row[3] or row[3].strip() != "완"):  # B열 값 있고, 아직 '완' 아님
             target_row = i
-            b_val = row[1].strip() if len(row) > 1 else ""  # B열(키워드)
-
-            # ✅ A, C 후보에서 랜덤 선택
-            chosen_a = random.choice(A_CANDIDATES)
-            chosen_c = random.choice(C_CANDIDATES)
-
+            b_val = row[1].strip()
             keyword = b_val
             title = f"{chosen_a} {b_val} {chosen_c}".strip()
             break
-    
+
     if not keyword or not title:
         print("처리할 키워드 없음")
         exit()
-    
+
     print(f"이번 실행: {title}")
 
     # 썸네일 생성
@@ -390,7 +412,7 @@ try:
     os.makedirs(thumb_dir, exist_ok=True)
     thumb_path = os.path.join(thumb_dir, f"{keyword}.png")
     img_url = make_thumb_with_logging(ws, target_row, thumb_path, title)
-    
+
     html = make_intro(title, keyword)
     if img_url:
         html += f"""
@@ -438,20 +460,22 @@ try:
     # Blogger 업로드
     post_body = {"content": html, "title": title, "labels": ["앱","추천"]}
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False).execute()
-    url = res.get("url","")
+    url = res.get("url", "")
     print(f"✅ 업로드 성공: {url}")
 
-    # ✅ 시트 업데이트
-    ws.update_cell(target_row, 1, chosen_a)  # A열 → 선택된 값 저장
-    ws.update_cell(target_row, 3, chosen_c)  # C열 → 선택된 값 저장
+    # ✅ 시트 업데이트 (선택된 A, C 값 기록)
+    ws.update_cell(target_row, 1, chosen_a)  # A열 갱신
+    ws.update_cell(target_row, 3, chosen_c)  # C열 갱신
     ws.update_cell(target_row, 4, "완")      # D열 완료 표시
     ws.update_cell(target_row, 7, url)       # G열 포스팅 URL
-    ws.update_cell(1, 7, (blog_idx+1) % len(BLOG_IDS))  # 다음 블로그 인덱스 기록
+    ws.update_cell(1, 7, (blog_idx + 1) % len(BLOG_IDS))  # 다음 블로그 인덱스 기록
+
 
 
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
 
