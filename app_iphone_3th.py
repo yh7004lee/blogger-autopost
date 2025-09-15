@@ -577,6 +577,20 @@ def set_blog_index(ws, next_idx):
 # ================================
 # 메인
 # ================================
+def _gs_update_cell_retry(ws, row, col, value, label_for_log="", tries=3, delay=2):
+    """Google Sheets 셀 업데이트 (재시도 + 로그)"""
+    import time
+    for t in range(1, tries+1):
+        try:
+            ws.update_cell(row, col, value)
+            print(f"[OK] ({row},{col}) ← {label_for_log or value}")
+            return True
+        except Exception as e:
+            print(f"[WARN] {t}/{tries}회 실패: ({row},{col}) ← {label_for_log or value} | {e}")
+            time.sleep(delay * t)
+    print(f"[FAIL] 업데이트 실패: ({row},{col}) ← {label_for_log or value}")
+    return False
+
 try:
     # 1) sheet2에서 대상 행/키워드
     target_row, keyword = pick_target_row_and_keyword(ws2)
@@ -671,15 +685,31 @@ try:
     post_url = res.get("url", "")
     print(f"✅ 업로드 성공: {post_url}")
 
-    # 12) 시트 기록 (sheet2)
-    ws2.update_cell(target_row, 1, "아이폰")     # A열
-    ws2.update_cell(target_row, 3, chosen_c)     # C열
-    ws2.update_cell(target_row, 4, "완")         # D열
-    ws2.update_cell(target_row, 7, post_url)     # G열
-    set_blog_index(ws2, blog_idx + 1)            # 다음 블로그 인덱스
+    # 12) 시트 기록 (sheet2, 재시도 + 검증)
+    _gs_update_cell_retry(ws2, target_row, 1, "아이폰", "A열=아이폰")
+    _gs_update_cell_retry(ws2, target_row, 3, chosen_c, "C열=로테이션 문구")
+    _gs_update_cell_retry(ws2, target_row, 4, "완", "D열=완료 표시")
+    _gs_update_cell_retry(ws2, target_row, 7, post_url, "G열=URL")
+
+    # G1 블로그 인덱스 기록
+    next_idx = (blog_idx + 1) % len(BLOG_IDS)
+    _gs_update_cell_retry(ws2, 1, 7, next_idx, "G1=다음 블로그 인덱스")
+
+    # 최종 확인 로그
+    try:
+        print("[VERIFY] 기록된 값:",
+              ws2.cell(target_row, 1).value,
+              ws2.cell(target_row, 3).value,
+              ws2.cell(target_row, 4).value,
+              ws2.cell(target_row, 7).value,
+              "| G1:", ws2.cell(1, 7).value)
+    except Exception as e:
+        print("[WARN] 검증 단계 읽기 실패:", e)
 
 except SystemExit:
     pass
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
+
