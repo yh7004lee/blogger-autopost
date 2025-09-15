@@ -357,8 +357,11 @@ def crawl_apps(keyword):
     return app_links[3:]
 
 # ================================
-# 메인 실행
+# 메인 실행 (수정 버전)
 # ================================
+A_CANDIDATES = ["스마트폰", "핸드폰", "휴대폰", "안드로이드"]
+C_CANDIDATES = ["어플 추천 앱", "앱 추천 어플"]
+
 try:
     rows = ws.get_all_values()
     target_row, keyword, title = None, None, None
@@ -366,11 +369,14 @@ try:
     for i, row in enumerate(rows[1:], start=2):  # 2행부터 확인
         if row[1] and (not row[3] or row[3].strip() != "완"):  # B열 값 있고, D열이 '완' 아니면 대상
             target_row = i
-            a_val = row[0].strip() if len(row) > 0 else ""  # A열
-            b_val = row[1].strip() if len(row) > 1 else ""  # B열
-            c_val = row[2].strip() if len(row) > 2 else ""  # C열
+            b_val = row[1].strip() if len(row) > 1 else ""  # B열(키워드)
+
+            # ✅ A, C 후보에서 랜덤 선택
+            chosen_a = random.choice(A_CANDIDATES)
+            chosen_c = random.choice(C_CANDIDATES)
+
             keyword = b_val
-            title = f"{a_val} {b_val} {c_val}".strip()
+            title = f"{chosen_a} {b_val} {chosen_c}".strip()
             break
     
     if not keyword or not title:
@@ -378,7 +384,6 @@ try:
         exit()
     
     print(f"이번 실행: {title}")
-
 
     # 썸네일 생성
     thumb_dir = "thumbnails"
@@ -394,7 +399,6 @@ try:
         </p>
         <br /><br />
         """
-
 
     # 앱 크롤링
     app_links = crawl_apps(keyword)
@@ -437,14 +441,18 @@ try:
     url = res.get("url","")
     print(f"✅ 업로드 성공: {url}")
 
-    # 시트 업데이트
-    ws.update_cell(target_row, 4, "완")   # D열 완료 표시
-    ws.update_cell(target_row, 7, url)    # G열 포스팅 URL
+    # ✅ 시트 업데이트
+    ws.update_cell(target_row, 1, chosen_a)  # A열 → 선택된 값 저장
+    ws.update_cell(target_row, 3, chosen_c)  # C열 → 선택된 값 저장
+    ws.update_cell(target_row, 4, "완")      # D열 완료 표시
+    ws.update_cell(target_row, 7, url)       # G열 포스팅 URL
     ws.update_cell(1, 7, (blog_idx+1) % len(BLOG_IDS))  # 다음 블로그 인덱스 기록
+
 
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
 
