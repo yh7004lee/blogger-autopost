@@ -276,46 +276,30 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
 # 1) Google Custom Search 사용 (있으면)
 # 2) 없으면 앱스토어 웹 검색 파싱 보조
 # ================================
-def search_app_store_ids(keyword: str, limit: int = 10):
-    ids = []
+def search_app_store_ids(keyword, limit=10):
+    import re, requests
+    API_KEY = os.getenv("GOOGLE_API_KEY", "YOUR_API_KEY")
+    CX = os.getenv("GOOGLE_CX", "YOUR_CX")
+    query = f"site:apps.apple.com {keyword} 앱 OR 어플"
+    url = f"https://www.googleapis.com/customsearch/v1?q={query}&key={API_KEY}&cx={CX}&num={limit}"
+    print("[검색쿼리]", query)
 
-    # 1) Google Custom Search
-    if GCS_API_KEY and GCS_CX:
-        try:
-            q = f"site:apps.apple.com/kr {keyword} 어플"
-            url = f"https://www.googleapis.com/customsearch/v1?q={requests.utils.quote(q)}&key={GCS_API_KEY}&cx={GCS_CX}&num={limit}"
-            res = requests.get(url, timeout=15).json()
-            for item in res.get("items", []):
-                link = item.get("link", "")
-                # https://apps.apple.com/kr/app/앱이름/id1234567890?...
-                if "/id" in link:
-                    try:
-                        apid = link.split("/id")[1].split("?")[0]
-                        if apid.isdigit():
-                            ids.append(apid)
-                    except:
-                        pass
-        except Exception as e:
-            print("[GCS 실패] 보조 검색으로 전환:", e)
+    res = requests.get(url).json()
+    if "items" not in res:
+        print("[검색 결과 없음]", res)
+        return []
 
-    # 2) 앱스토어 직접 검색 (간단 파서)
-    if len(ids) < 3:
-        try:
-            search_url = f"https://apps.apple.com/kr/search?term={requests.utils.quote(keyword)}&media=software"
-            r = requests.get(search_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
-            # 링크 형태에서 id 추출
-            # 예: <a href="https://apps.apple.com/kr/app/앱/id1234567890">
-            found = set(re.findall(r"/id(\d+)", r.text))
-            ids.extend(list(found))
-        except Exception as e:
-            print("[앱스토어 보조 검색 실패]", e)
+    my_list = []
+    for item in res["items"]:
+        link = item.get("link", "")
+        m = re.search(r'/id(\d+)', link)
+        if m:
+            my_list.append(m.group(1))
 
-    # 정리
-    uniq = []
-    for x in ids:
-        if x not in uniq and x.isdigit():
-            uniq.append(x)
-    return uniq[:limit]
+    # 중복 제거
+    aid = list(dict.fromkeys(my_list))
+    return aid
+
 
 # ================================
 # 앱 상세 페이지 수집 (이름/설명/스크린샷)
@@ -711,5 +695,6 @@ except SystemExit:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
