@@ -3,6 +3,7 @@ name: Blogger Autopost iphone 3th
 on:
   workflow_dispatch:        # ✅ 수동 실행만 가능하도록 수정
 
+
 jobs:
   autopost:
     runs-on: windows-latest
@@ -55,6 +56,8 @@ jobs:
           echo "${{ secrets.DRIVE_TOKEN_2ND_B64 }}" > drive_token_2nd.pickle.b64
           certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
 
-      # ✅ 실행할 파이썬 파일 (여기만 변경)
+      # ✅ 실행할 파이썬 파일 (아이폰 버전)
       - name: Run autopost script
         run: python app_iphone_3th.py
+
+ 
