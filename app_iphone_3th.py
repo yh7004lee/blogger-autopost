@@ -559,51 +559,62 @@ def set_blog_index(ws, next_idx):
     ws.update_cell(1, 7, next_idx % len(BLOG_IDS))  # G1
 
 # ================================
-# 메인
+# 메인 (시트2 H열 로그 누적)
 # ================================
-def _gs_update_cell_retry(ws, row, col, value, label_for_log="", tries=3, delay=2):
-    """Google Sheets 셀 업데이트 (재시도 + 로그)"""
-    import time
+
+import time
+
+def sheet_append_log(ws, row_idx, message, tries=3, delay=2):
+    """H열(8열)에 타임스탬프+메시지를 이어 붙여 기록"""
+    ts = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) + "Z"
+    line = f"[{ts}] {message}"
     for t in range(1, tries+1):
         try:
-            ws.update_cell(row, col, value)
-            print(f"[OK] ({row},{col}) ← {label_for_log or value}")
+            prev = ws.cell(row_idx, 8).value or ""   # H열
+            new_val = (prev + (";" if prev else "") + line)
+            ws.update_cell(row_idx, 8, new_val)
+            print(f"[LOG:H{row_idx}] {line}")
             return True
         except Exception as e:
-            print(f"[WARN] {t}/{tries}회 실패: ({row},{col}) ← {label_for_log or value} | {e}")
+            print(f"[WARN] 로그기록 재시도 {t}/{tries}: {e}")
             time.sleep(delay * t)
-    print(f"[FAIL] 업데이트 실패: ({row},{col}) ← {label_for_log or value}")
+    print(f"[FAIL] 로그기록 실패: {line}")
     return False
+
 
 try:
     # 1) sheet2에서 대상 행/키워드
     target_row, keyword = pick_target_row_and_keyword(ws2)
     if not target_row or not keyword:
-        print("처리할 키워드가 없습니다 (sheet2 B열).")
+        sheet_append_log(ws2, 2, "처리할 키워드 없음(B열)")
         raise SystemExit(0)
+    sheet_append_log(ws2, target_row, f"대상 행={target_row}, 키워드='{keyword}'")
 
     # 2) 로테이션 문구 결정
     prev_c = get_prev_c_from_last_completed(ws2)
     chosen_c = get_next_rotation_phrase(prev_c)
     title = f"아이폰 {keyword} {chosen_c}".strip()
-    print(f"[이번 실행 키워드] {keyword}")
-    print(f"[타이틀] {title}")
+    sheet_append_log(ws2, target_row, f"타이틀='{title}', 이전C='{prev_c}', 선택C='{chosen_c}'")
 
     # 3) 썸네일 생성 & 업로드
     thumb_dir = "thumbnails"
     os.makedirs(thumb_dir, exist_ok=True)
     thumb_path = os.path.join(thumb_dir, f"{keyword}.png")
+    sheet_append_log(ws2, target_row, "썸네일 생성 시작")
     thumb_url = make_thumb_with_logging(ws2, target_row, thumb_path, title)
+    sheet_append_log(ws2, target_row, f"썸네일 결과: {thumb_url or '실패'}")
 
     # 4) 앱 ID 목록 검색
+    sheet_append_log(ws2, target_row, "앱 ID 검색 시작")
     app_ids = search_app_store_ids(keyword, limit=10)
     if not app_ids:
-        print("앱 ID를 찾지 못했습니다.")
+        sheet_append_log(ws2, target_row, "앱 ID 없음 → 종료")
         raise SystemExit(0)
-    print(f"[앱 ID 추출] {app_ids}")
+    sheet_append_log(ws2, target_row, f"앱 ID={app_ids}")
 
     # 5) 서론
     html_full = build_intro_block(title, keyword)
+    sheet_append_log(ws2, target_row, "서론 블록 생성 완료")
 
     # 6) 썸네일 본문 삽입
     if thumb_url:
@@ -612,35 +623,35 @@ try:
   <img src="{thumb_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
 </p><br /><br />
 """
+        sheet_append_log(ws2, target_row, "본문에 썸네일 삽입")
+    else:
+        sheet_append_log(ws2, target_row, "본문 썸네일 없음")
 
     # 7) 해시태그
     tag_items = title.split()
     tag_str = " ".join([f"#{t}" for t in tag_items]) + " #앱스토어"
+    sheet_append_log(ws2, target_row, f"해시태그='{tag_str}'")
 
-    # 8) 앱 상세 수집 → 본문 조립 (상위 5개)
+    # 8) 앱 상세 수집 → 본문 조립
     for j, appid in enumerate(app_ids, 1):
-        if j > 5:
-            break
-        detail = fetch_app_detail(appid)
-        app_url = detail["url"]
-        app_name = detail["name"]
-        src_html = detail["desc_html"]
-        images = detail["images"]
+        if j > 5: break
+        try:
+            sheet_append_log(ws2, target_row, f"[{j}] 앱 수집 시작 id={appid}")
+            detail = fetch_app_detail(appid)
+            app_url = detail["url"]
+            app_name = detail["name"]
+            src_html = detail["desc_html"]
+            images = detail["images"]
 
-        # GPT 재작성
-        desc_html = rewrite_app_description(src_html, app_name, keyword)
+            desc_html = rewrite_app_description(src_html, app_name, keyword)
+            sheet_append_log(ws2, target_row, f"[{j}] {app_name} 설명 리라이트 성공")
 
-        # 이미지 묶음
-        img_group_html = ""
-        for cc, img_url in enumerate(images, 1):
-            img_group_html += f'''
-<div class="img-wrap">
-  <img src="{img_url}" alt="{app_name}_{cc}">
-</div>
-'''
+            img_group_html = "".join(
+                f'<div class="img-wrap"><img src="{img_url}" alt="{app_name}_{cc}"></div>'
+                for cc, img_url in enumerate(images, 1)
+            )
 
-        # 섹션 조립
-        section_html = f"""
+            section_html = f"""
 <h2 data-ke-size="size26">{j}. {app_name} 어플 소개</h2>
 <br />
 {desc_html}
@@ -654,47 +665,48 @@ try:
 <p data-ke-size="size18">{tag_str}</p>
 <br /><br />
 """
-        html_full += section_html
+            html_full += section_html
+            sheet_append_log(ws2, target_row, f"[{j}] {app_name} 섹션 완료")
+        except Exception as e_each:
+            sheet_append_log(ws2, target_row, f"[{j}] 앱 처리 실패: {e_each}")
 
     # 9) 마무리
     html_full += build_ending_block(title, keyword)
+    sheet_append_log(ws2, target_row, "마무리 블록 생성 완료")
 
-    # 10) 블로그 로테이션 (sheet2의 G1 사용)
+    # 10) 블로그 로테이션
     blog_idx = get_blog_index(ws2)
     BLOG_ID = BLOG_IDS[blog_idx]
+    sheet_append_log(ws2, target_row, f"로테이션 blog_idx={blog_idx}, BLOG_ID={BLOG_ID}")
 
-    # 11) 블로거 업로드
-    post_body = {"content": html_full, "title": title, "labels": ["앱", "아이폰", "추천"]}
-    res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False, fetchImages=True).execute()
-    post_url = res.get("url", "")
-    print(f"✅ 업로드 성공: {post_url}")
-
-    # 12) 시트 기록 (sheet2, 재시도 + 검증)
-    _gs_update_cell_retry(ws2, target_row, 1, "아이폰", "A열=아이폰")
-    _gs_update_cell_retry(ws2, target_row, 3, chosen_c, "C열=로테이션 문구")
-    _gs_update_cell_retry(ws2, target_row, 4, "완", "D열=완료 표시")
-    _gs_update_cell_retry(ws2, target_row, 7, post_url, "G열=URL")
-
-    # G1 블로그 인덱스 기록
-    next_idx = (blog_idx + 1) % len(BLOG_IDS)
-    _gs_update_cell_retry(ws2, 1, 7, next_idx, "G1=다음 블로그 인덱스")
-
-    # 최종 확인 로그
+    # 11) 업로드
     try:
-        print("[VERIFY] 기록된 값:",
-              ws2.cell(target_row, 1).value,
-              ws2.cell(target_row, 3).value,
-              ws2.cell(target_row, 4).value,
-              ws2.cell(target_row, 7).value,
-              "| G1:", ws2.cell(1, 7).value)
-    except Exception as e:
-        print("[WARN] 검증 단계 읽기 실패:", e)
+        post_body = {"content": html_full, "title": title, "labels": ["앱", "아이폰", "추천"]}
+        res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body,
+                                          isDraft=False, fetchImages=True).execute()
+        post_url = res.get("url", "")
+        sheet_append_log(ws2, target_row, f"업로드 성공: {post_url}")
+    except Exception as up_e:
+        sheet_append_log(ws2, target_row, f"업로드 실패: {up_e}")
+        raise
+
+    # 12) 시트 기록
+    ws2.update_cell(target_row, 1, "아이폰")
+    ws2.update_cell(target_row, 3, chosen_c)
+    ws2.update_cell(target_row, 4, "완")
+    ws2.update_cell(target_row, 7, post_url)
+    next_idx = (blog_idx + 1) % len(BLOG_IDS)
+    ws2.update_cell(1, 7, next_idx)
+    sheet_append_log(ws2, target_row, f"시트 기록 완료: D='완', G='{post_url}', G1={next_idx}")
+
+    # 13) 완료
+    sheet_append_log(ws2, target_row, "작업 정상 종료")
 
 except SystemExit:
     pass
 except Exception as e:
     tb = traceback.format_exc()
+    row_for_err = target_row if 'target_row' in locals() and target_row else 2
+    sheet_append_log(ws2, row_for_err, f"실패: {e}")
+    sheet_append_log(ws2, row_for_err, f"Trace: {tb.splitlines()[-1]}")
     print("실패:", e, tb)
-
-
-
