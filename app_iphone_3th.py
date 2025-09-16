@@ -312,20 +312,18 @@ def search_app_store_ids(keyword, limit=10, country="kr"):
 # ================================
 def fetch_app_detail(app_id: str):
     import html
-
     url = f"https://apps.apple.com/kr/app/id{app_id}"
-    html_text = ""
+    html_content = ""
     name = f"앱 {app_id}"
     images = []
     try:
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-        resp.encoding = "utf-8"  # ✅ 강제로 UTF-8 디코딩
-        soup = BeautifulSoup(resp.text, "lxml", from_encoding="utf-8")
+        soup = BeautifulSoup(resp.text, "lxml")
 
         # 앱 이름
         h1 = soup.find("h1")
         if h1:
-            name = html.unescape(h1.get_text(strip=True))  # ✅ HTML 엔티티 디코딩
+            name = html.unescape(h1.get_text(strip=True))
 
         # 앱 설명
         desc_html = ""
@@ -334,14 +332,14 @@ def fetch_app_detail(app_id: str):
             ps = desc_div.find_all("p")
             if ps:
                 desc_html = "".join(
-                    f"<p data-ke-size='size18'>{p.get_text(strip=True)}</p>"
+                    f"<p data-ke-size='size18'>{html.unescape(p.get_text(strip=True))}</p>"
                     for p in ps if p.get_text(strip=True)
                 )
 
         if not desc_html:
             meta_desc = soup.find("meta", attrs={"name": "description"})
             if meta_desc and meta_desc.get("content"):
-                desc_html = f"<p data-ke-size='size18'>{meta_desc.get('content').strip()}</p>"
+                desc_html = f"<p data-ke-size='size18'>{html.unescape(meta_desc.get('content').strip())}</p>"
 
         # 스크린샷
         sc_wraps = soup.find_all("source")
@@ -351,7 +349,6 @@ def fetch_app_detail(app_id: str):
                 img_url = srcset.split(" ")[0]
                 if img_url and img_url.startswith("https"):
                     images.append(img_url)
-
         if not images:
             for img in soup.find_all("img"):
                 src = img.get("src") or ""
@@ -359,11 +356,16 @@ def fetch_app_detail(app_id: str):
                     images.append(src)
 
         images = images[:4]
-        return {"url": url, "name": name, "desc_html": desc_html, "images": images}
-
+        return {
+            "url": url,
+            "name": name,
+            "desc_html": html.unescape(desc_html),  # ✅ 설명에도 디코딩 추가
+            "images": images
+        }
     except Exception as e:
         print("[앱 상세 수집 실패]", app_id, e)
         return {"url": url, "name": name, "desc_html": "", "images": []}
+
 
 
 # ================================
@@ -721,6 +723,7 @@ except Exception as e:
     sheet_append_log(ws2, row_for_err, f"실패: {e}")
     sheet_append_log(ws2, row_for_err, f"Trace: {tb.splitlines()[-1]}")
     print("실패:", e, tb)
+
 
 
 
