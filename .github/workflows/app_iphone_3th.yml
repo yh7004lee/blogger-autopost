@@ -1,7 +1,9 @@
 name: Blogger Autopost iphone 3th
 
 on:
-  workflow_dispatch:        # ✅ 수동 실행만 가능하도록 수정
+  schedule:
+    - cron: "0 0 */2 * *"   # ⏰ 이틀에 한 번 (UTC 00:00 → 한국 오전 9시)
+  workflow_dispatch:        # ✅ 여전히 수동 실행도 가능
 
 
 jobs:
@@ -61,3 +63,4 @@ jobs:
         run: python app_iphone_3th.py
 
  
+
