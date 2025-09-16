@@ -318,6 +318,7 @@ def fetch_app_detail(app_id: str):
     images = []
     try:
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+        resp.encoding = "utf-8"   # ✅ 추가 (인코딩 강제)
         soup = BeautifulSoup(resp.text, "lxml")
 
         # 앱 이름
@@ -359,7 +360,7 @@ def fetch_app_detail(app_id: str):
         return {
             "url": url,
             "name": name,
-            "desc_html": html.unescape(desc_html),  # ✅ 설명에도 디코딩 추가
+            "desc_html": desc_html,
             "images": images
         }
     except Exception as e:
@@ -723,6 +724,7 @@ except Exception as e:
     sheet_append_log(ws2, row_for_err, f"실패: {e}")
     sheet_append_log(ws2, row_for_err, f"Trace: {tb.splitlines()[-1]}")
     print("실패:", e, tb)
+
 
 
 
