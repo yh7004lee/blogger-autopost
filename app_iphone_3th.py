@@ -276,69 +276,41 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
 # 1) Google Custom Search 사용 (있으면)
 # 2) 없으면 앱스토어 웹 검색 파싱 보조
 # ================================
-def search_app_store_ids(keyword, limit=10):
-    import re, requests, urllib.parse, os
+def search_app_store_ids(keyword, limit=10, country="KR"):
+    """
+    앱스토어 앱 ID 검색 (Apple amp-api-edge API 사용)
+    """
+    import requests, urllib.parse, traceback
 
-    API_KEY = os.getenv("GOOGLE_API_KEY")
-    CX = os.getenv("GOOGLE_CX")
+    encoded = urllib.parse.quote(keyword)
+    url = f"https://amp-api-edge.apps.apple.com/v1/catalog/{country}/apps/search?term={encoded}&entity=software&limit={limit}"
+    headers = {
+        "User-Agent": "AppStore/3.0 CFNetwork/978.0.7 Darwin/18.7.0",
+        "Accept": "application/json",
+    }
+    print("[앱스토어 API 요청]", url)
 
-    # ----------------------------
-    # 1단계: Google CSE API
-    # ----------------------------
     try:
-        query = f"site:apps.apple.com {keyword} (앱 OR 어플)"
-        url = f"https://www.googleapis.com/customsearch/v1?q={query}&key={API_KEY}&cx={CX}&num={limit}"
-        print("[CSE검색쿼리]", query)
-
-        res = requests.get(url, timeout=10).json()
-        if "items" in res:
-            app_ids = []
-            for item in res["items"]:
-                link = item.get("link", "")
-                m = re.search(r'/id(\d+)', link)
-                if m:
-                    app_ids.append(m.group(1))
-            app_ids = list(dict.fromkeys(app_ids))
-            if app_ids:
-                print(f"[CSE 결과] {app_ids}")
-                return app_ids
-            else:
-                print("[CSE 결과 없음 → fallback 이동]")
-        else:
-            print("[CSE 검색 실패/결과 없음]", res)
-    except Exception as e:
-        print("[CSE 예외 발생]", e)
-
-    # ----------------------------
-    # 2단계: 앱스토어 검색 fallback
-    # ----------------------------
-    try:
-        encoded = urllib.parse.quote(keyword)
-        search_url = f"https://apps.apple.com/kr/search?term={encoded}&entity=software"
-        print("[앱스토어 fallback 요청]", search_url)
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/118.0.5993.70 Safari/537.36"
-        }
-        html = requests.get(search_url, headers=headers, timeout=10).text
-
-        # ✅ 중간 HTML 로그
-        snippet = html[:500].replace("\n", " ")
-        print("[앱스토어 HTML 일부]", snippet)
-
-        app_ids = re.findall(r'/id(\d+)', html)
-        app_ids = list(dict.fromkeys(app_ids))[:limit]
-        if app_ids:
-            print(f"[앱스토어 fallback 결과] {app_ids}")
-            return app_ids
-        else:
-            print("[앱스토어 fallback도 결과 없음]")
+        res = requests.get(url, headers=headers, timeout=10)
+        if res.status_code != 200:
+            print(f"[앱스토어 API 실패] HTTP {res.status_code}")
             return []
+
+        data = res.json()
+        results = data.get("results", [])
+        app_ids = []
+        for app in results:
+            if "id" in app:
+                app_ids.append(str(app["id"]))
+        app_ids = list(dict.fromkeys(app_ids))
+        print(f"[앱스토어 API 결과] {app_ids}")
+        return app_ids
+
     except Exception as e:
-        print("[앱스토어 fallback 예외 발생]", e)
+        print("[앱스토어 API 예외]", e)
+        print(traceback.format_exc())
         return []
+
 
 
 
@@ -752,5 +724,6 @@ except Exception as e:
     sheet_append_log(ws2, row_for_err, f"실패: {e}")
     sheet_append_log(ws2, row_for_err, f"Trace: {tb.splitlines()[-1]}")
     print("실패:", e, tb)
+
 
 
