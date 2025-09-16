@@ -1057,6 +1057,31 @@ def get_blogger_service():
 DONE_COL = 7         # G列
 DONE_MARK = "완"     # 표시는 '완' (한국어)
 
+
+def post_to_blogger(service, blog_id, title, html_content, labels=None, is_draft=False):
+    """
+    Blogger API로 글 발행
+    """
+    body = {
+        "kind": "blogger#post",
+        "title": title,
+        "content": html_content,
+    }
+    if labels:
+        body["labels"] = labels
+
+    try:
+        post = service.posts().insert(
+            blogId=blog_id,
+            body=body,
+            isDraft=is_draft
+        ).execute()
+        return post
+    except Exception as e:
+        print(f"❌ Blogger API 포스트 실패: {e}", file=sys.stderr)
+        raise
+
+
 def find_next_row(ws):
     """
     G열이 '완'이 아닌 첫 번째 데이터 행을 찾는다 (2행부터).
@@ -1177,6 +1202,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
