@@ -10,7 +10,7 @@ Excel(MOVIE_ID) → TMDB → Blogger 自動ポスティングパイプライン
 - Blogger APIで公開 (blogId=6854008537633494036)
 - 成功時に対象行G列へ「完」と記録して保存
 """
-
+import json
 import urllib.parse
 import os, sys, html, textwrap, requests, random, time, pickle
 import openpyxl
@@ -1177,5 +1177,6 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
