@@ -276,41 +276,33 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
 # 1) Google Custom Search 사용 (있으면)
 # 2) 없으면 앱스토어 웹 검색 파싱 보조
 # ================================
-def search_app_store_ids(keyword, limit=10, country="KR"):
+def search_app_store_ids(keyword, limit=10, country="kr"):
     """
-    앱스토어 앱 ID 검색 (Apple amp-api-edge API 사용)
+    iTunes Search API로 앱스토어 ID 추출 (인증 불필요, 공식 API)
     """
     import requests, urllib.parse, traceback
 
     encoded = urllib.parse.quote(keyword)
-    url = f"https://amp-api-edge.apps.apple.com/v1/catalog/{country}/apps/search?term={encoded}&entity=software&limit={limit}"
-    headers = {
-        "User-Agent": "AppStore/3.0 CFNetwork/978.0.7 Darwin/18.7.0",
-        "Accept": "application/json",
-    }
-    print("[앱스토어 API 요청]", url)
+    url = f"https://itunes.apple.com/search?term={encoded}&country={country}&entity=software&limit={limit}"
+    print("[iTunes API 요청]", url)
 
     try:
-        res = requests.get(url, headers=headers, timeout=10)
+        res = requests.get(url, timeout=10)
         if res.status_code != 200:
-            print(f"[앱스토어 API 실패] HTTP {res.status_code}")
+            print(f"[iTunes API 실패] HTTP {res.status_code}")
             return []
 
         data = res.json()
         results = data.get("results", [])
-        app_ids = []
-        for app in results:
-            if "id" in app:
-                app_ids.append(str(app["id"]))
+        app_ids = [str(app["trackId"]) for app in results if "trackId" in app]
         app_ids = list(dict.fromkeys(app_ids))
-        print(f"[앱스토어 API 결과] {app_ids}")
+        print(f"[iTunes API 결과] {app_ids}")
         return app_ids
 
     except Exception as e:
-        print("[앱스토어 API 예외]", e)
+        print("[iTunes API 예외]", e)
         print(traceback.format_exc())
         return []
-
 
 
 
@@ -724,6 +716,7 @@ except Exception as e:
     sheet_append_log(ws2, row_for_err, f"실패: {e}")
     sheet_append_log(ws2, row_for_err, f"Trace: {tb.splitlines()[-1]}")
     print("실패:", e, tb)
+
 
 
 
