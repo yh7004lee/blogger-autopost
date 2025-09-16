@@ -277,12 +277,8 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
 # 2) 없으면 앱스토어 웹 검색 파싱 보조
 # ================================
 def search_app_store_ids(keyword, limit=10):
-    """
-    앱스토어 앱 ID 검색 (2단계)
-    1) Google CSE API 검색
-    2) 실패 시 앱스토어 검색 페이지 fallback
-    """
-    import re, requests, urllib.parse
+    import re, requests, urllib.parse, os
+
     API_KEY = os.getenv("GOOGLE_API_KEY")
     CX = os.getenv("GOOGLE_CX")
 
@@ -322,9 +318,15 @@ def search_app_store_ids(keyword, limit=10):
         print("[앱스토어 fallback 요청]", search_url)
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                          "AppleWebKit/537.36 (KHTML, like Gecko) "
+                          "Chrome/118.0.5993.70 Safari/537.36"
         }
         html = requests.get(search_url, headers=headers, timeout=10).text
+
+        # ✅ 중간 HTML 로그
+        snippet = html[:500].replace("\n", " ")
+        print("[앱스토어 HTML 일부]", snippet)
 
         app_ids = re.findall(r'/id(\d+)', html)
         app_ids = list(dict.fromkeys(app_ids))[:limit]
@@ -337,6 +339,7 @@ def search_app_store_ids(keyword, limit=10):
     except Exception as e:
         print("[앱스토어 fallback 예외 발생]", e)
         return []
+
 
 
 
@@ -749,4 +752,5 @@ except Exception as e:
     sheet_append_log(ws2, row_for_err, f"실패: {e}")
     sheet_append_log(ws2, row_for_err, f"Trace: {tb.splitlines()[-1]}")
     print("실패:", e, tb)
+
 
