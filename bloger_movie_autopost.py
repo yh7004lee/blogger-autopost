@@ -103,13 +103,26 @@ def get_youtube_trailers(title_ko, title_en=None, max_results=2):
 
 # ===============================
 # Google Sheets 연결
+# ===============================
+# Google Sheets 연결 (영화 시트 전용)
+# ===============================
+import gspread
+from google.oauth2.service_account import Credentials
+
 def get_sheet():
     SERVICE_ACCOUNT_FILE = "sheetapi.json"
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds = ServiceAccountCredentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+
+    creds = Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    )
     gc = gspread.authorize(creds)
-    SHEET_ID = os.getenv("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
+
+    # 🎬 영화 시트 ID 고정
+    SHEET_ID = "10kqYhxmeewG_9-XOdXTbv0RVQG9_-jXjtg0C6ERoGG0"
+
     return gc.open_by_key(SHEET_ID).sheet1
+
 
 
 
@@ -1297,6 +1310,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
