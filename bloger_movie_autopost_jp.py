@@ -1190,7 +1190,8 @@ def main_once():
 
     # 6) 로그 기록 (Q열=17)
     try:
-        log_val = log_buffer.getvalue()
+        
+        log_val = log_buffer.getvalue().replace("\n", " │ ")
         prev = ws.cell(target_row, 17).value or ""
         new_val = (prev + " | " if prev else "") + log_val
         ws.update_cell(target_row, 17, new_val)
@@ -1215,6 +1216,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
