@@ -59,7 +59,8 @@ IMG_BASE = "https://image.tmdb.org/t/p"
 
 # 🔑 TMDB 인증정보
 BEARER = "YOUR_TMDB_BEARER"
-API_KEY = "YOUR_TMDB_API_KEY"
+API_KEY = "56f4a3bce0512cdc20171a83153c25d6"
+
 
 # 🔑 YouTube API
 YOUTUBE_API_KEY = "YOUR_YOUTUBE_KEY"
@@ -335,4 +336,5 @@ if __name__ == "__main__":
             break
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             time.sleep(POST_DELAY_MIN * 60)
+
 
