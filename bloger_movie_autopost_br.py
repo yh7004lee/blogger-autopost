@@ -93,7 +93,7 @@ def choose(*options):
 # ===============================
 # 🎬 인트로 생성 (포르투갈어)
 # ===============================
-def make_intro_7(title, year, genres_str, director_names, main_cast, cert_label, runtime_min, keywords):
+def make_intro_6(title, year, genres_str, director_names, main_cast, cert_label, runtime_min, keywords):
     year_txt = f"lançado em {year}" if year else "ano de lançamento desconhecido"
     genre_phrase = genres_str if genres_str else "gênero desconhecido"
     director_one = director_names[0] if director_names else ""
@@ -182,7 +182,7 @@ def make_intro_7(title, year, genres_str, director_names, main_cast, cert_label,
 # 🎬 아웃트로 생성 (포르투갈어)
 # ===============================
 
-def make_outro_7(title, year, genres_str, director_names, keywords):
+def make_outro_6(title, year, genres_str, director_names, keywords):
     year_txt = year if year else "desconhecido"
     director_one = director_names[0] if director_names else ""
 
@@ -336,5 +336,6 @@ if __name__ == "__main__":
             break
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
