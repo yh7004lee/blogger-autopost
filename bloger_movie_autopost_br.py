@@ -357,6 +357,19 @@ def make_section_lead(name, title, year, genres_str, cert_label, extras=None):
 # ===============================
 # TMDB 보조 함수들
 # ===============================
+
+def get_movie_images(movie_id, api_key=None):
+    """스틸컷/포스터 이미지 가져오기 (언어 제한 해제)"""
+    try:
+        params = {"include_image_language": "null,en"}
+        j = tmdb_get(f"/movie/{movie_id}/images", params=params, api_key=api_key)
+        return j.get("backdrops", []), j.get("posters", [])
+    except Exception as e:
+        print(f"❌ TMDB 이미지 API 오류 (movie_id={movie_id}): {e}")
+        return [], []
+
+
+
 def get_movie_release_cert(movie_id):
     try:
         data = tmdb_get(f"/movie/{movie_id}/release_dates", api_key=API_KEY)
@@ -452,8 +465,9 @@ def build_html(post, cast_count=10, stills_count=8):
     director_names = [esc(d.get("name","")) for d in directors]
     cast_names = [esc(p.get("name","")) for p in cast]
 
-    backdrops = (post.get("images") or {}).get("backdrops") or []
+    backdrops, posters = get_movie_images(post["id"], api_key=API_KEY)
     backdrops = sorted(backdrops, key=lambda b: (b.get("vote_count",0), b.get("vote_average",0)), reverse=True)[:stills_count]
+
 
     cert = get_movie_release_cert(post["id"])
     if not cert and adult_flag:
@@ -744,6 +758,7 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
 
 
 
