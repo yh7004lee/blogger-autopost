@@ -1123,6 +1123,24 @@ def mark_done(ws, row_idx):
 # ===============================
 # メイン実行部
 def main_once():
+    def main_once():
+    import io, sys, re
+
+    # 로그 버퍼 설정
+    log_buffer = io.StringIO()
+    class Logger:
+        def write(self, msg):
+            log_buffer.write(msg)
+            sys.__stdout__.write(msg)  # 콘솔에도 그대로 출력
+        def flush(self):
+            sys.__stdout__.flush()
+
+    sys.stdout = Logger()
+    sys.stderr = Logger()
+
+    ws = get_sheet()
+    service = get_blogger_service()
+
     ws = get_sheet()
 
     # 1) 대상 행 찾기
@@ -1199,6 +1217,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
