@@ -1,4 +1,4 @@
-name: Movie Autopost
+name: Movie Autopost jp
 
 on:
   schedule:
@@ -59,4 +59,4 @@ jobs:
           certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
 
       - name: Run autopost
-        run: python bloger_movie_autopost.py
+        run: python bloger_movie_autopost_jp.py
