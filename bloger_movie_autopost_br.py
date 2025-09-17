@@ -425,76 +425,102 @@ def build_html(post, cast_count=10, stills_count=8):
 
     html_parts = []
 
+    # ========================
     # 인트로
-    html_parts.append(f"<p>{make_intro_6(title, year, genres, directors, cast_top, cert, runtime, [title])}</p>")
+    # ========================
+    html_parts.append(f"<div class='intro-box'><p>{make_intro_6(title, year, genres, directors, cast_top, cert, runtime, [title])}</p></div>")
 
-    # Sinopse
+    # ========================
+    # 줄거리 (Sinopse)
+    # ========================
     overview = html.escape(post.get("overview") or "Sinopse não disponível.")
-    html_parts.append(f"<h2>Sinopse</h2><p>{make_section_lead('Sinopse', title, year, genres, cert)}</p><p>{overview}</p>")
+    html_parts.append("<h2>Sinopse</h2>")
+    html_parts.append(f"<div class='summary-box'><p>{make_section_lead('Sinopse', title, year, genres, cert)}</p><p>{overview}</p></div>")
 
-    # Elenco
+    # ========================
+    # 출연 (Elenco)
+    # ========================
     html_parts.append("<h2>Elenco</h2>")
-    html_parts.append(f"<p>{make_section_lead('Elenco', title, year, genres, cert, {'cast_top': cast_top})}</p>")
-    html_parts.append("<ul>")
+    html_parts.append(f"<div class='cast-box'><p>{make_section_lead('Elenco', title, year, genres, cert, {'cast_top': cast_top})}</p><ul>")
     for c in cast_list:
         html_parts.append(f"<li>{c.get('name')} como {c.get('character')}</li>")
-    html_parts.append("</ul>")
+    html_parts.append("</ul></div>")
 
-    # Fotos
+    # ========================
+    # 사진 (Fotos)
+    # ========================
     stills = post.get("images", {}).get("backdrops", [])[:stills_count]
     if stills:
         html_parts.append("<h2>Fotos</h2>")
-        html_parts.append(f"<p>{make_section_lead('Fotos', title, year, genres, cert)}</p>")
+        html_parts.append(f"<div class='photos-box'><p>{make_section_lead('Fotos', title, year, genres, cert)}</p>")
         for s in stills:
             u = img_url(s.get("file_path"), "w500")
             if u:
                 html_parts.append(f'<img src="{u}" alt="still">')
+        html_parts.append("</div>")
 
-    # Avaliação
+    # ========================
+    # 평가 (Avaliação)
+    # ========================
     vote_avg = post.get("vote_average") or "N/A"
     vote_cnt = post.get("vote_count") or 0
     popularity = post.get("popularity") or "N/A"
     html_parts.append("<h2>Avaliação & Popularidade</h2>")
-    html_parts.append(f"<p>Nota média: {vote_avg} (com {vote_cnt} votos)</p>")
-    html_parts.append(f"<p>Popularidade: {popularity}</p>")
+    html_parts.append("<div class='score-box'>")
+    html_parts.append(f"<p><b>Nota média:</b> {vote_avg} (com {vote_cnt} votos)</p>")
+    html_parts.append(f"<p><b>Popularidade:</b> {popularity}</p>")
+    html_parts.append("</div>")
 
-    # Trailer
+    # ========================
+    # 트레일러 (Trailer)
+    # ========================
     html_parts.append("<h2>Trailer</h2>")
     vids = get_movie_videos_all(post["id"])
     yt = [v for v in vids if v.get("site") == "YouTube" and v.get("type") == "Trailer"]
     if yt:
         vid = yt[0]["key"]
-        html_parts.append(f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{vid}" frameborder="0" allowfullscreen></iframe>')
+        html_parts.append(f"<div class='trailer-box'><iframe width='560' height='315' src='https://www.youtube.com/embed/{vid}' frameborder='0' allowfullscreen></iframe></div>")
     else:
         alts = get_youtube_trailers(title, year)
         if alts:
-            html_parts.append(f'<a href="{alts[0][1]}" target="_blank">{alts[0][0]}</a>')
+            html_parts.append(f"<div class='trailer-box'><a href='{alts[0][1]}' target='_blank'>{alts[0][0]}</a></div>")
         else:
-            html_parts.append("<p>Trailer não disponível.</p>")
+            html_parts.append("<div class='trailer-box'><p>Trailer não disponível.</p></div>")
 
-    # Filmes recomendados (TMDB)
+    # ========================
+    # 추천 영화 (TMDB Recommendations)
+    # ========================
     recs = get_movie_recommendations(post["id"])
     if recs:
-        html_parts.append("<h2>Filmes recomendados</h2><ul>")
+        html_parts.append("<h2>Filmes recomendados</h2>")
+        html_parts.append("<div class='recommend-box'><ul>")
         for r in recs:
             html_parts.append(f"<li>{r.get('title')} ({(r.get('release_date') or '')[:4]})</li>")
-        html_parts.append("</ul>")
-
-    # Outros artigos do blog (RSS)
-    related = get_related_posts(RELATED_RSS_URL, max_results=5)
-    if related:
-        html_parts.append('<div class="related-box"><h2>Outros artigos do blog</h2><ul>')
-        for r in related:
-            html_parts.append(f'<li><a href="{r["link"]}" target="_blank">{r["title"]}</a></li>')
         html_parts.append("</ul></div>")
 
-    # Outro
-    html_parts.append(f"<p>{make_outro_6(title, year, genres, directors, [title])}</p>")
+    # ========================
+    # 블로그 내 추천글 (RSS)
+    # ========================
+    related = get_related_posts(RELATED_RSS_URL, max_results=5)
+    if related:
+        html_parts.append("<h2>Outros artigos do blog</h2>")
+        html_parts.append("<div class='related-box'><ul>")
+        for r in related:
+            html_parts.append(f"<li><a href='{r['link']}' target='_blank'>{r['title']}</a></li>")
+        html_parts.append("</ul></div>")
 
-    # Hashtags
-    html_parts.append(f"<p>{make_hashtags_from_title(title, year, genres)}</p>")
+    # ========================
+    # 아웃트로
+    # ========================
+    html_parts.append(f"<div class='outro-box'><p>{make_outro_6(title, year, genres, directors, [title])}</p></div>")
+
+    # ========================
+    # 해시태그
+    # ========================
+    html_parts.append(f"<div class='hashtag-box'><p>{make_hashtags_from_title(title, year, genres)}</p></div>")
 
     return "\n".join(html_parts)
+
 
 
 # ===============================
@@ -535,6 +561,7 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
 
 
 
