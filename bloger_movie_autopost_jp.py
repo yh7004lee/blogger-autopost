@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+import sys
+sys.stdout.reconfigure(encoding="utf-8")
 """
 Excel(MOVIE_ID) → TMDB → Blogger 自動ポスティングパイプライン
 - movies_discover.xlsx 読み込み: A=タイトル, B=MOVIE_ID, C=公開日, D=評価, E=投票数, F=備考, G=完了フラグ
@@ -1192,6 +1193,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
