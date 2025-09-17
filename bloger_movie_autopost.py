@@ -106,8 +106,7 @@ def get_youtube_trailers(title_ko, title_en=None, max_results=2):
 # ===============================
 # Google Sheets 연결 (영화 시트 전용)
 # ===============================
-import gspread
-from google.oauth2.service_account import Credentials
+
 
 def get_sheet():
     SERVICE_ACCOUNT_FILE = "sheetapi.json"
@@ -1310,6 +1309,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
