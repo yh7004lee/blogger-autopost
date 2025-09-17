@@ -13,12 +13,25 @@ Excel(MOVIE_ID) → TMDB → Blogger 自動ポスティングパイプライン
 import json
 import urllib.parse
 import os, sys, html, textwrap, requests, random, time, pickle
-import openpyxl
-from openpyxl.utils import get_column_letter
-from openpyxl.styles import PatternFill
+
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+
+import gspread
+from google.oauth2.service_account import Credentials
+
+# Google Sheets 인증
+SHEET_ID = os.getenv("SHEET_ID", "YOUR_SHEET_ID")
+SHEET_RANGE = "シート1"   # 시트 이름 (수정 필요)
+
+def get_sheet():
+    creds = Credentials.from_service_account_file("sheetapi.json", scopes=[
+        "https://www.googleapis.com/auth/spreadsheets"
+    ])
+    client = gspread.authorize(creds)
+    return client.open_by_key(SHEET_ID).worksheet(SHEET_RANGE)
+
 
 # ===============================
 # 📝 ポスティング設定
@@ -29,9 +42,7 @@ POST_DELAY_MIN = 1  # 各投稿後の待機時間 (分単位、0なら即次へ)
 # 🔧 環境/パス設定
 EXCEL_PATH = "movies_discover.xlsx"
 BLOG_ID = "6854008537633494036"       # ★ 新しい日本語ブログ ID
-CLIENT_SECRET_FILE = r"cc.json" # Google OAuth クライアントシークレットJSON
-BLOGGER_TOKEN_PICKLE = "blogger_token.pickle"
-SCOPES = ["https://www.googleapis.com/auth/blogger"]
+
 
 # ===============================
 # 🈶 TMDB 設定
@@ -680,7 +691,7 @@ def make_outro_6(title, year, genres_str, director_names, keywords):
 
 
 
-import requests, random
+
 import xml.etree.ElementTree as ET
 
 def get_random_rss_links(rss_url="https://japan.appsos.kr/feeds/posts/default?alt=rss", count=5):
@@ -1055,7 +1066,7 @@ def get_blogger_service():
 # ===============================
 # Excel ヘルパー（G列に '완'）
 DONE_COL = 7         # G列
-DONE_MARK = "완"     # 표시는 '완' (한국어)
+DONE_MARK = "完"     # 표시는 '완' (한국어)
 
 
 def post_to_blogger(service, blog_id, title, html_content, labels=None, is_draft=False):
@@ -1082,44 +1093,36 @@ def post_to_blogger(service, blog_id, title, html_content, labels=None, is_draft
         raise
 
 
+DONE_COL = 7         # G列
+DONE_MARK = "완"     # 일본어 버전에서는 '完'
+
 def find_next_row(ws):
-    """
-    G열이 '완'이 아닌 첫 번째 데이터 행을 찾는다 (2행부터).
-    반환: (row_index, movie_id:int)
-    """
-    for row_idx in range(2, ws.max_row + 1):
-        done_val = str(ws.cell(row=row_idx, column=DONE_COL).value or "").strip()  # G열
-        movie_raw = ws.cell(row=row_idx, column=2).value                           # B열 (MOVIE_ID)
+    rows = ws.get_all_values()
+    for idx, row in enumerate(rows[1:], start=2):  # 2행부터
+        done_val = row[6].strip() if len(row) > 6 else ""   # G열
+        movie_raw = row[1].strip() if len(row) > 1 else ""  # B열 MOVIE_ID
         if done_val == DONE_MARK:
             continue
-        if movie_raw is None or str(movie_raw).strip() == "":
+        if not movie_raw.isdigit():
             continue
-        try:
-            movie_id = int(str(movie_raw).strip())
-        except:
-            continue
-        return row_idx, movie_id
+        return idx, int(movie_raw)
     return None, None
 
 def mark_done(ws, row_idx):
-    ws.cell(row=row_idx, column=DONE_COL, value=DONE_MARK)  # G열 = '완'
+    ws.update_cell(row_idx, DONE_COL, DONE_MARK)  # ✅ G열 업데이트
+
+
 
 # ===============================
 # メイン実行部
 def main_once():
-    random.seed()
+    ws = get_sheet()
 
-    # 1) 엑셀에서 대상 행 찾기
-    if not os.path.exists(EXCEL_PATH):
-        print(f"엑셀 파일을 찾지 못했습니다: {EXCEL_PATH}", file=sys.stderr)
-        sys.exit(1)
-    wb = openpyxl.load_workbook(EXCEL_PATH)
-    ws = wb.active
-
+    # 1) 대상 행 찾기
     target_row, movie_id = find_next_row(ws)
     if not movie_id:
-        print("처리할 행이 없습니다. (모든 행이 '완')")
-        return False  # 더 이상 처리할 게 없으니 종료
+        print("📌 처리할 행이 없습니다. (모든 행이 '完')")
+        return False
 
     print(f"👉 대상 행: {target_row} (MOVIE_ID={movie_id})")
 
@@ -1127,67 +1130,54 @@ def main_once():
     try:
         post = get_movie_bundle(movie_id, lang=LANG, bearer=BEARER, api_key=API_KEY)
     except Exception as e:
-        print(f"TMDB 요청 실패: {e}", file=sys.stderr)
-        return True  # 다음 턴 계속
+        print(f"❌ TMDB 요청 실패: {e}")
+        return True
 
     # 3) HTML 생성
     try:
         html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
     except Exception as e:
-        print(f"HTML 생성 오류: {e}", file=sys.stderr)
+        print(f"❌ HTML 생성 오류: {e}")
         return True
 
-    # 4) 블로그 제목(일본어)
-    title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
-    year = (post.get("release_date") or "")[:4]
-    blog_title = f"映画 {title} ({year}) あらすじ 出演者 主人公 予告編"
-
-    # 5) Blogger 발행
-    post_success = False
+    # 4) Blogger 발행
+    post_success, blog_title = False, ""
     try:
         service = get_blogger_service()
-        genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
+        title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
         year = (post.get("release_date") or "")[:4]
+        blog_title = f"映画 {title} ({year}) あらすじ 出演者 主人公 予告編"
 
-        labels = ["映画"]
-        if year:
-            labels.append(year)
-        if genres_list:
-            labels.extend(genres_list)
+        genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
+        labels = ["映画"] + ([year] if year else []) + genres_list
 
         res = post_to_blogger(service, BLOG_ID, blog_title, html_out, labels=labels, is_draft=False)
-        post_url = res.get("url", "(URL 미확인)")
-        print(f"✅ 발행 완료: {post_url}")
+        print(f"✅ 발행 완료: {res.get('url','(URL 미확인)')}")
         post_success = True
     except Exception as e:
-        print(f"Blogger 발행 실패: {e}", file=sys.stderr)
-       
+        print(f"❌ Blogger 발행 실패: {e}")
 
-         # 👉 실패 시 HTML 로컬 저장 (D:\py\image_wd 고정)
-        safe_title = "".join(c if c.isalnum() else "_" for c in blog_title)[:50]
-        save_dir = r"D:\py\image_wd"
-        os.makedirs(save_dir, exist_ok=True)  # 폴더 없으면 자동 생성
-        filename = f"failed_post_{movie_id}_{safe_title}.html"
-        filepath = os.path.join(save_dir, filename)
-
-
-        try:
-            with open(filepath, "w", encoding="utf-8") as f:
-                f.write(html_out)
-            print(f"💾 발행 실패 → HTML 로컬 저장 완료\n    저장 위치: {filepath}")
-        except Exception as fe:
-            print(f"❌ HTML 저장 실패: {fe}", file=sys.stderr)
-
-    # 6) 엑셀 G열 '완' 표시 후 저장 (✅ 성공시에만)
+    # 5) Google Sheets 업데이트
     if post_success:
         try:
-            mark_done(ws, target_row)
-            wb.save(EXCEL_PATH)
-            print(f"✅ 엑셀 저장 완료: {EXCEL_PATH} (행 {target_row} G열='{DONE_MARK}')")
+            mark_done(ws, target_row)   # G열 = 完
+            print(f"✅ Google Sheets 완료 표시 (행 {target_row}, G열)")
         except Exception as e:
-            print(f"엑셀 저장 실패: {e}", file=sys.stderr)
+            print(f"❌ 완료 표시 실패: {e}")
 
-    return True  # 다음 루프 진행
+    # 6) 로그 기록 (Q열=17)
+    try:
+        import io
+        log_val = log_buffer.getvalue()
+        prev = ws.cell(target_row, 17).value or ""
+        new_val = (prev + " | " if prev else "") + log_val
+        ws.update_cell(target_row, 17, new_val)
+        print(f"📌 로그 기록 완료 (행 {target_row}, Q열)")
+    except Exception as e:
+        print(f"❌ 로그 기록 실패: {e}")
+
+    return True
+
 
 
 
@@ -1202,6 +1192,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
