@@ -1284,7 +1284,19 @@ def main():
                 except Exception as log_e:
                     sys.__stdout__.write(f"❌ 로그 기록 실패: {log_e}\n")
 
-            break  # ✅ 한
+            break  # ✅ 한 건만 처리 후 종료
+
+# ===============================
+# 메인 호출부
+# ===============================
+if __name__ == "__main__":
+    for n in range(POST_COUNT):
+        print(f"\n🚀 {n+1}/{POST_COUNT} 번째 포스팅 시작")
+        main()
+
+        if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
+            print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
+            time.sleep(POST_DELAY_MIN * 60)
 
 
 
