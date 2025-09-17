@@ -14,7 +14,7 @@ import urllib.parse
 import os, sys, html, textwrap, requests, random, time, pickle
 import gspread
 from google.oauth2.service_account import Credentials as ServiceAccountCredentials
-
+import json
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
@@ -1299,6 +1299,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
