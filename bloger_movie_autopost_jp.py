@@ -24,7 +24,7 @@ from google.oauth2.service_account import Credentials
 
 # Google Sheets 인증
 
-
+from oauth2client.service_account import ServiceAccountCredentials
 def get_sheet():
     SERVICE_ACCOUNT_FILE = "sheetapi.json"   # ✅ GitHub Secrets에서 복원되는 파일
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -1199,6 +1199,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
