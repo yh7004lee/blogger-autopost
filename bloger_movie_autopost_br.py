@@ -77,15 +77,33 @@ def tmdb_get(path, params=None, api_key=None):
         params = {}
     if api_key and "api_key" not in params:
         params["api_key"] = api_key
-    r = requests.get(url, headers=headers, params=params, timeout=20)
-    r.raise_for_status()
-    return r.json()
+
+    try:
+        r = requests.get(url, headers=headers, params=params, timeout=20)
+        r.raise_for_status()
+        return r.json()
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ TMDB 요청 실패 (HTTP {r.status_code}): {url}")
+        return {}
+    except Exception as e:
+        print(f"❌ TMDB 요청 중 오류 발생: {e}")
+        return {}
+
+
 
 def img_url(path, size="w780"):
     return f"{IMG_BASE}/{size}{path}" if path else None
 
 def choose(*options):
     return random.choice(options)
+
+def post_to_blogger(service, blog_id, title, html_content, labels=None, is_draft=False):
+    body = {"kind": "blogger#post", "title": title, "content": html_content}
+    if labels:
+        body["labels"] = labels
+    post = service.posts().insert(blogId=blog_id, body=body, isDraft=is_draft).execute()
+    return post
+
 
 # ===============================
 # 🎬 인트로 (7문장)
@@ -408,7 +426,12 @@ def build_html(post, cast_count=10, stills_count=8):
     html_parts.append(f"<p>{make_section_lead('Elenco', title, year, genres, cert, {'cast_top':cast_top})}</p>")
     html_parts.append("<ul>")
     for c in cast_list:
-        html_parts.append(f"<li>{c.get('name')} como {c.get('character')}</li>")
+        name = c.get("name") or "Ator desconhecido"
+        char = c.get("character") or ""
+        if char:
+            html_parts.append(f"<li>{name} como {char}</li>")
+        else:
+            html_parts.append(f"<li>{name}</li>")
     html_parts.append("</ul>")
 
     # Fotos
@@ -496,3 +519,4 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
