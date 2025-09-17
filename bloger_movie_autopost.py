@@ -16,6 +16,22 @@ import os, sys, html, textwrap, requests, random, time, pickle
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
+
+import io, sys
+
+log_buffer = io.StringIO()
+class Logger:
+    def write(self, msg):
+        log_buffer.write(msg)
+        sys.__stdout__.write(msg)  # 콘솔에도 그대로 출력
+    def flush(self):
+        sys.__stdout__.flush()
+
+sys.stdout = Logger()
+sys.stderr = Logger()
+
+
+
 # ===============================
 # 📝 포스팅 설정
 POST_COUNT =1     # 몇 번 포스팅할지 (예: 10 이면 10회 반복)
@@ -1221,7 +1237,19 @@ def post_to_blogger(service, blog_id, title, html_content, labels=None, is_draft
 # ===============================
 ## 메인 실행부
 def main():
-    random.seed()
+    import io, sys
+
+    # 로그 버퍼 설정
+    log_buffer = io.StringIO()
+    class Logger:
+        def write(self, msg):
+            log_buffer.write(msg)
+            sys.__stdout__.write(msg)  # 콘솔에도 그대로 출력
+        def flush(self):
+            sys.__stdout__.flush()
+
+    sys.stdout = Logger()
+    sys.stderr = Logger()
 
     ws = get_sheet()
     service = get_blogger_service()
@@ -1234,40 +1262,41 @@ def main():
         if movie_id and done_flag != "완":
             print(f"👉 대상 행: {i} (MOVIE_ID={movie_id})")
 
-            # 1) TMDB에서 상세 번들 수집
             try:
+                # 1) TMDB에서 상세 번들 수집
                 post = get_movie_bundle(movie_id, lang=LANG, bearer=BEARER, api_key=API_KEY)
-            except Exception as e:
-                print(f"❌ TMDB 요청 실패: {e}")
-                return
 
-            # 2) HTML 구성
-            try:
+                # 2) HTML 구성
                 html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
-            except Exception as e:
-                print(f"❌ HTML 구성 오류: {e}")
-                return
 
-            # 3) 포스트 제목
-            title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
-            year = (post.get("release_date") or "")[:4]
-            blog_title = f"영화 {title} ({year}) 줄거리 출연진 주인공 예고편"
+                # 3) 포스트 제목
+                title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
+                year = (post.get("release_date") or "")[:4]
+                blog_title = f"영화 {title} ({year}) 줄거리 출연진 주인공 예고편"
 
-            # 4) Blogger 발행
-            try:
+                # 4) Blogger 발행
                 genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
                 labels = ["영화"] + ([year] if year else []) + genres_list
                 res = post_to_blogger(service, BLOG_ID, blog_title, html_out, labels=labels, is_draft=False)
                 print(f"✅ 발행 완료: {res.get('url','(URL 미확인)')}")
-            except Exception as e:
-                print(f"❌ Blogger 발행 실패: {e}")
-                return
 
-            # 5) Google Sheets 업데이트
-            try:
-                ws.update_cell(i, 6, "완")  # F열에 "완"
+                # 5) Google Sheets 업데이트 (완)
+                ws.update_cell(i, 6, "완")
                 print(f"✅ Google Sheets 업데이트 완료 (행 {i})")
-            except Exception as e:
-                print(f"❌ Google Sheets 업데이트 실패: {e}")
 
-            break  # ✅ 한 번 성공하면 루프 종료
+            except Exception as e:
+                print(f"❌ 실행 중 오류 발생: {e}")
+
+            finally:
+                # 6) 로그 기록 (P열 = 16열, append)
+                try:
+                    prev = ws.cell(i, 16).value or ""
+                    new_val = (prev + "\n" if prev else "") + log_buffer.getvalue().strip()
+                    ws.update_cell(i, 16, new_val)
+                    print(f"📌 실행 로그 기록 완료 (행 {i}, P열)")
+                except Exception as log_e:
+                    sys.__stdout__.write(f"❌ 로그 기록 실패: {log_e}\n")
+
+            break  # ✅ 한
+
+
