@@ -393,13 +393,22 @@ def get_youtube_trailers(title, year=None, max_results=2):
     except:
         return []
 
-def get_movie_recommendations(movie_id, max_results=4):
+def get_movie_recommendations(movie_id, lang="ja-JP", bearer=None, api_key=None):
+    """추천 영화 목록 (에러 발생 시 빈 리스트 반환)"""
     try:
-        data = tmdb_get(f"/movie/{movie_id}/recommendations", api_key=API_KEY)
-        results = data.get("results", [])
-        return results[:max_results]
-    except:
+        params = {"language": lang}
+        j = tmdb_get(
+            f"/movie/{movie_id}/recommendations",
+            params=params,
+            bearer=bearer,
+            api_key=api_key
+        )
+        return j.get("results", [])
+    except Exception as e:
+        print(f"❌ TMDB 추천 영화 API 오류 (movie_id={movie_id}): {e}")
         return []
+
+
 
 def make_hashtags_from_title(title, year, genres):
     tags = []
@@ -733,6 +742,7 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
 
 
 
