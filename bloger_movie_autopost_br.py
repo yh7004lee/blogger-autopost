@@ -317,7 +317,9 @@ def main_once():
     year = (post.get("release_date") or "")[:4]
     blog_title = f"Filme {title} ({year}) sinopse elenco trailer"
 
-    html_out = f"<p>{make_intro_6(title, year, '', [], [], '', 0, [title])}</p><br><p>{make_outro_6(title, year, '', [], [title])}</p>"
+   
+    html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
+
 
     res = post_to_blogger(service, BLOG_ID, blog_title, html_out, labels=["Filme", year] if year else ["Filme"])
     print(f"✅ 발행 완료: {res.get('url', '(URL 미확인)')}")
@@ -336,6 +338,7 @@ if __name__ == "__main__":
             break
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
