@@ -12,6 +12,8 @@ Excel(MOVIE_ID) → TMDB → Blogger 자동 포스팅 파이프라인
 """
 import urllib.parse
 import os, sys, html, textwrap, requests, random, time, pickle
+import gspread
+from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -104,10 +106,11 @@ def get_youtube_trailers(title_ko, title_en=None, max_results=2):
 def get_sheet():
     SERVICE_ACCOUNT_FILE = "sheetapi.json"
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    creds = ServiceAccountCredentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
     SHEET_ID = os.getenv("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
     return gc.open_by_key(SHEET_ID).sheet1
+
 
 
 # ===============================
@@ -1288,6 +1291,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
