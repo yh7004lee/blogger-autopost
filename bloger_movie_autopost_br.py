@@ -417,138 +417,277 @@ def make_hashtags_from_title(title, year, genres):
 # HTML 빌더 (포르투갈어, 일본블로그 스타일 반영)
 # ===============================
 def build_html(post, cast_count=10, stills_count=8):
-    title = post.get("title") or post.get("original_title")
-    year = (post.get("release_date") or "")[:4]
-    genres = ", ".join([g["name"] for g in post.get("genres", [])]) if post.get("genres") else ""
-    runtime = post.get("runtime") or 0
+    esc = html.escape
+
+    # ====== 기본 메타 ======
+    title = esc(post.get("title") or post.get("original_title") or "Título indisponível")
+    release_date = esc(post.get("release_date") or "")
+    year = release_date[:4] if release_date else ""
+    runtime = int(post.get("runtime") or 0)
+    genres_list = [g.get("name","") for g in (post.get("genres") or []) if g.get("name")]
+    genres_str = " · ".join(genres_list)
+    tagline = esc(post.get("tagline") or "")
+    adult_flag = bool(post.get("adult", False))
+
+    countries = [c.get("name","") for c in (post.get("production_countries") or []) if c.get("name")]
+    country_str = ", ".join(countries) if countries else "País de produção não informado"
+
+    backdrop = img_url(post.get("backdrop_path"), "w1280")
+
+    credits = post.get("credits") or {}
+    cast = (credits.get("cast") or [])[:cast_count]
+    crew = credits.get("crew") or []
+    directors = [c for c in crew if c.get("job") == "Director"]
+    director_names = [esc(d.get("name","")) for d in directors]
+    cast_names = [esc(p.get("name","")) for p in cast]
+
+    backdrops = (post.get("images") or {}).get("backdrops") or []
+    backdrops = sorted(backdrops, key=lambda b: (b.get("vote_count",0), b.get("vote_average",0)), reverse=True)[:stills_count]
+
     cert = get_movie_release_cert(post["id"])
-    directors = [c["name"] for c in post.get("credits", {}).get("crew", []) if c.get("job") == "Director"]
-    cast_list = [c for c in post.get("credits", {}).get("cast", [])][:cast_count]
-    cast_top = [c.get("name") for c in cast_list]
+    if not cert and adult_flag:
+        cert = "18+"
 
-    html_parts = []
+    # ====== 키워드(인트로/아웃트로용) ======
+    base_keywords = []
+    for w in (title.replace(":", " ").replace("-", " ").split()):
+        if len(w) > 1:
+            base_keywords.append(str(w))
+    base_keywords += genres_list
+    base_keywords += director_names[:2]
+    base_keywords += cast_names[:3]
+    if year: base_keywords.append(year)
+    if cert: base_keywords.append(cert)
+    base_keywords += ["resenha", "avaliação", "elenco", "trailer", "fotos", "filmes recomendados"]
 
-    # 인트로
-    html_parts.append(f"<p>{make_intro_6(title, year, genres, directors, cast_top, cert, runtime, [title])}</p><br>")
+    seen = set(); keywords = []
+    for k in base_keywords:
+        if isinstance(k, str) and k and k not in seen:
+            keywords.append(k); seen.add(k)
 
-    # ===============================
-    # 줄거리 (Sinopse) 박스
-    # ===============================
-    overview = post.get("overview") or "Sinopse não disponível."
-    html_parts.append(
-        f'<div style="border:2px solid #ccc; padding:15px; border-radius:8px; background:#fafafa; margin:15px 0;">'
-        f'<h2>📖 Sinopse</h2>'
-        f'<p>{make_section_lead("Sinopse", title, year, genres, cert)}</p>'
-        f'<p>{overview}</p>'
-        f'</div><br>'
+    # ====== 인트로 ======
+    intro_6 = make_intro_6(title, year, genres_str, director_names, cast_names, cert, runtime, keywords)
+
+    # ====== 출연자 테이블(이미지 포함) ======
+    cast_rows = []
+    for p in cast:
+        name = esc(p.get("name",""))
+        ch = esc(p.get("character",""))
+        prof = img_url(p.get("profile_path"), "w185")
+        img_tag = f'<img src="{prof}" alt="{name}" style="width:72px;height:auto;border-radius:8px;">' if prof else ""
+        cast_rows.append(
+            f'<tr>'
+            f'<td style="vertical-align:top;padding:8px 10px;white-space:nowrap;">{img_tag}</td>'
+            f'<td style="vertical-align:top;padding:8px 10px;"><b>{name}</b><br><span style="color:#666;">{ch}</span></td>'
+            f'</tr>'
+        )
+    cast_table = (
+        '<table style="width:100%;border-collapse:collapse;border:1px solid #eee;">' +
+        "".join(cast_rows or ['<tr><td style="padding:10px;">Informações de elenco indisponíveis.</td></tr>']) +
+        '</table>'
     )
 
-    # ===============================
-    # 배우 (Elenco) 테이블
-    # ===============================
-    if cast_list:
-        html_parts.append("<h2>🎭 Elenco</h2>")
-        html_parts.append(f"<p>{make_section_lead('Elenco', title, year, genres, cert, {'cast_top': cast_top})}</p><br>")
-        html_parts.append('<table style="width:100%; border-collapse:collapse;">')
-        for c in cast_list:
-            profile = c.get("profile_path")
-            profile_img = f'<img src="{img_url(profile,"w185")}" style="width:60px; border-radius:8px;">' if profile else ""
-            html_parts.append(
-                f'<tr style="border-bottom:1px solid #ddd;">'
-                f'<td style="padding:8px; width:70px;">{profile_img}</td>'
-                f'<td style="padding:8px;"><b>{c.get("name")}</b><br><small>{c.get("character")}</small></td>'
-                f'</tr>'
+    # ====== 스틸컷 2열 갤러리 ======
+    still_divs = []
+    for b in backdrops:
+        p = img_url(b.get("file_path"), "w780")
+        if not p: continue
+        still_divs.append(
+            f'<div style="flex:0 0 49%;margin:0.5%;">'
+            f'<img src="{p}" alt="still de {title}" style="width:100%;height:auto;border-radius:10px;"></div>'
+        )
+    stills_html = (
+        '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;">' +
+        "".join(still_divs or ['<div style="padding:10px;">Sem fotos disponíveis.</div>']) +
+        '</div>'
+    )
+
+    # ====== 점수/인기 박스 ======
+    vote_avg = float(post.get("vote_average") or 0.0)
+    vote_count = int(post.get("vote_count") or 0)
+    popularity = float(post.get("popularity") or 0.0)
+
+    rating_html = f"""
+    <div style="background:linear-gradient(135deg,#f9f9f9,#ececec);
+                border:2px solid #ddd;border-radius:15px;
+                padding:30px;margin:20px 0;
+                box-shadow:0 4px 12px rgba(0,0,0,0.08);
+                text-align:center;">
+      <div style="font-size:20px;font-weight:bold;margin-bottom:12px;color:#333;">
+        ⭐ Avaliação & 📊 Popularidade
+      </div>
+      <div style="font-size:18px;color:#222;margin:8px 0;">
+        <b style="color:#ff9800;">Nota média:</b> {vote_avg:.1f}/10
+      </div>
+      <div style="font-size:16px;color:#555;margin:6px 0;">
+        Votos: {vote_count:,}
+      </div>
+      <div style="font-size:18px;color:#0066cc;margin-top:10px;">
+        <b>Popularidade:</b> {popularity:.1f}
+      </div>
+    </div>
+    """
+
+    # ====== 예고편(iframe) + 안내문 ======
+    video_notice_variants = [
+        "※ Vídeos são obtidos automaticamente; ocasionalmente pode aparecer um conteúdo não-oficial.",
+        "※ Em raros casos, pode carregar um vídeo relacionado que não é o trailer oficial.",
+        "※ Se o carregamento falhar, um vídeo alternativo pode ser exibido.",
+        "※ Dependendo da disponibilidade pública, o conteúdo pode mudar sem aviso.",
+        "※ Caso não reproduza, tente novamente mais tarde."
+    ]
+    video_html = ""
+    video_lead = ""  # 동일 구조 유지용(일본 템플릿처럼 위치만 확보)
+    videos = get_movie_videos_all(post["id"])
+    if videos:
+        video_html += f"<p>{video_lead}</p>"
+        for v in videos:
+            yt_key = v.get("key")
+            yt_name = esc(v.get("name") or "Trailer")
+            if yt_key:
+                video_html += (
+                    f"<p><b>{yt_name}</b></p>"
+                    f"<iframe width='560' height='315' src='https://www.youtube.com/embed/{yt_key}' "
+                    f"frameborder='0' allowfullscreen></iframe><br>"
+                )
+    else:
+        # Fallback: YouTube API 검색은 외부 함수(get_youtube_trailers)가 있을 수도/없을 수도 있으니 방어
+        try:
+            alts = get_youtube_trailers(f"{title} trailer", max_results=2)
+        except Exception:
+            alts = []
+        if alts:
+            video_html += f"<br /><p style='color:#666;font-size:13px;'>{random.choice(video_notice_variants)}</p><br />"
+            for vid, vtitle in alts:
+                video_html += (
+                    f"<p><b>{esc(vtitle)}</b></p>"
+                    f"<iframe width='560' height='315' src='https://www.youtube.com/embed/{vid}' "
+                    f"frameborder='0' allowfullscreen></iframe><br>"
+                )
+        else:
+            video_html += "<p>Trailer não disponível.</p>"
+
+    # ====== 추천영화(포스터+제목, 3열) ======
+    recs = get_movie_recommendations(post["id"], lang=LANG)
+    if recs:
+        rec_cards = []
+        for r in recs[:6]:
+            rtitle = esc(r.get("title") or r.get("original_title") or "")
+            poster = img_url(r.get("poster_path"), "w185")
+            tmdb_link = f"https://www.themoviedb.org/movie/{r.get('id')}?language=pt-BR"
+            rec_cards.append(
+                f'<div style="flex:0 0 32%;margin-bottom:15px;text-align:center;">'
+                f'<a href="{tmdb_link}" target="_blank">'
+                f'<img src="{poster}" alt="{rtitle}" style="width:100%;border-radius:8px;"></a><br>'
+                f'<a href="{tmdb_link}" target="_blank" style="font-size:14px;color:#333;text-decoration:none;">{rtitle}</a>'
+                f'</div>'
             )
-        html_parts.append("</table><br>")
-
-    # ===============================
-    # 스틸컷 (Fotos)
-    # ===============================
-    stills = post.get("images", {}).get("backdrops", [])[:stills_count]
-    if stills:
-        html_parts.append("<h2>🖼 Fotos</h2>")
-        html_parts.append(f"<p>{make_section_lead('Fotos', title, year, genres, cert)}</p><br>")
-        html_parts.append('<div style="display:flex; flex-wrap:wrap; gap:8px;">')
-        for s in stills:
-            u = img_url(s.get("file_path"), "w500")
-            if u:
-                html_parts.append(f'<div style="flex:1 1 calc(50% - 8px);"><img src="{u}" style="width:100%; border-radius:6px;"></div>')
-        html_parts.append("</div><br>")
-
-    # ===============================
-    # 점수/인기도 박스
-    # ===============================
-    vote_avg = post.get("vote_average") or 0
-    vote_cnt = post.get("vote_count") or 0
-    popularity = post.get("popularity") or 0
-    html_parts.append(
-        '<div style="background:linear-gradient(135deg,#f6d365 0%,#fda085 100%);'
-        'padding:15px; border-radius:8px; color:#333; margin:20px 0; box-shadow:0 2px 6px rgba(0,0,0,0.1);">'
-        f'<h2>⭐ Avaliação & Popularidade</h2>'
-        f'<p><b>Nota média:</b> {vote_avg} (com {vote_cnt} votos)</p>'
-        f'<p><b>Popularidade:</b> {popularity}</p>'
-        '</div><br>'
-    )
-
-    # ===============================
-    # 예고편 (Trailer)
-    # ===============================
-    html_parts.append("<h2>🎥 Trailer</h2><br>")
-    vids = get_movie_videos_all(post["id"])
-    yt = [v for v in vids if v.get("site") == "YouTube" and v.get("type") == "Trailer"]
-    if yt:
-        vid = yt[0]["key"]
-        html_parts.append(
-            f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{vid}" '
-            f'frameborder="0" allowfullscreen></iframe><br>'
+        recs_html = (
+            f'<h2>Filmes recomendados de “{title}”</h2>'
+            f'<p>{make_section_lead("Fotos", title, year, genres_str, cert)}</p>'  # 자리 맞춤용(구조 동일 유지)
+            '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;">'
+            + "".join(rec_cards) +
+            "</div>"
         )
     else:
-        alts = get_youtube_trailers(title, year)
-        if alts:
-            html_parts.append(f'<a href="{alts[0][1]}" target="_blank">{alts[0][0]}</a><br>')
-        else:
-            html_parts.append("<p>Trailer não disponível.</p><br>")
+        recs_html = "<p>Não há recomendações disponíveis.</p>"
 
-    # ===============================
-    # 추천 영화 (TMDB Recommendations)
-    # ===============================
-    recs = get_movie_recommendations(post["id"])
-    if recs:
-        html_parts.append("<h2>🎬 Filmes recomendados</h2><div style='display:flex; flex-wrap:wrap; gap:12px; margin-top:10px;'>")
-        for r in recs:
-            poster = img_url(r.get("poster_path"), "w185")
-            link = f"https://www.google.com/search?q={r.get('title')} {((r.get('release_date') or '')[:4])} filme"
-            html_parts.append(
-                f"<div style='flex:1 1 calc(25% - 12px); text-align:center;'>"
-                f"<a href='{link}' target='_blank'>"
-                f"<img src='{poster}' style='width:100%; border-radius:8px;'><br>"
-                f"{r.get('title')} ({(r.get('release_date') or '')[:4]})"
-                f"</a></div>"
-            )
-        html_parts.append("</div><br>")
+    # ====== RSS 관련글 박스 (일본 템플릿과 동일한 박스 스타일) ======
+    def build_related_block(rss_url, count=5):
+        links = []
+        try:
+            r = requests.get(rss_url, timeout=10)
+            r.raise_for_status()
+            root = ET.fromstring(r.content)
+            items = root.findall(".//item")
+            for item in items[:count]:
+                link = item.findtext("link") or ""
+                t = item.findtext("title") or "Sem título"
+                if link:
+                    links.append((link, t))
+        except Exception as e:
+            print("❌ RSS parse error:", e)
 
-    # ===============================
-    # 추천글 (RSS)
-    # ===============================
-    related = get_related_posts(RELATED_RSS_URL, max_results=5)
-    if related:
-        html_parts.append(
-            '<div style="border:2px solid #f0f0f0; padding:15px; border-radius:8px; margin:20px 0;">'
-            '<h2>📰 Outros artigos do blog</h2><ul>'
-        )
-        for r in related:
-            html_parts.append(f'<li><a href="{r["link"]}" target="_blank">{r["title"]}</a></li>')
-        html_parts.append("</ul></div><br>")
+        links_html = ""
+        for href, text_ in links:
+            links_html += f'<a href="{href}" style="color:#555555; font-weight:normal;">● {esc(text_)}</a><br>\n'
 
-    # ===============================
-    # 아웃트로
-    # ===============================
-    html_parts.append(f"<p>{make_outro_6(title, year, genres, directors, [title])}</p><br>")
+        return f"""
+<div style="background: rgb(239, 237, 233); border-radius: 8px;
+            border: 2px dashed rgb(167, 162, 151);
+            box-shadow: rgb(239, 237, 233) 0px 0px 0px 10px;
+            color: #565656; font-weight: bold;
+            margin: 2em 10px; padding: 2em;">
+  <p style="border-bottom: 1px solid rgb(85, 85, 85); color: #555555;
+            font-size: 16px; margin-bottom: 15px; padding-bottom: 5px;">
+    ♡♥ Leia também
+  </p>
+  {links_html}
+</div>
+"""
+    related_block = build_related_block(RELATED_RSS_URL, count=5)
 
-    # 해시태그
-    html_parts.append(f"<p>{make_hashtags_from_title(title, year, genres)}</p><br>")
+    # ====== 아웃트로 ======
+    outro_6 = make_outro_6(title, year, genres_str, director_names, keywords)
 
-    return "\n".join(html_parts)
+    # ====== 해시태그 (일본 템플릿 동일 위치에 출력) ======
+    blog_title1 = f"Filme {title} ({year}) sinopse elenco trailer"
+    hashtags = make_hashtags_from_title(blog_title1)
+
+    # ====== 본문(일본 템플릿과 동일한 구조/여백) ======
+    overview = esc(post.get("overview") or "Sinopse ainda não disponível.")
+    html_out = f"""
+<p>{intro_6}</p>
+<!--more--><br />
+{f"<p><img src='{backdrop}' style='width:100%;height:auto;border-radius:12px;'></p>" if backdrop else ""}
+{f"<p><i>{tagline}</i></p>" if tagline else ""}
+
+<br /><br /><br />
+<h2>Sinopse do filme “{title}”</h2>
+<p><b>País(es):</b> {country_str} | <b>Gênero(s):</b> {genres_str if genres_str else "—"}</p>
+<p>{make_section_lead("Sinopse", title, year, genres_str, cert)}</p>
+
+<div style="background:#fafafa;border:2px solid #ddd;border-radius:12px;
+            padding:10px 18px 25px;margin:18px 0;line-height:1.7;color:#333;
+            box-shadow:0 3px 8px rgba(0,0,0,0.05);">
+  <p style="font-weight:bold;font-size:16px;margin-bottom:10px;">🎬 {title} — Sinopse</p>
+  {overview}
+</div>
+<br />
+{hashtags}
+
+<br /><br /><br />
+<h2>Elenco do filme “{title}”</h2>
+<p>{make_section_lead("Elenco", title, year, genres_str, cert, extras={{"cast_top": cast_names}})}</p>
+{cast_table}
+<br />
+{hashtags}
+
+<br /><br /><br />
+<h2>Fotos (stills) de “{title}”</h2>
+<p>{make_section_lead("Fotos", title, year, genres_str, cert)}</p>
+{stills_html}
+<br />
+{hashtags}
+
+<br /><br /><br />
+<h2>Avaliação & Trailer</h2>
+<p>{make_section_lead("Avaliação & Popularidade", title, year, genres_str, cert)}</p>
+{rating_html}
+{video_html}
+
+<br /><br /><br />
+{recs_html}
+
+<br />
+<p>{outro_6}</p>
+{related_block}
+
+<p style="font-size:12px;color:#666;">
+Este conteúdo foi produzido com dados do <a href="https://www.themoviedb.org/" target="_blank" style="color:#666;text-decoration:underline;">TMDB</a>.
+</p>
+"""
+    return textwrap.dedent(html_out).strip()
 
 
 
@@ -594,6 +733,7 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
 
 
 
