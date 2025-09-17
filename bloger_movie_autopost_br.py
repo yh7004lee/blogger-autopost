@@ -393,14 +393,13 @@ def get_youtube_trailers(title, year=None, max_results=2):
     except:
         return []
 
-def get_movie_recommendations(movie_id, lang="ja-JP", bearer=None, api_key=None):
+def get_movie_recommendations(movie_id, lang="pt-BR", api_key=None):
     """추천 영화 목록 (에러 발생 시 빈 리스트 반환)"""
     try:
         params = {"language": lang}
         j = tmdb_get(
             f"/movie/{movie_id}/recommendations",
             params=params,
-            bearer=bearer,
             api_key=api_key
         )
         return j.get("results", [])
@@ -410,14 +409,17 @@ def get_movie_recommendations(movie_id, lang="ja-JP", bearer=None, api_key=None)
 
 
 
-def make_hashtags_from_title(title, year, genres):
+
+def make_hashtags_from_title(title, year=None, genres=None):
     tags = []
-    if year: tags.append(f"#{year}")
+    if year:
+        tags.append(f"#{year}")
     if genres:
         tags.extend([f"#{g.strip()}" for g in genres.split(",") if g.strip()][:3])
-
-    tags.append(f"#{title.replace(' ','')}")
+    if title:
+        tags.append(f"#{title.replace(' ', '')}")
     return " ".join(tags)
+
 
 # ===============================
 # HTML 빌더
@@ -742,6 +744,7 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
 
 
 
