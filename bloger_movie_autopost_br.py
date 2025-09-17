@@ -410,15 +410,12 @@ def get_movie_recommendations(movie_id, lang="pt-BR", api_key=None):
     """추천 영화 목록 (에러 발생 시 빈 리스트 반환)"""
     try:
         params = {"language": lang}
-        j = tmdb_get(
-            f"/movie/{movie_id}/recommendations",
-            params=params,
-            api_key=api_key
-        )
+        j = tmdb_get(f"/movie/{movie_id}/recommendations", params=params, api_key=api_key)
         return j.get("results", [])
     except Exception as e:
         print(f"❌ TMDB 추천 영화 API 오류 (movie_id={movie_id}): {e}")
         return []
+
 
 
 
@@ -592,14 +589,14 @@ def build_html(post, cast_count=10, stills_count=8):
         else:
             video_html += "<p>Trailer não disponível.</p>"
 
-    # ====== 추천영화(포스터+제목, 3열) ======
-    recs = get_movie_recommendations(post["id"], lang=LANG)
+       # ====== 추천영화(포스터+제목, 3열) ======
+    recs = get_movie_recommendations(post["id"], lang=LANG, api_key=API_KEY)
     if recs:
         rec_cards = []
         for r in recs[:6]:
             rtitle = esc(r.get("title") or r.get("original_title") or "")
             poster = img_url(r.get("poster_path"), "w185")
-            tmdb_link = f"https://www.themoviedb.org/movie/{r.get('id')}?language=pt-BR"
+            tmdb_link = f"https://www.themoviedb.org/movie/{r.get('id')}?language={LANG}"
             rec_cards.append(
                 f'<div style="flex:0 0 32%;margin-bottom:15px;text-align:center;">'
                 f'<a href="{tmdb_link}" target="_blank">'
@@ -608,14 +605,15 @@ def build_html(post, cast_count=10, stills_count=8):
                 f'</div>'
             )
         recs_html = (
-            f'<h2>Filmes recomendados de “{title}”</h2>'
-            f'<p>{make_section_lead("Fotos", title, year, genres_str, cert)}</p>'  # 자리 맞춤용(구조 동일 유지)
+            f'<h2>Filmes recomendados</h2>'
+            f'<p>{make_section_lead("Recomendados", title, year, genres_str, cert)}</p>'
             '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;">'
             + "".join(rec_cards) +
             "</div>"
         )
     else:
         recs_html = "<p>Não há recomendações disponíveis.</p>"
+
 
     # ====== RSS 관련글 박스 (일본 템플릿과 동일한 박스 스타일) ======
     def build_related_block(rss_url, count=5):
@@ -758,6 +756,7 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
 
 
 
