@@ -23,13 +23,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ✅ blogger_token.json 복원
+      # ✅ blogger_token.json 복원 (refresh_token 포함)
       - name: Restore blogger_token.json
         run: |
           echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" > blogger_token.json.b64
           certutil -decode blogger_token.json.b64 blogger_token.json
 
-      # ✅ cc.json 복원
+      # ✅ cc.json 복원 (OAuth client ID, client secret)
       - name: Restore cc.json
         run: |
           echo "${{ secrets.CC_JSON_B64 }}" > cc.json.b64
@@ -38,7 +38,7 @@ jobs:
       # ✅ sheetapi.json 복원 (Google Sheets 서비스 계정)
       - name: Restore sheetapi.json
         run: |
-          echo "${{ secrets.SHEETAPI_JSON_B64 }}" > sheetapi.json.b64
+          echo "${{ secrets.SHEETAPI_JSON }}" > sheetapi.json.b64
           certutil -decode sheetapi.json.b64 sheetapi.json
 
       # ✅ openai.json 복원
