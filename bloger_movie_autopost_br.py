@@ -60,6 +60,13 @@ YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 # ===============================
 BLOGGER_TOKEN_JSON = "blogger_token.json"
 SCOPES = ["https://www.googleapis.com/auth/blogger"]
+def get_related_posts(rss_url, max_results=5):
+    feed = feedparser.parse(rss_url)
+    posts = []
+    for entry in feed.entries[:max_results]:
+        posts.append({"title": entry.title, "link": entry.link})
+    return posts
+
 
 def get_blogger_service():
     with open(BLOGGER_TOKEN_JSON, "r", encoding="utf-8") as f:
@@ -408,7 +415,7 @@ def build_html(post, cast_count=10, stills_count=8):
     genres = ", ".join([g["name"] for g in post.get("genres", [])]) if post.get("genres") else ""
     runtime = post.get("runtime") or 0
     cert = get_movie_release_cert(post["id"])
-    directors = [c["name"] for c in post.get("credits", {}).get("crew", []) if c.get("job")=="Director"]
+    directors = [c["name"] for c in post.get("credits", {}).get("crew", []) if c.get("job") == "Director"]
     cast_list = [c for c in post.get("credits", {}).get("cast", [])][:cast_count]
     cast_top = [c.get("name") for c in cast_list]
 
@@ -423,15 +430,10 @@ def build_html(post, cast_count=10, stills_count=8):
 
     # Elenco
     html_parts.append("<h2>Elenco</h2>")
-    html_parts.append(f"<p>{make_section_lead('Elenco', title, year, genres, cert, {'cast_top':cast_top})}</p>")
+    html_parts.append(f"<p>{make_section_lead('Elenco', title, year, genres, cert, {'cast_top': cast_top})}</p>")
     html_parts.append("<ul>")
     for c in cast_list:
-        name = c.get("name") or "Ator desconhecido"
-        char = c.get("character") or ""
-        if char:
-            html_parts.append(f"<li>{name} como {char}</li>")
-        else:
-            html_parts.append(f"<li>{name}</li>")
+        html_parts.append(f"<li>{c.get('name')} como {c.get('character')}</li>")
     html_parts.append("</ul>")
 
     # Fotos
@@ -441,7 +443,8 @@ def build_html(post, cast_count=10, stills_count=8):
         html_parts.append(f"<p>{make_section_lead('Fotos', title, year, genres, cert)}</p>")
         for s in stills:
             u = img_url(s.get("file_path"), "w500")
-            if u: html_parts.append(f'<img src="{u}" alt="still">')
+            if u:
+                html_parts.append(f'<img src="{u}" alt="still">')
 
     # Avaliação
     vote_avg = post.get("vote_average")
@@ -454,7 +457,7 @@ def build_html(post, cast_count=10, stills_count=8):
     # Trailer
     html_parts.append("<h2>Trailer</h2>")
     vids = get_movie_videos_all(post["id"])
-    yt = [v for v in vids if v.get("site")=="YouTube" and v.get("type")=="Trailer"]
+    yt = [v for v in vids if v.get("site") == "YouTube" and v.get("type") == "Trailer"]
     if yt:
         vid = yt[0]["key"]
         html_parts.append(f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{vid}" frameborder="0" allowfullscreen></iframe>')
@@ -465,13 +468,21 @@ def build_html(post, cast_count=10, stills_count=8):
         else:
             html_parts.append("<p>Trailer não disponível.</p>")
 
-    # Recomendados
+    # Filmes recomendados (TMDB)
     recs = get_movie_recommendations(post["id"])
     if recs:
         html_parts.append("<h2>Filmes recomendados</h2><ul>")
         for r in recs:
             html_parts.append(f"<li>{r.get('title')} ({(r.get('release_date') or '')[:4]})</li>")
         html_parts.append("</ul>")
+
+    # Outros artigos do blog (RSS)
+    related = get_related_posts(RELATED_RSS_URL, max_results=5)
+    if related:
+        html_parts.append('<div class="related-box"><h2>Outros artigos do blog</h2><ul>')
+        for r in related:
+            html_parts.append(f'<li><a href="{r["link"]}" target="_blank">{r["title"]}</a></li>')
+        html_parts.append("</ul></div>")
 
     # Outro
     html_parts.append(f"<p>{make_outro_6(title, year, genres, directors, [title])}</p>")
@@ -480,6 +491,7 @@ def build_html(post, cast_count=10, stills_count=8):
     html_parts.append(f"<p>{make_hashtags_from_title(title, year, genres)}</p>")
 
     return "\n".join(html_parts)
+
 
 # ===============================
 # 메인 실행
@@ -519,4 +531,5 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
 
