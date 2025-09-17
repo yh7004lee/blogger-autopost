@@ -11,6 +11,7 @@ Excel(MOVIE_ID) → TMDB → Blogger 자동포스팅 파이프라인 (브라질 
 - 인트로(7문장) + 섹션 리드 + 본문 섹션 + 아웃트로(7문장)
 - Blogger API 발행 후 시트에 "완" 표시
 """
+import feedparser
 
 import json, os, html, textwrap, requests, random, time, re
 import xml.etree.ElementTree as ET
@@ -90,7 +91,8 @@ def tmdb_get(path, params=None, api_key=None):
         r.raise_for_status()
         return r.json()
     except requests.exceptions.HTTPError as e:
-        print(f"❌ TMDB 요청 실패 (HTTP {r.status_code}): {url}")
+        status = e.response.status_code if e.response else "?"
+        print(f"❌ TMDB 요청 실패 (HTTP {status}): {url}")
         return {}
     except Exception as e:
         print(f"❌ TMDB 요청 중 오류 발생: {e}")
@@ -402,7 +404,9 @@ def get_movie_recommendations(movie_id, max_results=4):
 def make_hashtags_from_title(title, year, genres):
     tags = []
     if year: tags.append(f"#{year}")
-    if genres: tags.extend([f"#{g}" for g in genres.split(",")[:3]])
+    if genres:
+        tags.extend([f"#{g.strip()}" for g in genres.split(",") if g.strip()][:3])
+
     tags.append(f"#{title.replace(' ','')}")
     return " ".join(tags)
 
@@ -425,7 +429,7 @@ def build_html(post, cast_count=10, stills_count=8):
     html_parts.append(f"<p>{make_intro_6(title, year, genres, directors, cast_top, cert, runtime, [title])}</p>")
 
     # Sinopse
-    overview = post.get("overview") or "Sinopse não disponível."
+    overview = html.escape(post.get("overview") or "Sinopse não disponível.")
     html_parts.append(f"<h2>Sinopse</h2><p>{make_section_lead('Sinopse', title, year, genres, cert)}</p><p>{overview}</p>")
 
     # Elenco
@@ -447,9 +451,9 @@ def build_html(post, cast_count=10, stills_count=8):
                 html_parts.append(f'<img src="{u}" alt="still">')
 
     # Avaliação
-    vote_avg = post.get("vote_average")
-    vote_cnt = post.get("vote_count")
-    popularity = post.get("popularity")
+    vote_avg = post.get("vote_average") or "N/A"
+    vote_cnt = post.get("vote_count") or 0
+    popularity = post.get("popularity") or "N/A"
     html_parts.append("<h2>Avaliação & Popularidade</h2>")
     html_parts.append(f"<p>Nota média: {vote_avg} (com {vote_cnt} votos)</p>")
     html_parts.append(f"<p>Popularidade: {popularity}</p>")
@@ -531,5 +535,6 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
 
 
