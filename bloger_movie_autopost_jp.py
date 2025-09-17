@@ -1123,11 +1123,11 @@ def mark_done(ws, row_idx):
 # ===============================
 # メイン実行部
 def main_once():
-    def main_once():
     import io, sys, re
 
     # 로그 버퍼 설정
     log_buffer = io.StringIO()
+
     class Logger:
         def write(self, msg):
             log_buffer.write(msg)
@@ -1140,8 +1140,6 @@ def main_once():
 
     ws = get_sheet()
     service = get_blogger_service()
-
-    ws = get_sheet()
 
     # 1) 대상 행 찾기
     target_row, movie_id = find_next_row(ws)
@@ -1173,11 +1171,11 @@ def main_once():
         year = (post.get("release_date") or "")[:4]
         blog_title = f"映画 {title} ({year}) あらすじ 出演者 主人公 予告編"
 
-        genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
+        genres_list = [g.get("name", "") for g in post.get("genres", []) if g.get("name")]
         labels = ["映画"] + ([year] if year else []) + genres_list
 
         res = post_to_blogger(service, BLOG_ID, blog_title, html_out, labels=labels, is_draft=False)
-        print(f"✅ 발행 완료: {res.get('url','(URL 미확인)')}")
+        print(f"✅ 발행 완료: {res.get('url', '(URL 미확인)')}")
         post_success = True
     except Exception as e:
         print(f"❌ Blogger 발행 실패: {e}")
@@ -1192,7 +1190,6 @@ def main_once():
 
     # 6) 로그 기록 (Q열=17)
     try:
-        import io
         log_val = log_buffer.getvalue()
         prev = ws.cell(target_row, 17).value or ""
         new_val = (prev + " | " if prev else "") + log_val
@@ -1202,6 +1199,7 @@ def main_once():
         print(f"❌ 로그 기록 실패: {e}")
 
     return True
+
 
 
 
@@ -1217,6 +1215,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
