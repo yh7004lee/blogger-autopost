@@ -1218,7 +1218,7 @@ def post_to_blogger(service, blog_id, title, html_content, labels=None, is_draft
 # ===============================
 ## 메인 실행부
 def main():
-    import io, sys
+    import io, sys, re
 
     # 로그 버퍼 설정
     log_buffer = io.StringIO()
@@ -1237,8 +1237,13 @@ def main():
 
     rows = ws.get_all_values()
     for i, row in enumerate(rows[1:], start=2):  # 2행부터
-        movie_id = row[1].strip() if len(row) > 1 else ""
+        raw_id = row[1].strip() if len(row) > 1 else ""  # 원본 값
+        movie_id = re.sub(r"\D", "", raw_id)            # 숫자만 추출
         done_flag = row[5].strip() if len(row) > 5 else ""
+
+        if not movie_id:
+            print(f"⚠️ 유효하지 않은 MOVIE_ID: {raw_id} (행 {i}) → 건너뜀")
+            continue
 
         if movie_id and done_flag != "완":
             print(f"👉 대상 행: {i} (MOVIE_ID={movie_id})")
@@ -1280,6 +1285,7 @@ def main():
 
             break  # ✅ 한 건만 처리 후 종료
 
+
 # ===============================
 # 메인 호출부
 # ===============================
@@ -1291,6 +1297,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
