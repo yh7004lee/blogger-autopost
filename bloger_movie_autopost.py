@@ -17,19 +17,6 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
-import io, sys
-
-log_buffer = io.StringIO()
-class Logger:
-    def write(self, msg):
-        log_buffer.write(msg)
-        sys.__stdout__.write(msg)  # 콘솔에도 그대로 출력
-    def flush(self):
-        sys.__stdout__.flush()
-
-sys.stdout = Logger()
-sys.stderr = Logger()
-
 
 
 # ===============================
@@ -1298,5 +1285,6 @@ def main():
                     sys.__stdout__.write(f"❌ 로그 기록 실패: {log_e}\n")
 
             break  # ✅ 한
+
 
 
