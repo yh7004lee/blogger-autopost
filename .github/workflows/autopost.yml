@@ -6,23 +6,15 @@ on:
     - cron: "0 16,18,20,22,0,2,4,6,8,10 * * *"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   autopost:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Show workspace (debug)
-        run: |
-          pwd
-          ls -la
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -32,27 +24,25 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      # ✅ cc.json 복원
-      - name: Restore cc.json
-        run: |
-          echo "${{ secrets.CC_JSON_B64 }}" | base64 -d > cc.json
-
       # ✅ blogger_token.json 복원
       - name: Restore blogger_token.json
         run: |
-          echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" | base64 -d > blogger_token.json
+          echo "${{ secrets.BLOGGER_TOKEN_JSON_B64 }}" > blogger_token.json.b64
+          certutil -decode blogger_token.json.b64 blogger_token.json
 
-      # ✅ sheetapi.json 복원 (Google Sheets 인증용 서비스 계정 키)
+      # ✅ cc.json 복원
+      - name: Restore cc.json
+        run: |
+          echo "${{ secrets.CC_JSON_B64 }}" > cc.json.b64
+          certutil -decode cc.json.b64 cc.json
+
+      # ✅ sheetapi.json 복원
       - name: Restore sheetapi.json
         run: |
-          echo "${{ secrets.SHEETAPI_JSON }}" | base64 -d > sheetapi.json
+          echo "${{ secrets.SHEETAPI_JSON_B64 }}" > sheetapi.json.b64
+          certutil -decode sheetapi.json.b64 sheetapi.json
 
-      # ✅ Run the Python script
       - name: Run autopost script
         env:
           PYTHONUNBUFFERED: "1"
-        run: |
-          python bloger_movie_autopost.py
-
-      # ✅ [삭제됨] movies_discover.xlsx Git commit/push
-      # Google Sheets를 사용하므로 더 이상 필요 없음
+        run: python bloger_movie_autopost.py
