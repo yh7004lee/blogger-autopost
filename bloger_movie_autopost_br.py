@@ -310,7 +310,7 @@ def main_once():
 
     print(f"👉 대상 행: {target_row} (MOVIE_ID={movie_id})")
 
-    post = tmdb_get(f"/movie/{movie_id}", params={"language": LANG, "append_to_response": "credits,images"}, bearer=BEARER, api_key=API_KEY)
+    post = tmdb_get(f"/movie/{movie_id}", params={"language": LANG, "append_to_response": "credits,images"}, bearer=None, api_key=API_KEY)
 
     title = post.get("title") or post.get("original_title") or f"movie_{movie_id}"
     year = (post.get("release_date") or "")[:4]
@@ -335,3 +335,4 @@ if __name__ == "__main__":
             break
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             time.sleep(POST_DELAY_MIN * 60)
+
