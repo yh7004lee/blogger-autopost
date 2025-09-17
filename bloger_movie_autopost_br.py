@@ -669,7 +669,7 @@ def build_html(post, cast_count=10, stills_count=8):
 
 <br /><br /><br />
 <h2>Elenco do filme “{title}”</h2>
-<p>{make_section_lead("Elenco", title, year, genres_str, cert, extras={{"cast_top": cast_names}})}</p>
+<p>{make_section_lead("Elenco", title, year, genres_str, cert, extras={"cast_top": cast_names})}</p>
 {cast_table}
 <br />
 {hashtags}
@@ -744,6 +744,7 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
 
 
 
