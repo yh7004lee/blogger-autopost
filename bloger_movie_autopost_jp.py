@@ -23,15 +23,21 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 # Google Sheets 인증
-SHEET_ID = os.getenv("SHEET_ID", "YOUR_SHEET_ID")
-SHEET_RANGE = "シート1"   # 시트 이름 (수정 필요)
+
 
 def get_sheet():
-    creds = Credentials.from_service_account_file("sheetapi.json", scopes=[
-        "https://www.googleapis.com/auth/spreadsheets"
-    ])
-    client = gspread.authorize(creds)
-    return client.open_by_key(SHEET_ID).worksheet(SHEET_RANGE)
+    SERVICE_ACCOUNT_FILE = "sheetapi.json"   # ✅ GitHub Secrets에서 복원되는 파일
+    SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+
+    creds = ServiceAccountCredentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=SCOPES
+    )
+    gc = gspread.authorize(creds)
+
+    # ✅ 동일한 시트 ID 사용
+    SHEET_ID = "10kqYhxmeewG_9-XOdXTbv0RVQG9_-jXjtg0C6ERoGG0"
+    return gc.open_by_key(SHEET_ID).sheet1
+
 
 
 # ===============================
@@ -1193,6 +1199,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
