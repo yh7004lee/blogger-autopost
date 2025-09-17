@@ -413,6 +413,9 @@ def make_hashtags_from_title(title, year, genres):
 # ===============================
 # HTML 빌더
 # ===============================
+# ===============================
+# HTML 빌더 (포르투갈어, 일본블로그 스타일 반영)
+# ===============================
 def build_html(post, cast_count=10, stills_count=8):
     title = post.get("title") or post.get("original_title")
     year = (post.get("release_date") or "")[:4]
@@ -425,101 +428,128 @@ def build_html(post, cast_count=10, stills_count=8):
 
     html_parts = []
 
-    # ========================
     # 인트로
-    # ========================
-    html_parts.append(f"<div class='intro-box'><p>{make_intro_6(title, year, genres, directors, cast_top, cert, runtime, [title])}</p></div>")
+    html_parts.append(f"<p>{make_intro_6(title, year, genres, directors, cast_top, cert, runtime, [title])}</p><br>")
 
-    # ========================
-    # 줄거리 (Sinopse)
-    # ========================
-    overview = html.escape(post.get("overview") or "Sinopse não disponível.")
-    html_parts.append("<h2>Sinopse</h2>")
-    html_parts.append(f"<div class='summary-box'><p>{make_section_lead('Sinopse', title, year, genres, cert)}</p><p>{overview}</p></div>")
+    # ===============================
+    # 줄거리 (Sinopse) 박스
+    # ===============================
+    overview = post.get("overview") or "Sinopse não disponível."
+    html_parts.append(
+        f'<div style="border:2px solid #ccc; padding:15px; border-radius:8px; background:#fafafa; margin:15px 0;">'
+        f'<h2>📖 Sinopse</h2>'
+        f'<p>{make_section_lead("Sinopse", title, year, genres, cert)}</p>'
+        f'<p>{overview}</p>'
+        f'</div><br>'
+    )
 
-    # ========================
-    # 출연 (Elenco)
-    # ========================
-    html_parts.append("<h2>Elenco</h2>")
-    html_parts.append(f"<div class='cast-box'><p>{make_section_lead('Elenco', title, year, genres, cert, {'cast_top': cast_top})}</p><ul>")
-    for c in cast_list:
-        html_parts.append(f"<li>{c.get('name')} como {c.get('character')}</li>")
-    html_parts.append("</ul></div>")
+    # ===============================
+    # 배우 (Elenco) 테이블
+    # ===============================
+    if cast_list:
+        html_parts.append("<h2>🎭 Elenco</h2>")
+        html_parts.append(f"<p>{make_section_lead('Elenco', title, year, genres, cert, {'cast_top': cast_top})}</p><br>")
+        html_parts.append('<table style="width:100%; border-collapse:collapse;">')
+        for c in cast_list:
+            profile = c.get("profile_path")
+            profile_img = f'<img src="{img_url(profile,"w185")}" style="width:60px; border-radius:8px;">' if profile else ""
+            html_parts.append(
+                f'<tr style="border-bottom:1px solid #ddd;">'
+                f'<td style="padding:8px; width:70px;">{profile_img}</td>'
+                f'<td style="padding:8px;"><b>{c.get("name")}</b><br><small>{c.get("character")}</small></td>'
+                f'</tr>'
+            )
+        html_parts.append("</table><br>")
 
-    # ========================
-    # 사진 (Fotos)
-    # ========================
+    # ===============================
+    # 스틸컷 (Fotos)
+    # ===============================
     stills = post.get("images", {}).get("backdrops", [])[:stills_count]
     if stills:
-        html_parts.append("<h2>Fotos</h2>")
-        html_parts.append(f"<div class='photos-box'><p>{make_section_lead('Fotos', title, year, genres, cert)}</p>")
+        html_parts.append("<h2>🖼 Fotos</h2>")
+        html_parts.append(f"<p>{make_section_lead('Fotos', title, year, genres, cert)}</p><br>")
+        html_parts.append('<div style="display:flex; flex-wrap:wrap; gap:8px;">')
         for s in stills:
             u = img_url(s.get("file_path"), "w500")
             if u:
-                html_parts.append(f'<img src="{u}" alt="still">')
-        html_parts.append("</div>")
+                html_parts.append(f'<div style="flex:1 1 calc(50% - 8px);"><img src="{u}" style="width:100%; border-radius:6px;"></div>')
+        html_parts.append("</div><br>")
 
-    # ========================
-    # 평가 (Avaliação)
-    # ========================
-    vote_avg = post.get("vote_average") or "N/A"
+    # ===============================
+    # 점수/인기도 박스
+    # ===============================
+    vote_avg = post.get("vote_average") or 0
     vote_cnt = post.get("vote_count") or 0
-    popularity = post.get("popularity") or "N/A"
-    html_parts.append("<h2>Avaliação & Popularidade</h2>")
-    html_parts.append("<div class='score-box'>")
-    html_parts.append(f"<p><b>Nota média:</b> {vote_avg} (com {vote_cnt} votos)</p>")
-    html_parts.append(f"<p><b>Popularidade:</b> {popularity}</p>")
-    html_parts.append("</div>")
+    popularity = post.get("popularity") or 0
+    html_parts.append(
+        '<div style="background:linear-gradient(135deg,#f6d365 0%,#fda085 100%);'
+        'padding:15px; border-radius:8px; color:#333; margin:20px 0; box-shadow:0 2px 6px rgba(0,0,0,0.1);">'
+        f'<h2>⭐ Avaliação & Popularidade</h2>'
+        f'<p><b>Nota média:</b> {vote_avg} (com {vote_cnt} votos)</p>'
+        f'<p><b>Popularidade:</b> {popularity}</p>'
+        '</div><br>'
+    )
 
-    # ========================
-    # 트레일러 (Trailer)
-    # ========================
-    html_parts.append("<h2>Trailer</h2>")
+    # ===============================
+    # 예고편 (Trailer)
+    # ===============================
+    html_parts.append("<h2>🎥 Trailer</h2><br>")
     vids = get_movie_videos_all(post["id"])
     yt = [v for v in vids if v.get("site") == "YouTube" and v.get("type") == "Trailer"]
     if yt:
         vid = yt[0]["key"]
-        html_parts.append(f"<div class='trailer-box'><iframe width='560' height='315' src='https://www.youtube.com/embed/{vid}' frameborder='0' allowfullscreen></iframe></div>")
+        html_parts.append(
+            f'<iframe width="560" height="315" src="https://www.youtube.com/embed/{vid}" '
+            f'frameborder="0" allowfullscreen></iframe><br>'
+        )
     else:
         alts = get_youtube_trailers(title, year)
         if alts:
-            html_parts.append(f"<div class='trailer-box'><a href='{alts[0][1]}' target='_blank'>{alts[0][0]}</a></div>")
+            html_parts.append(f'<a href="{alts[0][1]}" target="_blank">{alts[0][0]}</a><br>')
         else:
-            html_parts.append("<div class='trailer-box'><p>Trailer não disponível.</p></div>")
+            html_parts.append("<p>Trailer não disponível.</p><br>")
 
-    # ========================
+    # ===============================
     # 추천 영화 (TMDB Recommendations)
-    # ========================
+    # ===============================
     recs = get_movie_recommendations(post["id"])
     if recs:
-        html_parts.append("<h2>Filmes recomendados</h2>")
-        html_parts.append("<div class='recommend-box'><ul>")
+        html_parts.append("<h2>🎬 Filmes recomendados</h2><div style='display:flex; flex-wrap:wrap; gap:12px; margin-top:10px;'>")
         for r in recs:
-            html_parts.append(f"<li>{r.get('title')} ({(r.get('release_date') or '')[:4]})</li>")
-        html_parts.append("</ul></div>")
+            poster = img_url(r.get("poster_path"), "w185")
+            link = f"https://www.google.com/search?q={r.get('title')} {((r.get('release_date') or '')[:4])} filme"
+            html_parts.append(
+                f"<div style='flex:1 1 calc(25% - 12px); text-align:center;'>"
+                f"<a href='{link}' target='_blank'>"
+                f"<img src='{poster}' style='width:100%; border-radius:8px;'><br>"
+                f"{r.get('title')} ({(r.get('release_date') or '')[:4]})"
+                f"</a></div>"
+            )
+        html_parts.append("</div><br>")
 
-    # ========================
-    # 블로그 내 추천글 (RSS)
-    # ========================
+    # ===============================
+    # 추천글 (RSS)
+    # ===============================
     related = get_related_posts(RELATED_RSS_URL, max_results=5)
     if related:
-        html_parts.append("<h2>Outros artigos do blog</h2>")
-        html_parts.append("<div class='related-box'><ul>")
+        html_parts.append(
+            '<div style="border:2px solid #f0f0f0; padding:15px; border-radius:8px; margin:20px 0;">'
+            '<h2>📰 Outros artigos do blog</h2><ul>'
+        )
         for r in related:
-            html_parts.append(f"<li><a href='{r['link']}' target='_blank'>{r['title']}</a></li>")
-        html_parts.append("</ul></div>")
+            html_parts.append(f'<li><a href="{r["link"]}" target="_blank">{r["title"]}</a></li>')
+        html_parts.append("</ul></div><br>")
 
-    # ========================
+    # ===============================
     # 아웃트로
-    # ========================
-    html_parts.append(f"<div class='outro-box'><p>{make_outro_6(title, year, genres, directors, [title])}</p></div>")
+    # ===============================
+    html_parts.append(f"<p>{make_outro_6(title, year, genres, directors, [title])}</p><br>")
 
-    # ========================
     # 해시태그
-    # ========================
-    html_parts.append(f"<div class='hashtag-box'><p>{make_hashtags_from_title(title, year, genres)}</p></div>")
+    html_parts.append(f"<p>{make_hashtags_from_title(title, year, genres)}</p><br>")
 
     return "\n".join(html_parts)
+
 
 
 
@@ -545,7 +575,10 @@ def main_once():
     post = tmdb_get(f"/movie/{movie_id}", params={"language": LANG, "append_to_response": "credits,images"}, api_key=API_KEY)
     title = post.get("title") or post.get("original_title") or f"movie_{movie_id}"
     year = (post.get("release_date") or "")[:4]
-    blog_title = f"Filme {title} ({year}) sinopse elenco trailer"
+    if year:
+        blog_title = f"{year} Filme {title} sinopse elenco trailer"
+    else:
+        blog_title = f"Filme {title} sinopse elenco trailer"
     html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
 
     res = post_to_blogger(service, BLOG_ID, blog_title, html_out, labels=["Filme", year] if year else ["Filme"])
@@ -561,6 +594,7 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
 
 
 
