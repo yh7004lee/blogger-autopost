@@ -107,20 +107,17 @@ def get_youtube_trailers(title_ko, title_en=None, max_results=2):
 # Google Sheets 연결 (영화 시트 전용)
 # ===============================
 
-
 def get_sheet():
     SERVICE_ACCOUNT_FILE = "sheetapi.json"
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-    creds = Credentials.from_service_account_file(
+    creds = ServiceAccountCredentials.from_service_account_file(
         SERVICE_ACCOUNT_FILE, scopes=SCOPES
     )
     gc = gspread.authorize(creds)
-
-    # 🎬 영화 시트 ID 고정
     SHEET_ID = "10kqYhxmeewG_9-XOdXTbv0RVQG9_-jXjtg0C6ERoGG0"
-
     return gc.open_by_key(SHEET_ID).sheet1
+
 
 
 
@@ -1187,30 +1184,23 @@ def build_html(post, cast_count=10, stills_count=8):
 
 # ===============================
 # Blogger 인증/발행
-from google.oauth2.credentials import Credentials
+# Blogger 인증용
+from google.oauth2.credentials import Credentials as UserCredentials
+
+# Google Sheets 인증용
+from google.oauth2.service_account import Credentials as ServiceAccountCredentials
 
 BLOGGER_TOKEN_JSON = "blogger_token.json"  # refresh_token 포함 JSON 파일
 SCOPES = ["https://www.googleapis.com/auth/blogger"]
 
 def get_blogger_service():
-    try:
-        if not os.path.exists(BLOGGER_TOKEN_JSON):
-            raise FileNotFoundError("❌ blogger_token.json 파일이 없습니다. 먼저 발급 받아주세요.")
+    with open("blogger_token.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    creds = UserCredentials.from_authorized_user_info(
+        data, ["https://www.googleapis.com/auth/blogger"]
+    )
+    return build("blogger", "v3", credentials=creds)
 
-        creds = Credentials.from_authorized_user_file(BLOGGER_TOKEN_JSON, SCOPES)
-
-        # 액세스 토큰이 만료되었으면 자동으로 새로고침
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            # 갱신된 토큰을 다시 저장
-            with open(BLOGGER_TOKEN_JSON, "w", encoding="utf-8") as f:
-                f.write(creds.to_json())
-
-        return build("blogger", "v3", credentials=creds)
-
-    except Exception as e:
-        print(f"❌ Blogger 인증 실패: {e}", file=sys.stderr)
-        raise
 
 
 def post_to_blogger(service, blog_id, title, html_content, labels=None, is_draft=False):
@@ -1309,6 +1299,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
