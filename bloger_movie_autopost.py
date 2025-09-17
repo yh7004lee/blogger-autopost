@@ -1279,13 +1279,16 @@ def main():
                 # 6) 로그 기록 (P열 = 16열, append)
                 try:
                     prev = ws.cell(i, 16).value or ""
-                    new_val = (prev + "\n" if prev else "") + log_buffer.getvalue().strip()
+                    # 줄바꿈 제거 → ' | '로 구분
+                    new_log = log_buffer.getvalue().strip().replace("\n", " | ")
+                    new_val = (prev + " | " if prev else "") + new_log
                     ws.update_cell(i, 16, new_val)
                     print(f"📌 실행 로그 기록 완료 (행 {i}, P열)")
                 except Exception as log_e:
                     sys.__stdout__.write(f"❌ 로그 기록 실패: {log_e}\n")
 
             break  # ✅ 한 건만 처리 후 종료
+
 
 
 # ===============================
@@ -1299,6 +1302,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
