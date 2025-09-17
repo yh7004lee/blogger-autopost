@@ -81,7 +81,7 @@ def get_movie_videos_all(movie_id, bearer=None, api_key=None):
             j = tmdb_get(
                 f"/movie/{movie_id}/videos",
                 params={"language": lang},
-                bearer=bearer,
+                bearer=None,
                 api_key=api_key
             )
             results = j.get("results", [])
@@ -109,26 +109,26 @@ def get_movie_bundle(movie_id, lang="ja-JP", bearer=None, api_key=None):
         "append_to_response": "credits,images",
         "include_image_language": "ja,en,null"
     }
-    return tmdb_get(f"/movie/{movie_id}", params=params, bearer=bearer, api_key=api_key)
+    return tmdb_get(f"/movie/{movie_id}", params=params, bearer=None, api_key=api_key)
 
 def get_movie_reviews(movie_id, lang="ja-JP", bearer=None, api_key=None):
     """（将来使う場合に備えて）レビュー一覧"""
-    j = tmdb_get(f"/movie/{movie_id}/reviews", params={"language": lang}, bearer=bearer, api_key=api_key)
+    j = tmdb_get(f"/movie/{movie_id}/reviews", params={"language": lang}, bearer=None, api_key=api_key)
     return j.get("results", [])
 
 def get_movie_videos(movie_id, lang="ja-JP", bearer=None, api_key=None):
     """動画（予告編/ティーザー等）一覧"""
-    j = tmdb_get(f"/movie/{movie_id}/videos", params={"language": lang}, bearer=bearer, api_key=api_key)
+    j = tmdb_get(f"/movie/{movie_id}/videos", params={"language": lang}, bearer=None, api_key=api_key)
     return j.get("results", [])
 
 def get_movie_recommendations(movie_id, lang="ja-JP", bearer=None, api_key=None):
     """（将来使う場合に備えて）おすすめ作品一覧"""
-    j = tmdb_get(f"/movie/{movie_id}/recommendations", params={"language": lang}, bearer=bearer, api_key=api_key)
+    j = tmdb_get(f"/movie/{movie_id}/recommendations", params={"language": lang}, bearer=None, api_key=api_key)
     return j.get("results", [])
 
 def get_movie_release_cert(movie_id, bearer=None, api_key=None):
     """日本のレーティング（なければUS→空文字）"""
-    data = tmdb_get(f"/movie/{movie_id}/release_dates", bearer=bearer, api_key=api_key)
+    data = tmdb_get(f"/movie/{movie_id}/release_dates", bearer=None, api_key=api_key)
     results = data.get("results", []) or []
 
     def find_cert(country_code):
@@ -776,7 +776,7 @@ def build_html(post, cast_count=10, stills_count=8):
     backdrops = (post.get("images", {}) or {}).get("backdrops", [])
     backdrops = sorted(backdrops, key=lambda b: (b.get("vote_count",0), b.get("vote_average",0)), reverse=True)[:stills_count]
 
-    cert = get_movie_release_cert(post["id"], bearer=BEARER, api_key=API_KEY)
+    cert = get_movie_release_cert(post["id"], bearer=None, api_key=API_KEY)
     if not cert and adult_flag: cert = "R18"
 
     # キーワード生成
@@ -894,7 +894,7 @@ def build_html(post, cast_count=10, stills_count=8):
     video_lead = make_section_lead("予告編", title, year, genres_str, cert)
 
     # 1) TMDB公式 (Trailer/Official Trailer/Teaser 全部)
-    videos = get_movie_videos_all(post["id"], bearer=BEARER, api_key=API_KEY)
+    videos = get_movie_videos_all(post["id"], bearer=None, api_key=API_KEY)
 
     if videos:
         video_html += f"<p>{video_lead}</p>"
@@ -929,7 +929,7 @@ def build_html(post, cast_count=10, stills_count=8):
 
 
     # おすすめ映画
-    recs = get_movie_recommendations(post["id"], lang=LANG, bearer=BEARER, api_key=API_KEY)
+    recs = get_movie_recommendations(post["id"], lang=LANG, bearer=None, api_key=API_KEY)
     rec_divs = []
     for r in recs[:6]:
         rtitle = esc(r.get("title") or r.get("original_title") or "")
@@ -1151,7 +1151,7 @@ def main_once():
 
     # 2) TMDB 상세 수집
     try:
-        post = get_movie_bundle(movie_id, lang=LANG, bearer=BEARER, api_key=API_KEY)
+        post = get_movie_bundle(movie_id, lang=LANG, bearer=None, api_key=API_KEY)
     except Exception as e:
         print(f"❌ TMDB 요청 실패: {e}")
         return True
@@ -1216,6 +1216,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
