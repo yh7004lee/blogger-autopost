@@ -118,7 +118,7 @@ def get_sheet():
     )
     gc = gspread.authorize(creds)
     SHEET_ID = "10kqYhxmeewG_9-XOdXTbv0RVQG9_-jXjtg0C6ERoGG0"
-    return gc.open_by_key(SHEET_ID).sheet2
+    return gc.open_by_key(SHEET_ID).get_worksheet(1)
 
 
 
@@ -1139,6 +1139,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
