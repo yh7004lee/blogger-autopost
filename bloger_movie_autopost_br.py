@@ -521,57 +521,57 @@ def make_section_lead(name, title, year, genres_str, cert_label, extras=None):
         ]
 
 
-elif name == "평점 및 인기":
-        base = [
-            choose(
-                f"A avaliação de {title} é um indicador claro da reação do público.",
-                f"Só de ver a nota desta obra já dá para ter uma ideia da recepção popular.",
-                f"A nota é uma forma rápida de entender a primeira impressão da obra.",
-                f"A pontuação numérica mostra os sentimentos honestos dos espectadores.",
-                f"A avaliação de {title} sugere o nível de popularidade e relevância.",
-                f"A nota também serve como um termômetro de quanto a obra foi querida.",
-                f"A pontuação ajuda a medir as expectativas e a satisfação do público.",
-                f"A nota é o jeito mais simples de ver o desempenho de bilheteria.",
-                f"A pontuação de {title} mostra indiretamente o entusiasmo do público.",
-                f"Com uma avaliação visível, dá para sentir a importância da obra."
-            ),
-            choose(
-                "O número de votos e a média dizem mais do que simples estatísticas.",
-                "Quanto mais votos, maior a confiabilidade da avaliação.",
-                "Olhar a média junto com o tamanho da amostra dá mais precisão.",
-                "Quando os votos aumentam, fica claro o reconhecimento popular.",
-                "Muitos votos significam que o filme realmente foi comentado.",
-                "O grande número de avaliações mostra o alto interesse pela obra.",
-                "Não só a média, mas também o volume de avaliações é importante.",
-                "O total de votos indica o quão difundida foi a obra.",
-                "Ver a média junto com a participação dá uma noção melhor da posição do filme.",
-                "Os dados de avaliação carregam significados além dos números."
-            ),
-            choose(
-                "Claro, números não dizem tudo. Assistir é sempre o mais certeiro.",
-                "Uma nota alta não garante diversão, e uma baixa não significa tédio.",
-                "Use a pontuação apenas como referência: seu gosto importa mais.",
-                "A avaliação é só um guia, a decisão final é sua.",
-                "Mesmo notas altas podem não agradar se não for seu estilo.",
-                "Uma nota baixa pode esconder um filme inesquecível para você.",
-                "No fim, o mais importante é se você aproveita a experiência.",
-                "Use a nota como referência leve, sem se preocupar demais.",
-                "A pontuação mostra a voz do público, mas sua opinião é o que conta.",
-                "Use a nota apenas como uma orientação superficial."
-            ),
-            choose(
-                "Veja abaixo os números apenas como referência leve.",
-                "Considere os dados apenas como guia e siga sua intuição.",
-                "Confira a tabela e perceba a reação geral do público.",
-                "Junto dos números, ver as reações reais é ainda mais divertido.",
-                "Considere os dados como referência, mas encontre sua resposta assistindo.",
-                "Mais interessante que a média é observar a distribuição e o clima.",
-                "Não olhe só os números, leia também as críticas para entender melhor.",
-                "A tabela abaixo resume a reação, encare de forma leve.",
-                "No fim, a escolha é sua, os números são apenas uma pista.",
-                "Veja a tabela e sinta apenas o fluxo geral das reações."
-            )
-        ]
+    elif name == "평점 및 인기":
+            base = [
+                choose(
+                    f"A avaliação de {title} é um indicador claro da reação do público.",
+                    f"Só de ver a nota desta obra já dá para ter uma ideia da recepção popular.",
+                    f"A nota é uma forma rápida de entender a primeira impressão da obra.",
+                    f"A pontuação numérica mostra os sentimentos honestos dos espectadores.",
+                    f"A avaliação de {title} sugere o nível de popularidade e relevância.",
+                    f"A nota também serve como um termômetro de quanto a obra foi querida.",
+                    f"A pontuação ajuda a medir as expectativas e a satisfação do público.",
+                    f"A nota é o jeito mais simples de ver o desempenho de bilheteria.",
+                    f"A pontuação de {title} mostra indiretamente o entusiasmo do público.",
+                    f"Com uma avaliação visível, dá para sentir a importância da obra."
+                ),
+                choose(
+                    "O número de votos e a média dizem mais do que simples estatísticas.",
+                    "Quanto mais votos, maior a confiabilidade da avaliação.",
+                    "Olhar a média junto com o tamanho da amostra dá mais precisão.",
+                    "Quando os votos aumentam, fica claro o reconhecimento popular.",
+                    "Muitos votos significam que o filme realmente foi comentado.",
+                    "O grande número de avaliações mostra o alto interesse pela obra.",
+                    "Não só a média, mas também o volume de avaliações é importante.",
+                    "O total de votos indica o quão difundida foi a obra.",
+                    "Ver a média junto com a participação dá uma noção melhor da posição do filme.",
+                    "Os dados de avaliação carregam significados além dos números."
+                ),
+                choose(
+                    "Claro, números não dizem tudo. Assistir é sempre o mais certeiro.",
+                    "Uma nota alta não garante diversão, e uma baixa não significa tédio.",
+                    "Use a pontuação apenas como referência: seu gosto importa mais.",
+                    "A avaliação é só um guia, a decisão final é sua.",
+                    "Mesmo notas altas podem não agradar se não for seu estilo.",
+                    "Uma nota baixa pode esconder um filme inesquecível para você.",
+                    "No fim, o mais importante é se você aproveita a experiência.",
+                    "Use a nota como referência leve, sem se preocupar demais.",
+                    "A pontuação mostra a voz do público, mas sua opinião é o que conta.",
+                    "Use a nota apenas como uma orientação superficial."
+                ),
+                choose(
+                    "Veja abaixo os números apenas como referência leve.",
+                    "Considere os dados apenas como guia e siga sua intuição.",
+                    "Confira a tabela e perceba a reação geral do público.",
+                    "Junto dos números, ver as reações reais é ainda mais divertido.",
+                    "Considere os dados como referência, mas encontre sua resposta assistindo.",
+                    "Mais interessante que a média é observar a distribuição e o clima.",
+                    "Não olhe só os números, leia também as críticas para entender melhor.",
+                    "A tabela abaixo resume a reação, encare de forma leve.",
+                    "No fim, a escolha é sua, os números são apenas uma pista.",
+                    "Veja a tabela e sinta apenas o fluxo geral das reações."
+                )
+            ]
 
 
 
@@ -629,72 +629,72 @@ elif name == "평점 및 인기":
         ]
 
 
-elif name == "예고편":
-        base = [
-            choose(
-                "O trailer é a forma mais rápida de sentir o tom e a atmosfera do filme.",
-                "Em poucos segundos, o trailer já mostra o mood principal da obra.",
-                "Só de assistir ao trailer, dá para captar a essência do filme.",
-                "Curto mas intenso, o trailer aumenta a expectativa pelo longa.",
-                "O trailer funciona como uma janela para espiar a cor da obra antes de assistir.",
-                "É como um cartão de visita, mostrando a primeira impressão do filme.",
-                "Mesmo em poucos segundos, o trailer transmite todo o charme.",
-                "Cenas rápidas já comunicam bem a atmosfera geral.",
-                "O trailer é o recurso que desperta interesse antes da sessão.",
-                "Só o trailer já permite saborear bastante da magia do filme."
-            ),
-            choose(
-                "Sem medo de spoilers, você pode conferir apenas a atmosfera.",
-                "O trailer relaxa um pouco a tensão mas deixa curiosidade no ar.",
-                "Em pouco tempo já transmite ritmo e emoção da obra.",
-                "Só com cortes e som já dá para sentir a imersão.",
-                "Depois do trailer, a vontade de ver o longa só aumenta.",
-                "A música e a montagem revelam bem a identidade do filme.",
-                "O ritmo e o tempo já antecipam a energia do longa.",
-                "Mesmo curto, o trailer dá pistas sobre a narrativa.",
-                "Som e imagem juntos já fazem pensar: ‘Ah, esse é o estilo do filme’.",
-                "Em poucos segundos, já traz várias cenas memoráveis."
-            ),
-            choose(
-                f"Assistindo ao trailer {runtime_txt+' inteiro ' if runtime_txt else ''}você capta rapidamente o tom do longa.",
-                "Às vezes, uma única fala no trailer já representa o tom inteiro do filme.",
-                "A primeira e a última cena do trailer podem conter pistas importantes.",
-                "Mesmo curto, o vídeo traz uma mensagem forte.",
-                "Só pelo trailer já dá para sentir a linha emocional que será seguida.",
-                "A beleza visual e a trilha já bastam para transmitir o encanto.",
-                "Uma cena do trailer pode ser o motivo decisivo para ver o filme.",
-                "Mesmo breve, o trailer tem força para gerar imersão.",
-                "É só um teaser, mas deixa um impacto duradouro.",
-                "Algumas cenas já revelam o tema central da obra."
-            ),
-            choose(
-                "Se possível, veja uma vez de fones e outra em caixas de som, a sensação muda.",
-                "Ative as legendas: você vai captar melhor o tom e a nuance dos diálogos.",
-                "Se mergulhar mesmo em poucos segundos, o encanto do longa é maior.",
-                "Nos primeiros e últimos 10 segundos muitas vezes está a essência do filme.",
-                "Rever várias vezes o trailer revela detalhes escondidos.",
-                "Quando reencontrar no longa as cenas vistas no trailer, a experiência será prazerosa.",
-                "Mais do que passar rápido, é melhor assistir com foco.",
-                "Mesmo em pouco tempo, há muitos detalhes de produção para notar.",
-                "A combinação de som e imagem pode ser tão marcante quanto o próprio longa.",
-                "Embora curto, o trailer mostra fielmente o mood do filme."
-            ),
-            choose(
-                "Assista ao vídeo abaixo e, se sentir vontade, siga naturalmente para o longa.",
-                "O trailer é um aperitivo e um convite para o filme completo.",
-                "Se este pequeno clipe já tocar você, o longa será ainda mais envolvente.",
-                "Não há melhor forma de confirmar se combina com seu gosto do que pelo trailer.",
-                "Depois de ver o trailer, escolher o filme fica mais fácil.",
-                "Um vídeo já basta para saber se é do seu estilo.",
-                "O trailer é a melhor ferramenta para criar expectativa pelo longa.",
-                "Ao conhecer a obra pela primeira vez, o trailer é o melhor guia.",
-                "Se o trailer já emocionar, seguir para o longa será sem arrependimentos.",
-                "Sinta levemente o encanto do filme através do trailer."
-            )
-        ]
-
-
+    elif name == "예고편":
+            base = [
+                choose(
+                    "O trailer é a forma mais rápida de sentir o tom e a atmosfera do filme.",
+                    "Em poucos segundos, o trailer já mostra o mood principal da obra.",
+                    "Só de assistir ao trailer, dá para captar a essência do filme.",
+                    "Curto mas intenso, o trailer aumenta a expectativa pelo longa.",
+                    "O trailer funciona como uma janela para espiar a cor da obra antes de assistir.",
+                    "É como um cartão de visita, mostrando a primeira impressão do filme.",
+                    "Mesmo em poucos segundos, o trailer transmite todo o charme.",
+                    "Cenas rápidas já comunicam bem a atmosfera geral.",
+                    "O trailer é o recurso que desperta interesse antes da sessão.",
+                    "Só o trailer já permite saborear bastante da magia do filme."
+                ),
+                choose(
+                    "Sem medo de spoilers, você pode conferir apenas a atmosfera.",
+                    "O trailer relaxa um pouco a tensão mas deixa curiosidade no ar.",
+                    "Em pouco tempo já transmite ritmo e emoção da obra.",
+                    "Só com cortes e som já dá para sentir a imersão.",
+                    "Depois do trailer, a vontade de ver o longa só aumenta.",
+                    "A música e a montagem revelam bem a identidade do filme.",
+                    "O ritmo e o tempo já antecipam a energia do longa.",
+                    "Mesmo curto, o trailer dá pistas sobre a narrativa.",
+                    "Som e imagem juntos já fazem pensar: ‘Ah, esse é o estilo do filme’.",
+                    "Em poucos segundos, já traz várias cenas memoráveis."
+                ),
+                choose(
+                    f"Assistindo ao trailer {runtime_txt+' inteiro ' if runtime_txt else ''}você capta rapidamente o tom do longa.",
+                    "Às vezes, uma única fala no trailer já representa o tom inteiro do filme.",
+                    "A primeira e a última cena do trailer podem conter pistas importantes.",
+                    "Mesmo curto, o vídeo traz uma mensagem forte.",
+                    "Só pelo trailer já dá para sentir a linha emocional que será seguida.",
+                    "A beleza visual e a trilha já bastam para transmitir o encanto.",
+                    "Uma cena do trailer pode ser o motivo decisivo para ver o filme.",
+                    "Mesmo breve, o trailer tem força para gerar imersão.",
+                    "É só um teaser, mas deixa um impacto duradouro.",
+                    "Algumas cenas já revelam o tema central da obra."
+                ),
+                choose(
+                    "Se possível, veja uma vez de fones e outra em caixas de som, a sensação muda.",
+                    "Ative as legendas: você vai captar melhor o tom e a nuance dos diálogos.",
+                    "Se mergulhar mesmo em poucos segundos, o encanto do longa é maior.",
+                    "Nos primeiros e últimos 10 segundos muitas vezes está a essência do filme.",
+                    "Rever várias vezes o trailer revela detalhes escondidos.",
+                    "Quando reencontrar no longa as cenas vistas no trailer, a experiência será prazerosa.",
+                    "Mais do que passar rápido, é melhor assistir com foco.",
+                    "Mesmo em pouco tempo, há muitos detalhes de produção para notar.",
+                    "A combinação de som e imagem pode ser tão marcante quanto o próprio longa.",
+                    "Embora curto, o trailer mostra fielmente o mood do filme."
+                ),
+                choose(
+                    "Assista ao vídeo abaixo e, se sentir vontade, siga naturalmente para o longa.",
+                    "O trailer é um aperitivo e um convite para o filme completo.",
+                    "Se este pequeno clipe já tocar você, o longa será ainda mais envolvente.",
+                    "Não há melhor forma de confirmar se combina com seu gosto do que pelo trailer.",
+                    "Depois de ver o trailer, escolher o filme fica mais fácil.",
+                    "Um vídeo já basta para saber se é do seu estilo.",
+                    "O trailer é a melhor ferramenta para criar expectativa pelo longa.",
+                    "Ao conhecer a obra pela primeira vez, o trailer é o melhor guia.",
+                    "Se o trailer já emocionar, seguir para o longa será sem arrependimentos.",
+                    "Sinta levemente o encanto do filme através do trailer."
+                )
+            ]
     
+    
+        
 
  
     elif name == "추천 영화":
@@ -1139,6 +1139,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
