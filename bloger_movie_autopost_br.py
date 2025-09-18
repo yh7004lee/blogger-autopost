@@ -356,7 +356,7 @@ def build_html(post, cast_count=10, stills_count=8):
     tagline = esc(post.get("tagline") or "")
     adult_flag = bool(post.get("adult", False))
     countries = [c.get("name","") for c in (post.get("production_countries") or []) if c.get("name")]
-    country_str = ", ".join(countries) if countries else "País de produção não informado"
+    country_str = ", ".join(countries) if countries else "—"
     backdrop = img_url(post.get("backdrop_path"), "w1280")
 
     credits = post.get("credits") or {}
@@ -370,99 +370,111 @@ def build_html(post, cast_count=10, stills_count=8):
     backdrops = sorted(backdrops, key=lambda b: (b.get("vote_count",0), b.get("vote_average",0)), reverse=True)[:stills_count]
 
     cert = get_movie_release_cert(post["id"])
-    if not cert and adult_flag:
-        cert = "18+"
+    if not cert and adult_flag: cert = "18+"
 
     base_keywords = [title] + genres_list + director_names[:2] + cast_names[:3]
     if year: base_keywords.append(year)
     if cert: base_keywords.append(cert)
     base_keywords += ["resenha","avaliação","elenco","trailer","fotos","filmes recomendados"]
-    seen = set(); keywords = []
+    seen=set(); keywords=[]
     for k in base_keywords:
         if k and k not in seen: keywords.append(k); seen.add(k)
 
     intro_6 = make_intro_6(title, year, genres_str, director_names, cast_names, cert, runtime, keywords)
 
+    # === Elenco 테이블 ===
     cast_rows = []
     for p in cast:
         name = esc(p.get("name",""))
         ch = esc(p.get("character",""))
         prof = img_url(p.get("profile_path"), "w185")
-        img_tag = f'<img src="{prof}" alt="{name}" style="width:72px;height:auto;border-radius:8px;">' if prof else ""
-        cast_rows.append(
-            f'<tr><td style="padding:8px;">{img_tag}</td><td style="padding:8px;"><b>{name}</b><br><span style="color:#666;">{ch}</span></td></tr>'
-        )
-    cast_table = '<table style="width:100%;border-collapse:collapse;border:1px solid #eee;">' + "".join(cast_rows or ['<tr><td>Sem elenco.</td></tr>']) + '</table>'
+        img_tag = f'<img src="{prof}" alt="{name}" style="width:72px;border-radius:8px;">' if prof else ""
+        cast_rows.append(f"<tr><td>{img_tag}</td><td><b>{name}</b><br><span style='color:#666'>{ch}</span></td></tr>")
+    cast_table = "<table style='width:100%;border:1px solid #ccc;border-collapse:collapse;'>" + "".join(cast_rows or ["<tr><td>Sem elenco.</td></tr>"]) + "</table>"
 
-    still_divs = []
+    # === Stills 갤러리 ===
+    still_divs=[]
     for b in backdrops:
-        p = img_url(b.get("file_path"), "w780")
-        if p: still_divs.append(f'<div style="flex:0 0 49%;margin:0.5%;"><img src="{p}" alt="still" style="width:100%;border-radius:10px;"></div>')
-    stills_html = '<div style="display:flex;flex-wrap:wrap;">' + "".join(still_divs or ['<div>Sem fotos.</div>']) + '</div>'
+        p=img_url(b.get("file_path"),"w780")
+        if p: still_divs.append(f"<div style='flex:0 0 49%;margin:0.5%'><img src='{p}' style='width:100%;border-radius:8px;'></div>")
+    stills_html="<div style='display:flex;flex-wrap:wrap'>" + "".join(still_divs or ["<div>Sem fotos.</div>"]) + "</div>"
 
-    vote_avg = float(post.get("vote_average") or 0.0)
-    vote_count = int(post.get("vote_count") or 0)
-    popularity = float(post.get("popularity") or 0.0)
-    rating_html = f"<div>Nota média: {vote_avg:.1f} (com {vote_count} votos)<br>Popularidade: {popularity:.1f}</div>"
+    # === 평가/인기 ===
+    vote_avg=float(post.get("vote_average") or 0)
+    vote_count=int(post.get("vote_count") or 0)
+    popularity=float(post.get("popularity") or 0)
+    rating_html=f"""
+    <div style="background:#fafafa;border:2px solid #ddd;border-radius:10px;padding:20px;margin:20px 0;text-align:center">
+      <b>⭐ Nota média:</b> {vote_avg:.1f}/10<br>
+      <b>📊 Votos:</b> {vote_count}<br>
+      <b>🔥 Popularidade:</b> {popularity:.1f}
+    </div>
+    """
 
-    videos = get_movie_videos_all(post["id"])
-    video_html = ""
+    # === Trailer ===
+    videos=get_movie_videos_all(post["id"])
+    video_html=""
     if videos:
         for v in videos:
-            yt_key = v.get("key")
-            yt_name = esc(v.get("name") or "Trailer")
-            if yt_key:
-                video_html += f"<p><b>{yt_name}</b></p><iframe width='560' height='315' src='https://www.youtube.com/embed/{yt_key}' frameborder='0' allowfullscreen></iframe><br>"
+            yt_key=v.get("key")
+            yt_name=esc(v.get("name") or "Trailer")
+            if yt_key: video_html+=f"<p><b>{yt_name}</b></p><iframe width='560' height='315' src='https://www.youtube.com/embed/{yt_key}' frameborder='0' allowfullscreen></iframe><br>"
     else:
-        video_html = "<p>Trailer não disponível.</p>"
+        video_html="<p>Trailer não disponível.</p>"
 
-    recs = get_movie_recommendations(post["id"], lang=LANG, api_key=API_KEY)
+    # === 추천 영화 ===
+    recs=get_movie_recommendations(post["id"],lang=LANG,api_key=API_KEY)
     if recs:
-        rec_cards = []
+        rec_cards=[]
         for r in recs[:6]:
-            rtitle = esc(r.get("title") or r.get("original_title") or "")
-            poster = img_url(r.get("poster_path"), "w185")
-            blog_link = blog_search_url(rtitle)
-            rec_cards.append(f'<div style="flex:0 0 32%;text-align:center;"><a href="{blog_link}"><img src="{poster}" style="width:100%;border-radius:8px;"></a><br><a href="{blog_link}">{rtitle}</a></div>')
-        recs_html = '<h2>Filmes recomendados</h2><div style="display:flex;flex-wrap:wrap;">' + "".join(rec_cards) + '</div>'
+            rtitle=esc(r.get("title") or r.get("original_title") or "")
+            poster=img_url(r.get("poster_path"),"w185")
+            blog_link=blog_search_url(rtitle)
+            rec_cards.append(f"<div style='flex:0 0 32%;text-align:center'><a href='{blog_link}'><img src='{poster}' style='width:100%;border-radius:8px;'></a><br><a href='{blog_link}'>{rtitle}</a></div>")
+        recs_html=f"<h2>Filmes recomendados de “{title}”</h2><div style='display:flex;flex-wrap:wrap'>{''.join(rec_cards)}</div>"
     else:
-        recs_html = "<p>Não há recomendações disponíveis.</p>"
+        recs_html="<p>Não há recomendações disponíveis.</p>"
 
-    def build_related_block(rss_url, count=5):
-        links = []
+    # === RSS 관련글 박스 ===
+    def build_related_block(rss_url,count=5):
+        links=[]
         try:
-            r = requests.get(rss_url, timeout=10)
-            root = ET.fromstring(r.content)
-            items = root.findall(".//item")
-            for item in items[:count]:
-                link = item.findtext("link") or ""
-                t = item.findtext("title") or "Sem título"
-                if link: links.append((link, t))
-        except Exception as e:
-            print("❌ RSS parse error:", e)
-        links_html = "".join([f'<a href="{href}">● {esc(t)}</a><br>' for href,t in links])
-        return f"<div style='background:#eee;padding:10px;'>{links_html}</div>"
+            r=requests.get(rss_url,timeout=10)
+            root=ET.fromstring(r.content)
+            for item in root.findall(".//item")[:count]:
+                link=item.findtext("link") or ""
+                t=item.findtext("title") or "Sem título"
+                if link: links.append((link,t))
+        except: pass
+        links_html="".join([f"<a href='{href}'>● {esc(t)}</a><br>" for href,t in links])
+        return f"<div style='background:#efede9;border:2px dashed #aaa;padding:15px;margin:20px 0;border-radius:8px'><p><b>♡♥ Leia também</b></p>{links_html}</div>"
 
-    related_block = build_related_block(RELATED_RSS_URL, count=5)
-    outro_6 = make_outro_6(title, year, genres_str, director_names, keywords)
-    hashtags = make_hashtags_from_title(title, year, genres_str)
+    related_block=build_related_block(RELATED_RSS_URL,5)
+    outro_6=make_outro_6(title,year,genres_str,director_names,keywords)
 
-    overview = esc(post.get("overview") or "Sinopse não disponível.")
-    html_out = f"""
+    # === 장르 링크 ===
+    genre_links=" ".join([f"<a href='{blog_label_url(g)}'>#{g}</a>" for g in genres_list])
+
+    overview=esc(post.get("overview") or "Sinopse não disponível.")
+    html_out=f"""
 <p>{intro_6}</p><br>
-{f"<img src='{backdrop}' style='width:100%;'>" if backdrop else ""}
-<h2>Sinopse</h2>
-<p>{make_section_lead("Sinopse", title, year, genres_str, cert)}</p>
-<div style="background:#fafafa;border:1px solid #ccc;padding:10px;">{overview}</div>
-<h2>Elenco</h2>{cast_table}
-<h2>Fotos</h2>{stills_html}
-<h2>Avaliação & Trailer</h2>{rating_html}{video_html}
+{f"<img src='{backdrop}' style='width:100%;border-radius:12px'>" if backdrop else ""}
+{f"<p><i>{tagline}</i></p>" if tagline else ""}
+
+{related_block}
+
+<h2>Sinopse do filme “{title}”</h2>
+<p><b>País:</b> {country_str} | <b>Gênero:</b> {genre_links if genre_links else "—"}</p>
+<div style="background:#fafafa;border:1px solid #ddd;border-radius:10px;padding:15px;margin:15px 0;line-height:1.6">{overview}</div>
+
+<h2>Elenco de “{title}”</h2>{cast_table}
+<h2>Fotos de “{title}”</h2>{stills_html}
+<h2>Avaliação & Trailer de “{title}”</h2>{rating_html}{video_html}
 {recs_html}
 <p>{outro_6}</p>
-{related_block}
-<p>{hashtags}</p>
 """
     return textwrap.dedent(html_out).strip()
+
 
 # ===============================
 # 메인 실행
@@ -501,3 +513,4 @@ if __name__ == "__main__":
         if not ok: break
         if i < POST_COUNT-1 and POST_DELAY_MIN>0:
             time.sleep(POST_DELAY_MIN*60)
+
