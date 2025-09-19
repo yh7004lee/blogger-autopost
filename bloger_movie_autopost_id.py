@@ -605,7 +605,7 @@ def make_section_lead(name, title, year, genres_str, cert_label, extras=None):
             )
         ]
 
-    return base
+ 
 
 
 
@@ -1128,7 +1128,7 @@ def build_html(post, title, cast_count=10, stills_count=8):
 # Blogger 인증/발행
 # ===============================
 from google.oauth2.credentials import Credentials as UserCredentials
-from google.oauth2.service_account import Credentials as ServiceAccountCredentials
+#from google.oauth2.service_account import Credentials as ServiceAccountCredentials 중복
 
 BLOGGER_TOKEN_JSON = "blogger_token.json"  # refresh_token 포함 JSON 파일
 SCOPES = ["https://www.googleapis.com/auth/blogger"]
@@ -1171,10 +1171,10 @@ def main():
     sys.stdout = Logger()
     sys.stderr = Logger()
 
-    ws = get_sheet()
+    ws3 = get_sheet()
     service = get_blogger_service()
 
-    rows = ws.get_all_values()
+    rows = ws3.get_all_values()
     for i, row in enumerate(rows[1:], start=2):  # 2행부터
         raw_id = row[1].strip() if len(row) > 1 else ""  # 원본 값
         movie_id = re.sub(r"\D", "", raw_id)            # 숫자만 추출
@@ -1199,7 +1199,7 @@ def main():
                 html_out = build_html(post, title, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
 
                 # 4) 블로그 제목 생성
-                blog_title = get_next_title_pattern(ws, title, year)
+                blog_title = get_next_title_pattern(ws3, title, year)
 
                 # 5) Blogger 발행
                 genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
@@ -1209,7 +1209,7 @@ def main():
                 print(f"✅ Publikasi selesai: {res.get('url','(URL tidak diketahui)')}")
 
                 # 6) Google Sheets 업데이트 (완)
-                ws.update_cell(i, 6, "완")
+                ws3.update_cell(i, 6, "완")
                 print(f"✅ Google Sheets diperbarui (baris {i})")
 
             except Exception as e:
@@ -1218,10 +1218,10 @@ def main():
             finally:
                 # 7) 로그 기록 (P열 = 16열, append)
                 try:
-                    prev = ws.cell(i, 16).value or ""
+                    prev = ws3.cell(i, 16).value or ""
                     new_log = log_buffer.getvalue().strip().replace("\n", " | ")
                     new_val = (prev + " | " if prev else "") + new_log
-                    ws.update_cell(i, 16, new_val)
+                    ws3.update_cell(i, 16, new_val)
                     print(f"📌 Log eksekusi disimpan (baris {i}, kolom P)")
                 except Exception as log_e:
                     sys.__stdout__.write(f"❌ Gagal menyimpan log: {log_e}\n")
@@ -1240,6 +1240,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ Tunggu {POST_DELAY_MIN} menit sebelum posting berikutnya...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
