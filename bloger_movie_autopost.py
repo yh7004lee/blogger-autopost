@@ -99,6 +99,46 @@ def get_youtube_trailers(title_ko, title_en=None, max_results=2):
             return results
 
     return []
+# ===============================
+# 블로그 제목 생성 로직 (10가지 로테이션, 괄호 제거 & 검색 친화 키워드)
+# ===============================
+def get_rotating_title(ws, title, year):
+    """
+    Google Sheets O1 셀에 저장된 인덱스를 기반으로
+    10가지 제목 템플릿을 순환 사용
+    """
+    # 현재 인덱스 불러오기 (비어있으면 0으로 시작)
+    try:
+        idx_val = ws.acell("O1").value
+        idx = int(idx_val.strip()) if idx_val and idx_val.strip().isdigit() else 0
+    except Exception:
+        idx = 0
+
+    # 제목 패턴 10가지 (괄호 제거 + 검색 키워드 강화)
+    templates = [
+        f"영화 {title} {year} 줄거리 출연진 예고편 리뷰",
+        f"{year} 영화 {title} 줄거리와 주연 배우 평점 리뷰",
+        f"{title} {year} 개봉작 줄거리 출연진 관람포인트",
+        f"{title} {year} 영화 리뷰 줄거리 예고편 명장면",
+        f"영화 {title} {year} 추천작 줄거리 배우 정보",
+        f"{title} {year} 줄거리 스틸컷 예고편 평점 리뷰",
+        f"{year} 추천 영화 {title} 줄거리 출연 배우 총정리",
+        f"영화 리뷰 {title} {year} 줄거리와 캐스팅 정보",
+        f"{title} {year} 개봉 영화 줄거리 평점 리뷰 모음",
+        f"영화 {title} {year} 줄거리 출연진 예고편 정보",
+    ]
+
+    # 현재 인덱스로 제목 선택
+    blog_title = templates[idx % len(templates)]
+
+    # 다음 인덱스로 업데이트 (순환)
+    next_idx = (idx + 1) % len(templates)
+    try:
+        ws.update_acell("O1", str(next_idx))
+    except Exception as e:
+        print(f"⚠️ O1 셀 업데이트 실패: {e}")
+
+    return blog_title
 
 
 # ===============================
@@ -1257,10 +1297,13 @@ def main():
                 # 2) HTML 구성
                 html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
 
-                # 3) 포스트 제목
+                # 3) 포스트 제목 (로테이션 적용)
                 title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
                 year = (post.get("release_date") or "")[:4]
-                blog_title = f"영화 {title} ({year}) 줄거리 출연진 주인공 예고편"
+                
+                # ✅ 로테이션 제목 생성 함수 호출
+                blog_title = get_rotating_title(ws, title, year)
+
 
                 # 4) Blogger 발행
                 genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
@@ -1302,6 +1345,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
