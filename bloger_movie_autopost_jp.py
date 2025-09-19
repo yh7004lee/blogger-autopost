@@ -100,6 +100,45 @@ def get_movie_videos_all(movie_id, bearer=None, api_key=None):
 
     return videos
 
+# ===============================
+# 🎌 日本語ブログタイトル生成 (10種類ローテーション, P1セル)
+# ===============================
+def get_rotating_title_ja(ws, title, year):
+    """
+    Google Sheets P1セルを使って日本語タイトルを10種類ローテーション
+    """
+    # 現在のインデックスを取得
+    try:
+        idx_val = ws.acell("P1").value
+        idx = int(idx_val.strip()) if idx_val and idx_val.strip().isdigit() else 0
+    except Exception:
+        idx = 0
+
+    # タイトルテンプレート 10種類
+    templates = [
+        f"映画 {title} {year} あらすじ 出演者 評価 予告編",
+        f"{year}年公開の映画 {title} 見どころとキャスト情報",
+        f"{title} {year} 映画レビュー あらすじと出演者一覧",
+        f"{title} {year} おすすめ映画 ストーリーと評価まとめ",
+        f"映画 {title} {year} 出演者紹介とストーリー解説",
+        f"{year}年 映画 {title} あらすじ・キャスト・予告編まとめ",
+        f"映画レビュー {title} {year} あらすじ 評価 見どころ",
+        f"{title} {year} 人気映画 キャスト情報と感想まとめ",
+        f"{title} {year} あらすじと予告編 出演者と評価ガイド",
+        f"映画 {title} {year} ストーリー キャスト 評価 総まとめ",
+    ]
+
+    # 選択
+    blog_title = templates[idx % len(templates)]
+
+    # 次のインデックスを P1 に保存
+    next_idx = (idx + 1) % len(templates)
+    try:
+        ws.update_acell("P1", str(next_idx))
+    except Exception as e:
+        print(f"⚠️ P1セル更新失敗: {e}")
+
+    return blog_title
 
 
 def get_movie_bundle(movie_id, lang="ja-JP", bearer=None, api_key=None):
@@ -1169,7 +1208,9 @@ def main_once():
         service = get_blogger_service()
         title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
         year = (post.get("release_date") or "")[:4]
-        blog_title = f"映画 {title} ({year}) あらすじ 出演者 主人公 予告編"
+        # ✅ ローテーションタイトル生成 (日本語版, P1セル使用)
+        blog_title = get_rotating_title_ja(ws, title, year)
+
 
         genres_list = [g.get("name", "") for g in post.get("genres", []) if g.get("name")]
         labels = ["映画"] + ([year] if year else []) + genres_list
@@ -1216,6 +1257,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
