@@ -2,12 +2,7 @@ name: Movie Autopost
 
 on:
   schedule:
-    # 한국시간(KST) 01:10 → UTC 16:10
-    - cron: "10 16 * * *"
-    # 한국시간(KST) 09:10 → UTC 00:10
-    - cron: "10 0 * * *"
-    # 한국시간(KST) 18:10 → UTC 09:10
-    - cron: "10 9 * * *"
+
   workflow_dispatch:
 
 
@@ -65,4 +60,5 @@ jobs:
 
       - name: Run autopost
         run: python bloger_movie_autopost_id.py
+
 
