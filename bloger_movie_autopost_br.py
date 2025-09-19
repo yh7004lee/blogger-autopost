@@ -10,6 +10,7 @@ Excel(MOVIE_ID) → TMDB → Blogger 자동 포스팅 파이프라인
 - Blogger API로 발행 (blogId=7755804984438912295)
 - 성공 시 해당 행 F열에 "완" 기록 후 저장
 """
+import re
 import urllib.parse
 import os, sys, html, textwrap, requests, random, time, pickle
 import gspread
@@ -1224,6 +1225,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
