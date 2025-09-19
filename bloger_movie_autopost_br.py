@@ -95,10 +95,11 @@ YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 # 🏷️ 해시태그 생성 함수
 def make_hashtags_from_title(title: str) -> str:
     import re
-    # 괄호 안 숫자도 분리
-    words = re.findall(r"[가-힣A-Za-z0-9]+|\([^)]+\)", title)
-    hashtags = ["#" + w.strip() for w in words if w.strip()]
+    # 괄호를 무시하고 단어/숫자만 뽑기
+    words = re.findall(r"[가-힣A-Za-zÀ-ÿ0-9]+", title)
+    hashtags = ["#" + w for w in words if w.strip()]
     return " ".join(hashtags)
+
 
 
 
@@ -244,16 +245,6 @@ def get_movie_recommendations(movie_id, lang="pt-BR", bearer=None, api_key=None)
     return j.get("results", [])
 
 def get_movie_release_cert(movie_id, bearer=None, api_key=None):
-    def map_kr(cert):
-        mapping = {
-            "ALL": "전체관람가", "G": "전체관람가", "0": "전체관람가",
-            "12": "12세 관람가",
-            "15": "15세 관람가",
-            "18": "청소년 관람불가", "19": "청소년 관람불가", "R": "청소년 관람불가"
-        }
-        if cert in mapping: return mapping[cert]
-        return cert if cert else ""
-
     data = tmdb_get(f"/movie/{movie_id}/release_dates", bearer=bearer, api_key=api_key)
     results = data.get("results", [])
 
@@ -266,10 +257,21 @@ def get_movie_release_cert(movie_id, bearer=None, api_key=None):
                         return c
         return ""
 
-    kr = find_cert("KR")
-    if kr: return map_kr(kr)
+    # 1. 브라질 등급
+    br = find_cert("BR")
+    if br:
+        return f"Classificação {br}"
+
+    # 2. 미국 등급
     us = find_cert("US")
-    if us: return us
+    if us:
+        return f"Rated {us}"
+
+    # 3. 한국 fallback (영화에 따라 없을 수도 있음)
+    kr = find_cert("KR")
+    if kr:
+        return f"Classificação {kr}"
+
     return ""
 
 # ===============================
@@ -375,7 +377,7 @@ def make_outro_6(title, year, genres_str, director_names, keywords):
         "Ao longo do artigo, revisitamos a sinopse, comentamos sobre o elenco e detalhamos os principais aspectos técnicos e artísticos.",
         "Nesta análise, percorremos a história, falamos dos atores e apontamos os pontos altos que tornam o filme envolvente.",
         "Passamos pela trama, pela direção e pelo impacto cultural que este título trouxe para os espectadores.",
-        "Relembramos a narrativa, a ambientação e os personagens que fazem de <b>{title}</b> uma experiência especial."
+        f"Relembramos a narrativa, a ambientação e os personagens que fazem de <b>{title}</b> uma experiência especial."
     )
 
     s3 = (
@@ -1245,6 +1247,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
