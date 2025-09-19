@@ -865,7 +865,7 @@ def get_related_posts(blog_id, count=4):
     return html_box
 
 
-def build_html(post, cast_count=10, stills_count=8):
+def build_html(post, title, cast_count=10, stills_count=8):
     esc = html.escape
     # Título (pt-BR → fallback em inglês)
     
@@ -1198,7 +1198,7 @@ def main():
                 ws = get_sheet()   # 이미 sheet2 반환하도록 되어 있으면 ws2 사용
 
                 # 2) HTML 구성
-                html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
+                html_out = build_html(post, title, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
                 
                 # 블로그 제목 생성
                 blog_title = get_next_title_pattern(ws, title, year)
@@ -1245,6 +1245,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
