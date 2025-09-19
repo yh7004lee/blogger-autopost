@@ -100,6 +100,24 @@ def make_hashtags_from_title(title: str) -> str:
     hashtags = ["#" + w.strip() for w in words if w.strip()]
     return " ".join(hashtags)
 
+def get_movie_title(movie_id, bearer=None, api_key=None):
+    import re
+    # 1. 포르투갈어
+    data_pt = tmdb_get(f"/movie/{movie_id}", params={"language": "pt-BR"}, bearer=bearer, api_key=api_key)
+    title_pt = data_pt.get("title")
+
+    if title_pt and not re.search(r"[ㄱ-ㅎ가-힣]", title_pt):
+        return title_pt
+
+    # 2. 영어 fallback
+    data_en = tmdb_get(f"/movie/{movie_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
+    title_en = data_en.get("title")
+
+    if title_en:
+        return title_en
+
+    # 3. 최후 fallback
+    return data_pt.get("original_title") or "Título indisponível"
 
 def get_youtube_trailers(title_pt, title_en=None, max_results=2):
     """유튜브에서 예고편 검색 (포르투갈어 먼저, 없으면 영어로)"""
@@ -1175,7 +1193,9 @@ def main():
                 html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
 
                 # 3) 포스트 제목
-                title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
+                # title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
+                title = esc(get_movie_title(post["id"], bearer=BEARER, api_key=API_KEY))
+
                 year = (post.get("release_date") or "")[:4]
                 # ws 객체 준비
                 ws = get_sheet()   # 이미 sheet2 반환하도록 되어 있으면 ws2 사용
@@ -1225,6 +1245,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
