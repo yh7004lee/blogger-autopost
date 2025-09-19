@@ -47,6 +47,44 @@ IMG_BASE = "https://image.tmdb.org/t/p"
 BEARER = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1NmY0YTNiY2UwNTEyY2RjMjAxNzFhODMxNTNjMjVkNiIsIm5iZiI6MTc1NjY0NjE4OC40MTI5OTk5LCJzdWIiOiI2OGI0NGIyYzI1NzIyYjIzNDdiNGY0YzQiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.ShX_ZJwMuZ1WffeUR6PloXx2E7pjBJ4nAlQoI4l7nKY"
 API_KEY = "56f4a3bce0512cdc20171a83153c25d6"
 
+# ===============================
+# 제목 패턴 목록
+# ===============================
+TITLE_PATTERNS = [
+    "{title} {year} sinopse elenco crítica trailer",
+    "Sinopse do filme {title} {year} crítica elenco trailer",
+    "Elenco de {title} {year} sinopse completa crítica",
+    "Trailer oficial de {title} {year} sinopse crítica elenco",
+    "Crítica e análise do filme {title} {year} elenco sinopse",
+    "{year} lançamento {title} sinopse crítica elenco trailer",
+    "{title} crítica e sinopse {year} elenco trailer",
+    "Filme {title} {year} crítica trailer elenco e sinopse",
+    "Sinopse completa de {title} {year} elenco crítica trailer",
+    "{title} análise {year} trailer oficial crítica sinopse"
+]
+
+# ===============================
+# 시트2 K1 셀 기반 로테이션 함수
+# ===============================
+def get_next_title_pattern(ws2, title, year):
+    # 현재 인덱스 불러오기 (없으면 0으로 초기화)
+    try:
+        idx_val = ws2.acell("K1").value
+        idx = int(idx_val) if idx_val and idx_val.isdigit() else 0
+    except Exception:
+        idx = 0
+
+    # 패턴 선택
+    pattern = TITLE_PATTERNS[idx % len(TITLE_PATTERNS)]
+    blog_title = pattern.format(title=title, year=year)
+
+    # 다음 인덱스 저장
+    try:
+        ws2.update_acell("K1", str(idx + 1))
+    except Exception as e:
+        print(f"⚠️ K1 셀 업데이트 실패: {e}")
+
+    return blog_title
 
 
 # 🔑 유튜브 API 인증정보
@@ -1095,7 +1133,11 @@ def main():
                 # 3) 포스트 제목
                 title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
                 year = (post.get("release_date") or "")[:4]
-                blog_title = f"Filme {title} ({year}) Sinopse Elenco Personagens Principais Trailer"
+                # ws 객체 준비
+                ws = get_sheet()   # 이미 sheet2 반환하도록 되어 있으면 ws2 사용
+                
+                # 블로그 제목 생성
+                blog_title = get_next_title_pattern(ws, title, year)
 
 
                 # 4) Blogger 발행
@@ -1139,6 +1181,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
