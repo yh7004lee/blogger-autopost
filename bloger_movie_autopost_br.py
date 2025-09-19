@@ -177,6 +177,16 @@ def tmdb_get(path, params=None, bearer=None, api_key=None):
     r.raise_for_status()
     return r.json()
 
+def get_person_name_en(person_id, bearer=None, api_key=None):
+    try:
+        data = tmdb_get(f"/person/{person_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
+        name_en = data.get("name", "")
+        return name_en
+    except Exception as e:
+        print(f"⚠️ Falha ao buscar nome para pessoa {person_id}: {e}")
+        return ""
+
+
 def img_url(path, size="w780"):
     if not path:
         return None
@@ -834,7 +844,14 @@ def get_related_posts(blog_id, count=4):
 
 def build_html(post, cast_count=10, stills_count=8):
     esc = html.escape
-    title = esc(post.get("title") or post.get("original_title") or "Título indisponível")
+    # Título (pt-BR → fallback em inglês)
+    title_pt = esc(post.get("title") or "")
+    title_en = esc(post.get("original_title") or "")
+    if re.search(r"[ㄱ-ㅎ가-힣]", title_pt):  # Se ainda for coreano
+        title = title_en if title_en else title_pt
+    else:
+        title = title_pt
+
     
     overview = esc(post.get("overview") or "As informações da sinopse ainda não estão disponíveis.")
     release_date = esc(post.get("release_date") or "")
@@ -884,10 +901,17 @@ def build_html(post, cast_count=10, stills_count=8):
 
     intro_6 = make_intro_6(title, year, genres_str, director_names, cast_names, cert, runtime, keywords)
 
+
     # 출연진 테이블
     cast_rows = []
     for p in cast:
         name = esc(p.get("name",""))
+        # 🔑 이름이 한글이면 영어 이름으로 교체 시도
+        if re.search(r"[ㄱ-ㅎ가-힣]", name):
+            name_en = get_person_name_en(p.get("id"), bearer=BEARER, api_key=API_KEY)
+            if name_en:
+                name = esc(name_en)
+    
         ch = esc(p.get("character",""))
         prof = img_url(p.get("profile_path"), "w185")
         img_tag = f'<img src="{prof}" alt="{name}" style="width:72px;height:auto;border-radius:8px;">' if prof else ""
@@ -897,6 +921,7 @@ def build_html(post, cast_count=10, stills_count=8):
             f'<td style="vertical-align:top;padding:8px 10px;"><b>{name}</b><br><span style="color:#666;">{ch}</span></td>'
             f'</tr>'
         )
+
     cast_table = (
         '<table style="width:100%;border-collapse:collapse;border:1px solid #eee;">' +
         "".join(cast_rows or ['<tr><td style="padding:10px;">Sem informações do elenco.</td></tr>']) +
@@ -1199,6 +1224,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
