@@ -1,7 +1,6 @@
 name: Movie Autopost indo
 
 on:
-  schedule:
 
   workflow_dispatch:
 
@@ -60,6 +59,7 @@ jobs:
 
       - name: Run autopost
         run: python bloger_movie_autopost_id.py
+
 
 
 
