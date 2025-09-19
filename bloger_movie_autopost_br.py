@@ -1020,13 +1020,15 @@ def build_html(post, cast_count=10, stills_count=8):
 
 <br /><br /><br />
 <h2>Filme {title} – Sinopse</h2>
-<p style="margin:10px 0;color:#555;">
-  👉 <a href="https://cinebr.appsos.kr/search?q={urllib.parse.quote(genres_str)}" 
-  target="_blank" style="color:#0066cc;text-decoration:none;">
-  {genres_str} filmes recomendados</a>
-</p>
 <p><b>País:</b> {country_str} | <b>Gênero:</b> {genres_str if genres_str else "Sem informações"}</p>
 <p>{make_section_lead("줄거리", title, year, genres_str, cert)}</p>
+
+{f'''<div class="ottistMultiRelated">
+  <a class="extL alt" href="https://cinebr.appsos.kr/search/label/{year}?&max-results=10" target="_blank">
+    <span style="font-size: medium;"><strong>Filmes recomendados de {year}</strong></span>
+    <i class="fas fa-link 2xs"></i>
+  </a>
+</div>''' if year else ''}
 
 <div style="background:#fafafa;border:2px solid #ddd;border-radius:12px;padding:10px 18px;">
   <p style="font-weight:bold;">🎬 Sinopse de {title}</p>
@@ -1036,49 +1038,35 @@ def build_html(post, cast_count=10, stills_count=8):
 
 <br /><br /><br />
 <h2>Elenco de {title}</h2>
-<p style="margin:10px 0;color:#555;">
-  👉 <a href="https://cinebr.appsos.kr/search?q={urllib.parse.quote(genres_str)}" 
-  target="_blank" style="color:#0066cc;text-decoration:none;">
-  Veja mais filmes de {genres_str}</a>
-</p>
 <p>{make_section_lead("출연진", title, year, genres_str, cert, extras={"cast_top": cast_names})}</p>
 {cast_table}
 <br />{hashtags}
 
 <br /><br /><br />
 <h2>Stills de {title}</h2>
-<p style="margin:10px 0;color:#555;">
-  👉 <a href="https://cinebr.appsos.kr/search?q={urllib.parse.quote(genres_str)}" 
-  target="_blank" style="color:#0066cc;text-decoration:none;">
-  {genres_str} filmes com imagens</a>
-</p>
 <p>{make_section_lead("스틸컷", title, year, genres_str, cert)}</p>
+
+{f'''<div class="ottistMultiRelated">
+  <a class="extL alt" href="https://cinebr.appsos.kr/search/label/{urllib.parse.quote(genres_list[0])}?&max-results=10" target="_blank">
+    <span style="font-size: medium;"><strong>Recomendações de filmes de {genres_list[0]}</strong></span>
+    <i class="fas fa-link 2xs"></i>
+  </a>
+</div>''' if genres_list else ''}
+
 {stills_html}
 <br />{hashtags}
 
 <br /><br /><br />
 <h2>Avaliação e Trailer</h2>
-<p style="margin:10px 0;color:#555;">
-  👉 <a href="https://cinebr.appsos.kr/search?q={urllib.parse.quote(genres_str)}" 
-  target="_blank" style="color:#0066cc;text-decoration:none;">
-  Mais {genres_str} bem avaliados</a>
-</p>
 <p>{rating_lead}</p>
 {rating_html}{video_html}
 {reviews_html}{rec_html}
 <br />{hashtags}
 
 <p>{outro_6}</p>
-
-<p style="margin-top:20px;font-weight:bold;">
-  🎯 Se você gosta de <b>{genres_str}</b>, veja também mais filmes desse gênero:
-  <a href="https://cinebr.appsos.kr/search?q={urllib.parse.quote(genres_str)}" 
-  target="_blank" style="color:#0066cc;text-decoration:none;">
-  clique aqui</a>
-</p>
-
 {related_box}
 <p style="font-size:12px;">Fonte: <a href="https://www.themoviedb.org/" target="_blank">TMDB</a></p>
+
 """
 
     return textwrap.dedent(html_out).strip()
@@ -1211,6 +1199,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
