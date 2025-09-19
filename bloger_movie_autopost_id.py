@@ -10,6 +10,7 @@ Excel(MOVIE_ID) → TMDB → Blogger 자동 포스팅 파이프라인
 - Blogger API로 발행 (blogId=7755804984438912295)
 - 성공 시 해당 행 F열에 "완" 기록 후 저장
 """
+import re
 import urllib.parse
 import os, sys, html, textwrap, requests, random, time, pickle
 import gspread
@@ -30,14 +31,14 @@ POST_DELAY_MIN = 1   # 각 포스팅 후 대기 시간 (분 단위, 0 이면 즉
 # ===============================
 # 🔧 환경/경로 설정
 
-BLOG_ID = "7755804984438912295"       # 요청하신 블로그 ID
+BLOG_ID = "1140596789331555981"       # 요청하신 블로그 ID
 CLIENT_SECRET_FILE = r"D:/py/cc.json" # 본인 구글 OAuth 클라이언트 시크릿 JSON 경로
 BLOGGER_TOKEN_PICKLE = "blogger_token.pickle"
 SCOPES = ["https://www.googleapis.com/auth/blogger"]
 
 # ===============================
 # 🈶 TMDB 설정 (요청: 키를 가리지 말 것 — 사용자가 제공한 값을 그대로 사용)
-LANG = "ko-KR"
+LANG = "pt-BR"
 CAST_COUNT = 10
 STILLS_COUNT = 8
 TMDB_V3_BASE = "https://api.themoviedb.org/3"
@@ -47,6 +48,44 @@ IMG_BASE = "https://image.tmdb.org/t/p"
 BEARER = "eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1NmY0YTNiY2UwNTEyY2RjMjAxNzFhODMxNTNjMjVkNiIsIm5iZiI6MTc1NjY0NjE4OC40MTI5OTk5LCJzdWIiOiI2OGI0NGIyYzI1NzIyYjIzNDdiNGY0YzQiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0.ShX_ZJwMuZ1WffeUR6PloXx2E7pjBJ4nAlQoI4l7nKY"
 API_KEY = "56f4a3bce0512cdc20171a83153c25d6"
 
+# ===============================
+# 제목 패턴 목록
+# ===============================
+TITLE_PATTERNS = [
+    "{title} {year} sinopse elenco crítica trailer",
+    "Sinopse do filme {title} {year} crítica elenco trailer",
+    "Elenco de {title} {year} sinopse completa crítica",
+    "Trailer oficial de {title} {year} sinopse crítica elenco",
+    "Crítica e análise do filme {title} {year} elenco sinopse",
+    "{year} lançamento {title} sinopse crítica elenco trailer",
+    "{title} crítica e sinopse {year} elenco trailer",
+    "Filme {title} {year} crítica trailer elenco e sinopse",
+    "Sinopse completa de {title} {year} elenco crítica trailer",
+    "{title} análise {year} trailer oficial crítica sinopse"
+]
+
+# ===============================
+# 시트2 K1 셀 기반 로테이션 함수
+# ===============================
+def get_next_title_pattern(ws2, title, year):
+    # 현재 인덱스 불러오기 (없으면 0으로 초기화)
+    try:
+        idx_val = ws2.acell("K1").value
+        idx = int(idx_val) if idx_val and idx_val.isdigit() else 0
+    except Exception:
+        idx = 0
+
+    # 패턴 선택
+    pattern = TITLE_PATTERNS[idx % len(TITLE_PATTERNS)]
+    blog_title = pattern.format(title=title, year=year)
+
+    # 다음 인덱스 저장
+    try:
+        ws2.update_acell("K1", str(idx + 1))
+    except Exception as e:
+        print(f"⚠️ K1 셀 업데이트 실패: {e}")
+
+    return blog_title
 
 
 # 🔑 유튜브 API 인증정보
@@ -56,14 +95,37 @@ YOUTUBE_SEARCH_URL = "https://www.googleapis.com/youtube/v3/search"
 # 🏷️ 해시태그 생성 함수
 def make_hashtags_from_title(title: str) -> str:
     import re
-    # 괄호 안 숫자도 분리
-    words = re.findall(r"[가-힣A-Za-z0-9]+|\([^)]+\)", title)
-    hashtags = ["#" + w.strip() for w in words if w.strip()]
+    # 괄호를 무시하고 단어/숫자만 뽑기
+    words = re.findall(r"[가-힣A-Za-zÀ-ÿ0-9]+", title)
+    hashtags = ["#" + w for w in words if w.strip()]
     return " ".join(hashtags)
 
 
-def get_youtube_trailers(title_ko, title_en=None, max_results=2):
-    """유튜브에서 예고편 검색 (한국어 먼저, 없으면 영어로)"""
+
+
+
+def get_movie_title(movie_id, bearer=None, api_key=None):
+    import html, re
+    # 1. 포르투갈어
+    data_pt = tmdb_get(f"/movie/{movie_id}", params={"language": "pt-BR"}, bearer=bearer, api_key=api_key)
+    title_pt = data_pt.get("title")
+
+    if title_pt and not re.search(r"[ㄱ-ㅎ가-힣]", title_pt):
+        return html.escape(title_pt)
+
+    # 2. 영어 fallback
+    data_en = tmdb_get(f"/movie/{movie_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
+    title_en = data_en.get("title")
+
+    if title_en:
+        return html.escape(title_en)
+
+    # 3. 최후 fallback
+    return html.escape(data_pt.get("original_title") or "Título indisponível")
+
+
+def get_youtube_trailers(title_pt, title_en=None, max_results=2):
+    """유튜브에서 예고편 검색 (포르투갈어 먼저, 없으면 영어로)"""
     def search(query):
         params = {
             "part": "snippet",
@@ -87,10 +149,11 @@ def get_youtube_trailers(title_ko, title_en=None, max_results=2):
             print(f"❌ YouTube API 오류: {e}")
             return []
 
-    # 1차: 한국어 제목 + "예고편"
-    results = search(f"{title_ko} 예고편")
-    if results:
-        return results
+    # 1차: 포르투갈어 제목 + "trailer oficial"
+    if title_pt:
+        results = search(f"{title_pt} trailer oficial")
+        if results:
+            return results
 
     # 2차: 영어 제목 + "trailer"
     if title_en:
@@ -99,46 +162,7 @@ def get_youtube_trailers(title_ko, title_en=None, max_results=2):
             return results
 
     return []
-# ===============================
-# 블로그 제목 생성 로직 (10가지 로테이션, 괄호 제거 & 검색 친화 키워드)
-# ===============================
-def get_rotating_title(ws, title, year):
-    """
-    Google Sheets O1 셀에 저장된 인덱스를 기반으로
-    10가지 제목 템플릿을 순환 사용
-    """
-    # 현재 인덱스 불러오기 (비어있으면 0으로 시작)
-    try:
-        idx_val = ws.acell("O1").value
-        idx = int(idx_val.strip()) if idx_val and idx_val.strip().isdigit() else 0
-    except Exception:
-        idx = 0
 
-    # 제목 패턴 10가지 (괄호 제거 + 검색 키워드 강화)
-    templates = [
-        f"영화 {title} {year} 줄거리 출연진 예고편 리뷰",
-        f"{year} 영화 {title} 줄거리와 주연 배우 평점 리뷰",
-        f"{title} {year} 개봉작 줄거리 출연진 관람포인트",
-        f"{title} {year} 영화 리뷰 줄거리 예고편 명장면",
-        f"영화 {title} {year} 추천작 줄거리 배우 정보",
-        f"{title} {year} 줄거리 스틸컷 예고편 평점 리뷰",
-        f"{year} 추천 영화 {title} 줄거리 출연 배우 총정리",
-        f"영화 리뷰 {title} {year} 줄거리와 캐스팅 정보",
-        f"{title} {year} 개봉 영화 줄거리 평점 리뷰 모음",
-        f"영화 {title} {year} 줄거리 출연진 예고편 정보",
-    ]
-
-    # 현재 인덱스로 제목 선택
-    blog_title = templates[idx % len(templates)]
-
-    # 다음 인덱스로 업데이트 (순환)
-    next_idx = (idx + 1) % len(templates)
-    try:
-        ws.update_acell("O1", str(next_idx))
-    except Exception as e:
-        print(f"⚠️ O1 셀 업데이트 실패: {e}")
-
-    return blog_title
 
 
 # ===============================
@@ -156,7 +180,7 @@ def get_sheet():
     )
     gc = gspread.authorize(creds)
     SHEET_ID = "10kqYhxmeewG_9-XOdXTbv0RVQG9_-jXjtg0C6ERoGG0"
-    return gc.open_by_key(SHEET_ID).sheet1
+    return gc.open_by_key(SHEET_ID).get_worksheet(1)
 
 
 
@@ -177,6 +201,16 @@ def tmdb_get(path, params=None, bearer=None, api_key=None):
     r.raise_for_status()
     return r.json()
 
+def get_person_name_en(person_id, bearer=None, api_key=None):
+    try:
+        data = tmdb_get(f"/person/{person_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
+        name_en = data.get("name", "")
+        return name_en
+    except Exception as e:
+        print(f"⚠️ Falha ao buscar nome para pessoa {person_id}: {e}")
+        return ""
+
+
 def img_url(path, size="w780"):
     if not path:
         return None
@@ -190,7 +224,7 @@ def maybe(value, prob=0.5):
 
 # ===============================
 # TMDB 수집기
-def get_movie_bundle(movie_id, lang="ko-KR", bearer=None, api_key=None):
+def get_movie_bundle(movie_id, lang="pt-BR", bearer=None, api_key=None):
     params = {
         "language": lang,
         "append_to_response": "credits,images",
@@ -198,29 +232,19 @@ def get_movie_bundle(movie_id, lang="ko-KR", bearer=None, api_key=None):
     }
     return tmdb_get(f"/movie/{movie_id}", params=params, bearer=bearer, api_key=api_key)
 
-def get_movie_reviews(movie_id, lang="ko-KR", bearer=None, api_key=None):
+def get_movie_reviews(movie_id, lang="pt-BR", bearer=None, api_key=None):
     j = tmdb_get(f"/movie/{movie_id}/reviews", params={"language": lang}, bearer=bearer, api_key=api_key)
     return j.get("results", [])
 
-def get_movie_videos(movie_id, lang="ko-KR", bearer=None, api_key=None):
+def get_movie_videos(movie_id, lang="pt-BR", bearer=None, api_key=None):
     j = tmdb_get(f"/movie/{movie_id}/videos", params={"language": lang}, bearer=bearer, api_key=api_key)
     return j.get("results", [])
 
-def get_movie_recommendations(movie_id, lang="ko-KR", bearer=None, api_key=None):
+def get_movie_recommendations(movie_id, lang="pt-BR", bearer=None, api_key=None):
     j = tmdb_get(f"/movie/{movie_id}/recommendations", params={"language": lang}, bearer=bearer, api_key=api_key)
     return j.get("results", [])
 
 def get_movie_release_cert(movie_id, bearer=None, api_key=None):
-    def map_kr(cert):
-        mapping = {
-            "ALL": "전체관람가", "G": "전체관람가", "0": "전체관람가",
-            "12": "12세 관람가",
-            "15": "15세 관람가",
-            "18": "청소년 관람불가", "19": "청소년 관람불가", "R": "청소년 관람불가"
-        }
-        if cert in mapping: return mapping[cert]
-        return cert if cert else ""
-
     data = tmdb_get(f"/movie/{movie_id}/release_dates", bearer=bearer, api_key=api_key)
     results = data.get("results", [])
 
@@ -233,225 +257,285 @@ def get_movie_release_cert(movie_id, bearer=None, api_key=None):
                         return c
         return ""
 
-    kr = find_cert("KR")
-    if kr: return map_kr(kr)
+    # 1. 브라질 등급
+    br = find_cert("BR")
+    if br:
+        return f"Classificação {br}"
+
+    # 2. 미국 등급
     us = find_cert("US")
-    if us: return us
+    if us:
+        return f"Rated {us}"
+
+    # 3. 한국 fallback (영화에 따라 없을 수도 있음)
+    kr = find_cert("KR")
+    if kr:
+        return f"Classificação {kr}"
+
     return ""
 
 # ===============================
 def make_intro_6(title, year, genres_str, director_names, main_cast, cert_label, runtime_min, keywords):
-    title_bold = f"{title}"
-    year_txt = f"{year}년" if year else "개봉연도 미상"
-    genre_phrase = genres_str if genres_str else "장르"
+    year_txt = f"lançado em {year}" if year else "ano de lançamento desconhecido"
+    genre_phrase = genres_str if genres_str else "gênero desconhecido"
     director_one = director_names[0] if director_names else ""
     star_one = main_cast[0] if main_cast else ""
     star_two = main_cast[1] if len(main_cast) > 1 else ""
-    runtime_txt = f"{runtime_min}분" if runtime_min else "러닝타임 미상"
-    cert_txt = cert_label or "등급 정보 미상"
+    runtime_txt = f"{runtime_min} minutos" if runtime_min else "duração desconhecida"
+    cert_txt = cert_label or "classificação desconhecida"
 
-    # 1. 오프닝 인사 & 영화 소개
+    # 1. Abertura
     s1 = choose(
-        f"안녕하세요! 오늘은 {year_txt} 개봉했던 화제작 <b>{title_bold}</b> 얘기를 준비했어요.",
-        f"혹시 <b>{title_bold}</b> 들어보셨나요? {year_txt}에 나온 작품인데 꽤 볼만합니다.",
-        f"오늘은 제가 좋아하는 작품 중 하나인 <b>{title_bold}</b>({year_txt})을 소개해드리려 합니다.",
-        f"친구들이랑 얘기하다가 떠올라서 <b>{title_bold}</b> 이야기를 준비했어요.",
-        f"오늘은 조금 특별하게 <b>{title_bold}</b>({year_txt}) 이야기를 풀어볼까 해요.",
-        f"<b>{title_bold}</b>({year_txt}), 보신 분도 계실 테고 아직 못 보신 분도 계실 텐데요.",
-        f"오늘은 <b>{title_bold}</b>({year_txt})에 대해 같이 얘기해보면 어떨까 해요.",
-        f"<b>{title_bold}</b>({year_txt})라는 영화, 오늘 함께 살펴보겠습니다.",
-        f"오늘의 주인공은 바로 <b>{title_bold}</b>({year_txt})입니다.",
-        f"가볍게 즐기기 좋은 <b>{title_bold}</b>({year_txt}) 이야기로 시작해볼까요?"
+        f"Olá, cinéfilos! Hoje vamos mergulhar no universo do filme <b>{title}</b>, {year_txt}, uma obra que merece toda a sua atenção.",
+        f"Se você é apaixonado por cinema, vai gostar de conhecer mais sobre <b>{title}</b>, {year_txt}, um título que já conquistou muitos corações.",
+        f"Bem-vindo! Hoje o destaque é para <b>{title}</b>, {year_txt}, um longa que desperta emoções intensas e discussões interessantes.",
+        f"O cinema nos brinda com várias obras inesquecíveis, e <b>{title}</b>, {year_txt}, é certamente uma delas que vamos explorar juntos."
     )
 
-    # 2. 장르 & 분위기
+    # 2. Gênero
     s2 = choose(
-        f"장르는 {genre_phrase}인데, 생각보다 {choose('탄탄하게', '세련되게', '깔끔하게')} 잘 어울려 있어요.",
-        f"{genre_phrase} 특유의 재미가 살아 있어서 장르 좋아하신다면 분명 만족하실 겁니다.",
-        f"분위기가 {choose('잔잔하면서도 긴장감 있고', '따뜻하면서도 묵직하고', '밝으면서도 여운이 길게 남는')} 작품이에요.",
-        f"{genre_phrase} 요소들이 자연스럽게 녹아 들어가 있어서 부담 없이 보실 수 있습니다.",
-        f"{genre_phrase}라서 그런지 전체적인 무드가 꽤 매력적으로 다가옵니다.",
-        f"톤이 {choose('유쾌하면서도 진지하고', '차분하면서도 몰입감 있고', '화려하면서도 잔잔한')} 느낌이라 재미있어요.",
-        f"장르적인 색채가 잘 드러나면서도 과하지 않은 작품이에요.",
-        f"분위기와 장르가 잘 맞물려서 흡입력이 강합니다.",
-        f"보는 내내 {genre_phrase} 장르만의 매력이 꾸준히 이어집니다.",
-        f"{genre_phrase}라서 그런지 몰입하는 재미가 확실히 있더라고요."
+        f"Este é um filme de {genre_phrase}, que combina emoção e profundidade de maneira envolvente.",
+        f"Pertencente ao gênero {genre_phrase}, a produção consegue transmitir sentimentos fortes e momentos inesquecíveis.",
+        f"Com características marcantes de {genre_phrase}, o longa prende a atenção do início ao fim.",
+        f"Envolvendo-se no gênero {genre_phrase}, a trama se desenrola de forma cativante e instigante."
     )
 
-    # 3. 감독/연출
+    # 3. Direção
     s3 = (
         choose(
-            f"연출은 {director_one} 감독이 맡았는데, 역시 {choose('감각적이고', '디테일이 살아 있고', '호흡이 안정적인')} 부분이 눈에 띄더라고요.",
-            f"{director_one} 감독 특유의 {choose('리듬감', '섬세한 연출', '독특한 톤')}이 잘 드러납니다.",
-            f"한 장면 한 장면에 {director_one} 감독의 색깔이 묻어 있어요.",
-            f"{director_one} 감독의 스타일이 영화 전체를 관통합니다.",
-            f"{director_one} 감독이 보여주는 디테일이 참 인상적이었어요."
+            f"A direção é assinada por {director_one}, que imprime um estilo único e deixa sua marca em cada cena.",
+            f"Com {director_one} no comando, a obra se transforma em uma experiência visual e narrativa inesquecível.",
+            f"{director_one} conduz a história com sensibilidade e firmeza, criando momentos de grande impacto.",
+            f"O olhar criativo de {director_one} faz deste filme algo muito especial e memorável."
         ) if director_one else choose(
-            "연출이 전체적으로 깔끔해서 보는 내내 편안했습니다.",
-            "장면마다 흐름이 매끄러워서 큰 끊김 없이 몰입할 수 있었습니다.",
-            "전체적인 톤이 안정적이라 부담 없이 볼 수 있어요.",
-            "영상미와 연출이 크게 과하지 않아 좋았습니다.",
-            "스토리 전개가 안정감 있게 이어져서 보기 편했어요."
+            "A direção é equilibrada, com escolhas criativas que mantêm o público imerso.",
+            "Mesmo sem grandes exageros, a condução da trama é precisa e muito bem realizada.",
+            "A narrativa se beneficia de uma direção clara e consistente, que dá fluidez ao enredo.",
+            "A maneira como a história é conduzida garante ritmo e emoção do começo ao fim."
         )
     )
 
-    # 4. 배우 & 케미
+    # 4. Elenco
     s4 = (
         choose(
-            f"배우진도 화려합니다. {star_one}{('·'+star_two) if star_two else ''} 등이 나오는데, 케미가 정말 좋아요.",
-            f"특히 {star_one}의 연기가 돋보였고{(' '+star_two+'와의 합도 멋졌습니다.') if star_two else ''}",
-            f"{star_one}이 끌어가는 힘이 강했고, {star_two}와의 시너지도 좋았습니다." if star_two else f"{star_one}의 존재감이 작품을 꽉 채웠습니다.",
-            f"배우들이 서로 호흡이 잘 맞아서 캐릭터가 살아 움직였어요.",
-            f"출연진 모두 연기가 자연스러워서 관객이 쉽게 몰입할 수 있습니다."
+            f"O elenco brilha com nomes como {star_one}{' e ' + star_two if star_two else ''}, entregando atuações memoráveis.",
+            f"Entre os destaques do elenco está {star_one}, cuja performance é digna de aplausos.",
+            f"As atuações são sólidas e cheias de emoção, com {star_one} marcando presença em momentos-chave.",
+            f"Além de um elenco diversificado, {star_one} se destaca pela entrega em seu papel."
         ) if star_one else choose(
-            "배우들의 합이 꽤 좋아서 보는 재미가 있었습니다.",
-            "출연진의 호흡이 자연스러워 캐릭터가 잘 살아났어요.",
-            "배우들 간의 연기가 어색하지 않아 몰입하기 좋습니다.",
-            "전체적으로 안정적인 연기를 보여줬습니다.",
-            "케미가 좋아서 장면마다 활기가 느껴졌습니다."
+            "O elenco é diversificado e cheio de talentos que enriquecem a narrativa.",
+            "Cada integrante do elenco contribui com sua presença marcante.",
+            "Os atores entregam interpretações que reforçam a intensidade da história.",
+            "O conjunto de atores dá vida a personagens cativantes e bem construídos."
         )
     )
 
-    # 5. 러닝타임/관람 등급
+    # 5. Duração e classificação
     s5 = choose(
-        f"상영시간은 {runtime_txt}인데 흐름이 끊기지 않아 지루하지 않았습니다.",
-        f"{runtime_txt} 동안 집중해서 보기에 충분히 매력적인 구성이에요.",
-        f"길다고 느껴지지 않고 오히려 빠르게 지나가는 {runtime_txt}이었습니다.",
-        f"전체 러닝타임 {runtime_txt}, 알차게 채워져 있습니다.",
-        f"{runtime_txt} 동안 몰입하기에 충분한 작품이에요."
-    ) + " " + (
-        choose(
-            f"관람 등급은 {cert_txt}라서 {choose('가족과 함께 보기에도 괜찮습니다.', '연인·친구와 즐기기에도 좋아요.')}",
-            f"연령 제한은 {cert_txt}인데, {choose('생각보다 부담 없이 보실 수 있어요.', '연령대 상관없이 즐기기 좋은 영화입니다.')}"
-        ) if cert_label else "등급 정보는 없지만 누구나 편하게 즐길 수 있는 느낌이에요."
-    )
-
-    # 6. 안내 멘트 & 키워드
-    s6 = choose(
-        "아래에서는 줄거리, 출연진, 스틸컷, 평점, 리뷰, 예고편까지 차근차근 정리해드릴게요.",
-        "이후 내용에서는 작품의 매력 포인트를 조금 더 자세히 풀어보겠습니다.",
-        "이제 본격적으로 영화의 매력 포인트를 하나씩 살펴보겠습니다.",
-        "스크롤을 내리시면 다양한 정보와 자료가 이어집니다.",
-        "줄거리와 배우들 이야기를 포함해 재미있는 포인트들을 정리했습니다."
+        f"O filme tem duração de {runtime_txt}, o que torna a experiência equilibrada e envolvente.",
+        f"Com seus {runtime_txt}, a narrativa consegue manter o ritmo sem se tornar cansativa.",
+        f"A duração de {runtime_txt} é ideal para aproveitar cada detalhe da história."
     ) + " " + choose(
-        f"참고 키워드: {', '.join(keywords[:6])}",
-        f"관련 키워드: {', '.join(keywords[:6])}",
-        f"이 글의 키워드는 {', '.join(keywords[:6])}입니다.",
-        f"검색 키워드: {', '.join(keywords[:6])}"
+        f"A classificação indicativa é {cert_txt}, tornando-o acessível para diferentes públicos.",
+        f"Classificado como {cert_txt}, o longa pode ser apreciado por várias faixas etárias.",
+        f"A censura é {cert_txt}, o que ajuda o espectador a decidir a melhor ocasião para assistir."
     )
 
-    return " ".join([s1, s2, s3, s4, s5, s6])
+    # 6. Impacto
+    s6 = choose(
+        f"<b>{title}</b> despertou debates e gerou expectativas desde seu lançamento, mostrando sua força cultural.",
+        f"Desde sua estreia, <b>{title}</b> chamou a atenção por sua proposta ousada e qualidade técnica.",
+        f"O impacto de <b>{title}</b> foi imediato, consolidando-o como um dos grandes destaques do {year_txt}.",
+        f"Não é apenas um filme, <b>{title}</b> é uma experiência que permanece viva na memória de quem assiste."
+    )
+
+    # 7. Encerramento da introdução
+    s7 = choose(
+        f"Agora, vamos explorar juntos os principais destaques de <b>{title}</b> e entender por que ele merece um lugar especial na sua lista de filmes.",
+        f"Nas próximas linhas, você vai conhecer mais sobre a sinopse, o elenco, os bastidores e os pontos fortes de <b>{title}</b>.",
+        f"Prepare-se para mergulhar no universo de <b>{title}</b>, analisando detalhes que o tornam uma produção tão relevante.",
+        f"Vamos seguir adiante e descobrir o que faz de <b>{title}</b> uma obra tão comentada e aclamada."
+    )
+
+    return " ".join([s1, s2, s3, s4, s5, s6, s7])
+
+# ===============================
+# 🎬 아웃트로 (7문장)
+# ===============================
+def make_outro_6(title, year, genres_str, director_names, keywords):
+    year_txt = year if year else "desconhecido"
+    director_one = director_names[0] if director_names else ""
+
+    s1 = choose(
+        f"Chegamos ao fim desta análise sobre o filme <b>{title}</b> ({year_txt}), que trouxe tantos pontos interessantes para refletirmos.",
+        f"Encerramos aqui a apresentação de <b>{title}</b> ({year_txt}), uma obra que certamente merece estar no radar de qualquer amante do cinema.",
+        f"Terminamos esta jornada pelo universo de <b>{title}</b> ({year_txt}), destacando os aspectos que o tornam uma produção tão comentada.",
+        f"Este foi um mergulho no mundo de <b>{title}</b> ({year_txt}), explorando os elementos que fazem deste filme algo memorável."
+    )
+
+    s2 = choose(
+        "Ao longo do artigo, revisitamos a sinopse, comentamos sobre o elenco e detalhamos os principais aspectos técnicos e artísticos.",
+        "Nesta análise, percorremos a história, falamos dos atores e apontamos os pontos altos que tornam o filme envolvente.",
+        "Passamos pela trama, pela direção e pelo impacto cultural que este título trouxe para os espectadores.",
+        f"Relembramos a narrativa, a ambientação e os personagens que fazem de <b>{title}</b> uma experiência especial."
+    )
+
+    s3 = (
+        choose(
+            f"A condução de {director_one} foi um dos pontos mais fortes, mostrando criatividade e sensibilidade em cada cena.",
+            f"{director_one} conseguiu imprimir sua marca pessoal no filme, equilibrando emoção e técnica de maneira única.",
+            f"O olhar artístico de {director_one} deixou claro como a direção pode transformar uma história em algo grandioso.",
+            f"Não podemos deixar de destacar a visão de {director_one}, que fez deste trabalho uma obra marcante."
+        ) if director_one else choose(
+            "A direção em geral mostrou equilíbrio e clareza, garantindo ritmo e impacto narrativo até o fim.",
+            "Mesmo sem um nome amplamente conhecido na direção, a condução foi sólida e bem estruturada.",
+            "A forma como o enredo foi dirigido manteve o público conectado e interessado até os últimos momentos.",
+            "A direção mostrou maturidade e domínio técnico, elevando a qualidade da obra."
+        )
+    )
+
+    s4 = choose(
+        "As avaliações e notas são apenas guias, mas a verdadeira experiência vem de assistir e sentir cada cena por conta própria.",
+        "Os números e críticas importam, mas nada substitui a emoção pessoal de se conectar com a narrativa.",
+        "Vale lembrar que opiniões variam, e o melhor é sempre tirar suas próprias conclusões ao assistir.",
+        "A nota é apenas uma referência: o impacto real depende do olhar de cada espectador."
+    )
+
+    s5 = choose(
+        "Ao final, também deixamos recomendações de filmes relacionados que podem enriquecer ainda mais sua jornada cinematográfica.",
+        "Para quem gostou desta experiência, indicamos títulos semelhantes que ampliam o repertório e trazem novas descobertas.",
+        "Sugerimos ainda obras que dialogam com este filme, permitindo comparações interessantes e novas perspectivas.",
+        "Para continuar no clima, oferecemos algumas opções de filmes que seguem a mesma linha temática."
+    )
+
+    kw = ", ".join([k for k in (keywords or []) if k][:6]) if keywords else ""
+    s6 = choose(
+        f"Entre os principais pontos, destacamos palavras-chave como {kw}, que ajudam a compreender melhor o alcance da obra.",
+        f"As palavras-chave {kw} sintetizam os elementos centrais do filme e podem servir de guia para novas buscas.",
+        f"Destacamos termos como {kw}, que reforçam a importância desta produção dentro de seu gênero.",
+        f"Os conceitos de {kw} foram recorrentes e mostram como o filme se posiciona dentro do cenário cinematográfico."
+    ) if kw else "Esperamos que as informações acima sirvam como um bom guia para sua próxima sessão de cinema."
+
+    s7 = choose(
+        "Muito obrigado por ter acompanhado até aqui, espero que este conteúdo tenha inspirado sua próxima sessão de cinema. 🙂",
+        "Agradecemos por sua leitura e desejamos que aproveite ainda mais suas experiências cinematográficas, até a próxima!",
+        "Se gostou do artigo, compartilhe com amigos e continue acompanhando nossas próximas análises de grandes filmes.",
+        "Foi um prazer trazer esta análise para você, e em breve voltaremos com novos títulos e recomendações especiais."
+    )
+
+    return " ".join([s1, s2, s3, s4, s5, s6, s7])
 
 
 
 def make_section_lead(name, title, year, genres_str, cert_label, extras=None):
-    """각 섹션용 4문장 리드 (친근하고 풍성한 톤, 매우 많은 조합)"""
+    """Introdução de 4 frases para cada seção (tom amigável e rico, com muitas combinações)"""
     extras = extras or {}
     year_txt = f"{year}년" if year else ""
-    genre_phrase = genres_str if genres_str else "장르"
-    cert_txt = cert_label or "등급 정보 미상"
+    genre_phrase = genres_str if genres_str else "gênero"
+    cert_txt = cert_label or "classificação desconhecida"
     cast_top = extras.get("cast_top", [])
     who = "·".join(cast_top[:3]) if cast_top else ""
     director_one = extras.get("director_one", "")
     runtime_min = extras.get("runtime_min", None)
-    runtime_txt = f"{runtime_min}분" if runtime_min else ""
+    runtime_txt = f"{runtime_min} minutos" if runtime_min else ""
 
- 
     if name == "줄거리":
         base = [
             choose(
-                f"{title}{f'({year_txt})' if year_txt else ''}의 줄거리를 스포일러는 최대한 피하면서 가볍게 풀어볼게요.",
-                f"혹시 아직 안 보신 분들을 위해 {title}의 큰 줄거리만 깔끔하게 정리해드릴게요.",
-                f"{title}의 줄거리, 디테일은 아껴두고 핵심 흐름만 편하게 짚어봅시다.",
-                f"관람 재미는 지키면서 <b>{title}</b>의 이야기 뼈대를 함께 따라가 보실까요?",
-                f"줄거리를 처음 접하시는 분도 이해하기 쉽도록 간단히 풀어드릴게요.",
-                f"큰 스포일러 없이 {title}의 주요 사건만 콕콕 짚어드리겠습니다.",
-                f"한눈에 흐름을 잡을 수 있도록 {title}의 이야기를 살짝 미리 보여드릴게요.",
-                f"줄거리를 차근차근 정리해서 관람 전에 미리 감을 잡아보세요.",
-                f"과하지 않게, 하지만 궁금증은 남기도록 {title}의 스토리를 풀어드릴게요.",
-                f"궁금증을 해치지 않는 선에서 {title}의 이야기 줄기를 따라가봅시다."
+                f"Vou apresentar o enredo de {title}{f'({year_txt})' if year_txt else ''} de forma leve, evitando ao máximo spoilers.",
+                f"Para quem ainda não assistiu, vou organizar o enredo principal de {title} de maneira clara.",
+                f"O enredo de {title}, sem revelar detalhes, apenas destacando o fluxo central da história.",
+                f"Sem perder a diversão, que tal acompanharmos juntos a estrutura da história de <b>{title}</b>?",
+                f"Vou explicar de forma simples para que até quem nunca ouviu falar do enredo de {title} consiga entender.",
+                f"Sem grandes spoilers, vou destacar apenas os principais acontecimentos de {title}.",
+                f"Para que você entenda rapidamente, vou mostrar um pouco do enredo de {title}.",
+                f"Vou organizar o enredo passo a passo para que você tenha uma ideia antes de assistir.",
+                f"De maneira equilibrada, mas deixando curiosidade, vou compartilhar a história de {title}.",
+                f"Sem estragar a surpresa, vamos acompanhar o fio condutor de {title}."
             ),
             choose(
-                f"초반에는 설정이 자연스럽게 자리 잡고, 중반부에서는 {choose('갈등이 깊어지고', '긴장이 차오르고', '관계가 얽히고')} 후반으로 갈수록 {choose('감정이 터집니다', '퍼즐이 맞춰집니다', '메시지가 선명해집니다')}.",
-                f"{choose('첫 장면은 담백하게', '시작부터 긴장감 있게', '도입은 차분하게')} 열리고, 이어서 {choose('캐릭터들이 본격적으로 움직이고', '숨겨진 비밀이 드러나고', '관계의 갈등이 선명해지고')} 흡입력을 높입니다.",
-                f"전체 구조는 {choose('설정→갈등→해결', '출발→위기→성장', '만남→갈등→선택')}으로 이어지며, 장면마다 포인트가 톡톡 살아있어요.",
-                f"중반부에 들어서면 이야기가 훨씬 더 속도를 내면서 긴장도가 높아집니다.",
-                f"후반부로 갈수록 쌓아온 복선들이 하나둘씩 풀리며 재미가 커져요."
+                f"No início, a ambientação é estabelecida naturalmente, no meio {choose('os conflitos se intensificam', 'a tensão aumenta', 'as relações se complicam')} e no final {choose('as emoções explodem', 'as peças do quebra-cabeça se encaixam', 'a mensagem fica clara')}.",
+                f"{choose('A primeira cena começa de forma simples', 'Desde o início há tensão', 'A introdução é tranquila')}, em seguida {choose('os personagens entram em ação', 'segredos são revelados', 'os conflitos ficam evidentes')}, aumentando o envolvimento.",
+                f"A estrutura geral segue {choose('introdução→conflito→resolução', 'partida→crise→crescimento', 'encontro→conflito→escolha')}, e cada cena tem seu ponto de destaque.",
+                f"A partir do meio, a história ganha ritmo e a tensão cresce muito mais.",
+                f"No final, as pistas lançadas vão se revelando e a diversão aumenta."
             ),
             choose(
-                f"{genre_phrase} 특유의 분위기가 전개에 스며들어 톤이 {choose('균형 있게', '과하지 않게', '차분하게')} 유지됩니다.",
-                f"설명이 많지 않아도 장면만으로도 몰입이 이어집니다.",
-                f"큰 반전은 직접 보실 수 있도록 아껴두고, 분위기만 살짝 알려드릴게요.",
-                f"스토리 라인이 과하지 않아서 자연스럽게 따라갈 수 있어요.",
-                f"대사보다는 흐름과 연출로 설득하는 타입이라 색다른 재미가 있습니다."
+                f"A atmosfera típica de {genre_phrase} se mistura ao desenvolvimento, mantendo o tom {choose('equilibrado', 'sem exageros', 'tranquilo')}.",
+                f"Mesmo sem muitas explicações, apenas as cenas já garantem a imersão.",
+                f"As grandes reviravoltas ficam para você descobrir, mas vou adiantar um pouco do clima.",
+                f"A narrativa não é exagerada, o que facilita acompanhar naturalmente.",
+                f"É do tipo que convence mais pelo ritmo e direção do que pelos diálogos, oferecendo uma diversão diferente."
             ),
             choose(
-                f"관람 등급은 {cert_txt}이고, 취향에 따라 {choose('가족과 함께 보셔도 좋습니다.', '친구와 편하게 보기에도 괜찮습니다.', '혼자 집중해서 감상해도 좋아요.')}",
-                f"{cert_txt} 기준이라 부담 없이 보실 수 있고, 분위기만 따라가시면 충분히 즐겁습니다.",
-                f"등급은 {cert_txt}이니 참고하시고, 감상은 자유롭게 즐기시면 됩니다.",
-                f"연령 제한은 {cert_txt}이지만, 누구나 공감할 만한 주제를 담고 있어요."
+                f"A classificação indicativa é {cert_txt}, e dependendo do gosto {choose('é ótimo para ver em família.', 'é uma boa opção para assistir com amigos.', 'vale a pena assistir sozinho e focado.')}",
+                f"Com a classificação {cert_txt}, você pode assistir sem preocupação e aproveitar apenas acompanhando a atmosfera.",
+                f"A classificação é {cert_txt}, mas fique à vontade para curtir como preferir.",
+                f"Ainda que a classificação seja {cert_txt}, o filme traz temas com os quais qualquer pessoa pode se identificar."
             )
         ]
         if maybe(True, 0.4):
             base.append(
                 choose(
-                    "아래에서 조금 더 디테일을 담아 정리해 드릴게요.",
-                    "이제 주요 장면과 감정선을 하나씩 따라가 보시죠.",
-                    "큰 줄기는 파악했으니, 디테일을 이어서 보시면 더 재미있습니다."
+                    "A seguir vou organizar com mais detalhes.",
+                    "Agora, vamos acompanhar as principais cenas e linhas emocionais.",
+                    "Já entendemos a estrutura geral, então vendo os detalhes será ainda mais divertido."
                 )
             )
 
 
+
     
+   
     elif name == "출연진":
         base = [
             choose(
-                f"이번 캐스팅은 {who} {('등' if who else '')}으로 꾸려졌는데, 이름만 들어도 왜 화제가 됐는지 감이 오실 거예요.",
-                f"배우 라인업부터 시선이 가죠{': ' + who if who else ''}. 화면 장악력이 탄탄합니다.",
-                f"첫 크레딧부터 반가운 얼굴들이 줄줄이 등장합니다{(' — ' + who) if who else ''}.",
-                f"{who} {('등' if who else '')} 출연진 덕분에 영화 보는 내내 든든합니다." if who else "출연진 라인업만 봐도 기대감이 차오릅니다.",
-                f"이름만 들어도 알 만한 배우들이 모여서 작품에 힘을 실어줍니다.",
-                f"배우 명단만 봐도 ‘아, 이건 볼만하겠다’ 싶은 느낌이 들어요.",
-                f"출연진 구성을 보면 제작진이 왜 이렇게 자신 있었는지 알 수 있습니다.",
-                f"한 명 한 명 존재감이 확실한 배우들이 모였습니다.",
-                f"주요 배역들 이름만 나와도 ‘와’ 하고 감탄이 나오죠.",
-                f"믿고 보는 배우들이 출연하는 작품이라는 점에서 벌써 설렘이 느껴집니다."
+                f"O elenco desta vez conta com {who} {('e outros' if who else '')}, só de ouvir os nomes já dá para entender por que foi tão comentado.",
+                f"O lineup de atores chama atenção desde o início{': ' + who if who else ''}. A presença em cena é marcante.",
+                f"Logo nos primeiros créditos aparecem rostos conhecidos{(' — ' + who) if who else ''}.",
+                f"Graças a {who} {('e outros' if who else '')}, dá para assistir ao filme com confiança." if who else "Só de ver a formação do elenco já aumenta a expectativa.",
+                f"Atores renomados se reuniram e deram ainda mais força à obra.",
+                f"Só de olhar a lista de atores já dá a sensação de que ‘vale a pena assistir’.",
+                f"O elenco mostra claramente por que a equipe de produção estava tão confiante.",
+                f"Cada ator tem uma presença marcante e se destaca.",
+                f"Só de ouvir os nomes dos principais papéis já dá vontade de aplaudir.",
+                f"O simples fato de contar com atores de confiança já traz uma sensação de empolgação."
             ),
             choose(
-                f"{choose('주연과 조연의 균형이 잘 맞아', '톤이 서로 잘 붙어서', '대사 호흡이 찰떡같아서')} 캐릭터가 자연스럽게 살아납니다.",
-                f"{choose('눈빛과 제스처가', '리액션 타이밍이', '호흡의 간격이')} 장면을 밀어줘서 과장되지 않고 매끄러워요.",
-                f"배우들 호흡이 좋아서 감정선이 {choose('자연스럽게 이어지고', '무리 없이 쌓이고', '점점 고조되며')} 클라이맥스에서 빛납니다.",
-                f"연기 톤이 통일감이 있어서 몰입이 잘 됩니다.",
-                f"대사 전달이 과하지 않고 자연스러워서 설득력이 있어요.",
-                f"주연진과 조연진이 균형을 맞춰서 캐릭터가 살아납니다.",
-                f"연기 톤이 안정적이라 관객이 편안하게 몰입할 수 있습니다.",
-                f"출연진의 합이 좋아 장면마다 긴장감이 살아납니다.",
-                f"대사와 감정의 호흡이 착착 맞아떨어집니다.",
-                f"인위적인 느낌이 거의 없어 실제 상황처럼 몰입이 됩니다."
+                f"O equilíbrio entre protagonistas e coadjuvantes, {choose('a harmonia de tons', 'a sincronia nas falas', 'o entrosamento nas atuações')} fazem com que os personagens ganhem vida naturalmente.",
+                f"{choose('Os olhares e gestos', 'O timing das reações', 'O ritmo das falas')} fortalecem as cenas sem exagero, de forma fluida.",
+                f"A química entre os atores faz com que a linha emocional {choose('flua naturalmente', 'cresça de forma consistente', 'aumente gradualmente')} e brilhe no clímax.",
+                f"O tom das atuações é uniforme, o que facilita a imersão.",
+                f"A entrega das falas é natural e convincente, sem exageros.",
+                f"O equilíbrio entre protagonistas e coadjuvantes dá vida aos personagens.",
+                f"O tom estável das atuações permite que o público mergulhe confortavelmente.",
+                f"A sintonia do elenco dá intensidade a cada cena.",
+                f"O ritmo entre diálogos e emoções se encaixa perfeitamente.",
+                f"Quase não há artificialidade, o que aumenta a sensação de realidade."
             ),
             choose(
-                f"특히 {choose('캐릭터 대비', '세대 차이', '가치관 충돌')}에서 오는 케미가 볼만합니다.",
-                f"{choose('콤비 플레이', '앙상블 연기', '팀플레이')}가 잘 맞아서 장면마다 재미가 배가됩니다.",
-                f"짧게 등장하는 카메오도 포인트가 되니 눈여겨보세요.",
-                f"조연진의 존재감이 커서 이야기가 더욱 풍성해졌습니다.",
-                f"배우들의 시너지가 장면마다 톡톡 튀어납니다.",
-                f"예상 못 했던 조합이 만들어내는 묘한 긴장감도 있습니다.",
-                f"인물 간의 대비가 뚜렷해 주제가 더 선명하게 다가옵니다.",
-                f"작은 배역까지도 제 몫을 다해서 빈틈이 없습니다.",
-                f"단역조차도 인상 깊은 연기를 보여줍니다.",
-                f"한 장면만 나와도 존재감을 확실히 남기는 배우들이 있습니다."
+                f"Especialmente a {choose('contraposição dos personagens', 'diferença de gerações', 'conflito de valores')} traz uma química interessante.",
+                f"O {choose('trabalho em dupla', 'ensaio coletivo', 'trabalho em equipe')} funciona muito bem, deixando as cenas ainda mais divertidas.",
+                f"Até as breves participações especiais viram destaque, preste atenção.",
+                f"A força dos coadjuvantes enriquece ainda mais a história.",
+                f"A sinergia dos atores salta aos olhos em cada cena.",
+                f"Algumas combinações inesperadas criam uma tensão intrigante.",
+                f"O contraste entre os personagens torna o tema ainda mais claro.",
+                f"Mesmo os papéis pequenos cumprem bem sua função, sem lacunas.",
+                f"Até os figurantes entregam atuações marcantes.",
+                f"Alguns atores conseguem deixar sua marca mesmo em apenas uma cena."
             ),
             choose(
-                "아래에서는 주요 배역과 간단한 소개를 정리해 드릴게요.",
-                "이제 배우별로 어떤 캐릭터를 맡았는지 살펴보겠습니다.",
-                "바로 이어서 출연진 정보를 하나씩 소개해 드릴게요.",
-                "어떤 배우가 어떤 역할을 맡았는지 바로 확인해 보시죠.",
-                "이제 출연진 리스트를 조금 더 자세히 들여다봅시다.",
-                "각 배우의 배역과 특징을 간단히 정리해 드리겠습니다.",
-                "배우들이 맡은 캐릭터를 하나씩 소개할게요.",
-                "출연진을 캐릭터별로 짚어드리겠습니다.",
-                "아래에서 출연진과 배역 정보를 확인해 보시죠.",
-                "각 배우가 연기한 인물이 어떤 색깔을 가졌는지 알려드릴게요."
+                "A seguir, vou organizar uma breve apresentação dos principais papéis.",
+                "Agora, vamos ver que personagem cada ator interpreta.",
+                "Na sequência, vou apresentar as informações do elenco uma a uma.",
+                "Confira imediatamente qual ator assumiu qual papel.",
+                "Vamos dar uma olhada mais detalhada na lista do elenco.",
+                "Vou resumir rapidamente os papéis e características de cada ator.",
+                "Vou apresentar um a um os personagens interpretados pelos atores.",
+                "Aqui está um panorama do elenco por personagem.",
+                "Veja abaixo as informações sobre o elenco e seus papéis.",
+                "Vou mostrar quais cores cada ator trouxe para o personagem que interpretou."
             )
         ]
 
@@ -460,263 +544,262 @@ def make_section_lead(name, title, year, genres_str, cert_label, extras=None):
     elif name == "스틸컷":
         base = [
             choose(
-                "스틸컷만 봐도 영화의 공기가 먼저 느껴지죠.",
-                "몇 장의 스틸컷만 훑어도 영화 분위기가 훤히 보입니다.",
-                "이미지 몇 장만으로도 작품의 색깔이 전해져요.",
-                "스틸컷을 보는 순간 영화가 어떤 톤인지 감이 오실 거예요.",
-                "한두 장의 사진만 봐도 영화 무드가 확 들어옵니다.",
-                "스틸컷은 짧지만 영화의 핵심 감정을 먼저 보여줍니다.",
-                "몇 장면만 보셔도 전체적인 무드가 선명하게 다가와요.",
-                "스틸컷은 영화의 첫인상이라고 할 수 있습니다.",
-                "짧은 컷에서도 영화가 가진 분위기가 생생하게 느껴집니다.",
-                "이미지 몇 장으로도 스토리의 결을 어림짐작할 수 있습니다."
+                "Só de olhar os stills já dá para sentir a atmosfera do filme.",
+                "Com apenas algumas imagens já é possível perceber o clima da obra.",
+                "Poucas fotos já transmitem bem as cores e o tom do filme.",
+                "Assim que você vê os stills, já entende qual é o tom da produção.",
+                "Basta uma ou duas fotos para captar o mood do filme.",
+                "Mesmo sendo breves, os stills já revelam a emoção central da história.",
+                "Com apenas algumas cenas é possível sentir claramente a atmosfera.",
+                "Os stills podem ser considerados a primeira impressão do filme.",
+                "Mesmo em cortes curtos, a atmosfera do filme aparece viva.",
+                "Com poucas imagens já dá para imaginar a textura da narrativa."
             ),
             choose(
-                f"{choose('프레임 구도', '촬영 각도', '여백 활용')}이 안정적이라 눈이 편안합니다.",
-                f"{choose('색감 톤', '조명', '콘트라스트')}이 {choose('세련돼서', '차분해서', '강렬해서')} 장면이 오래 남습니다.",
-                f"프로덕션 디자인이 {choose('상황에 딱 맞고', '과하지 않아서', '감정선과 맞물려서')} 화면이 꽉 차 보입니다.",
-                f"화면 구도가 균형감 있게 잡혀서 보는 재미가 있어요.",
-                f"빛과 색을 다루는 방식이 인상 깊습니다.",
-                f"작은 디테일 하나까지도 신경 쓴 흔적이 스틸컷에 묻어나요.",
-                f"구성과 색채가 조화를 이뤄 장면이 한 폭의 그림 같습니다.",
-                f"카메라 워크의 느낌이 스틸컷에도 고스란히 담겼습니다.",
-                f"색감이 분위기를 결정짓는 큰 힘을 발휘합니다.",
-                f"촬영 미술이 영화의 무드를 그대로 보여줍니다."
+                f"A {choose('composição do quadro', 'angulação da câmera', 'utilização dos espaços')} é estável e agradável aos olhos.",
+                f"A {choose('paleta de cores', 'iluminação', 'contraste')} é {choose('sofisticada', 'suave', 'intensa')}, deixando as cenas marcantes.",
+                f"O design de produção é {choose('perfeito para a situação', 'sem exageros', 'alinhado com a emoção')}, dando plenitude às imagens.",
+                f"A composição de cena tem equilíbrio e isso torna o visual interessante.",
+                f"A forma como luz e cores são trabalhadas é impressionante.",
+                f"Até nos pequenos detalhes percebe-se o cuidado da produção.",
+                f"A harmonia entre composição e cores faz a cena parecer uma pintura.",
+                f"A sensação da câmera em movimento também se reflete nos stills.",
+                f"As cores desempenham um papel central na definição da atmosfera.",
+                f"A direção de arte transmite claramente o mood do filme."
             ),
             choose(
-                "컷만 봐도 감정선의 흐름이 어렴풋이 이어집니다.",
-                "정지된 장면 속에서도 인물들의 감정이 전해져요.",
-                "스틸컷만 보고도 다음 장면이 궁금해집니다.",
-                "사진 속 움직임만으로도 이야기가 이어지는 것 같아요.",
-                "정적인 이미지인데도 긴장감이 묻어나옵니다.",
-                "짧은 순간을 담았는데도 여운이 길게 남습니다.",
-                "스틸컷에서만 보이는 디테일이 은근히 많습니다.",
-                "사진 몇 장만으로도 스토리의 퍼즐이 맞춰지는 느낌이에요.",
-                "컷 속 인물들의 표정만으로도 많은 이야기를 읽을 수 있습니다.",
-                "짧은 장면이지만 영화 전체의 무드를 대변합니다."
+                "Só de olhar os cortes já dá para sentir a linha emocional.",
+                "Mesmo em imagens estáticas, a emoção dos personagens é transmitida.",
+                "Os stills despertam curiosidade sobre a próxima cena.",
+                "Parece que a história continua só pelas fotos capturadas.",
+                "Mesmo paradas, as imagens carregam tensão.",
+                "Momentos curtos captados que deixam um longo impacto.",
+                "Há muitos detalhes perceptíveis apenas nos stills.",
+                "Poucas fotos já ajudam a montar o quebra-cabeça da narrativa.",
+                "As expressões dos personagens nos cortes já contam muita coisa.",
+                "Mesmo uma cena breve pode representar todo o mood do filme."
             ),
             choose(
-                "아래 이미지들을 보면서 영화의 분위기를 미리 만나보세요.",
-                "스틸컷을 먼저 보고 나면 본편을 볼 때 더 몰입이 됩니다.",
-                "사진을 통해 영화의 매력을 한 발 먼저 느껴보시죠.",
-                "이미지를 보고 나면 작품의 디테일이 더 눈에 들어옵니다.",
-                "컷들을 보며 관람 포인트를 미리 체크해 두시면 좋아요.",
-                "스틸컷은 본편 감상의 작은 예고편 같은 역할을 합니다.",
-                "사진을 먼저 보고 나면 영화에 들어갈 준비가 됩니다.",
-                "이 장면들을 기억해두시면 본편에서 반가움이 배가됩니다.",
-                "이미지로 먼저 분위기를 잡아두면 감상이 한층 풍부해집니다.",
-                "스틸컷을 보며 어떤 장면을 특히 기대해야 할지 골라보세요."
+                "Veja abaixo as imagens e sinta de antemão a atmosfera do filme.",
+                "Ao ver os stills primeiro, a imersão no longa aumenta.",
+                "Aproveite as fotos para sentir antes o encanto do filme.",
+                "Depois de ver as imagens, os detalhes ficam mais evidentes no longa.",
+                "Vale a pena conferir os cortes para identificar pontos-chave da obra.",
+                "Os stills funcionam como pequenos trailers dentro do filme.",
+                "Ver as fotos antes já prepara você para entrar na história.",
+                "Ao reconhecer estas cenas, a experiência durante o longa será ainda melhor.",
+                "Captar o clima pelas imagens torna a experiência mais rica.",
+                "Veja os stills e escolha quais cenas você mais espera assistir."
             )
         ]
 
 
-   
     elif name == "평점 및 인기":
-        base = [
-            choose(
-                f"{title}의 평점은 관객 반응을 한눈에 보여주는 지표예요.",
-                f"이 작품의 평점만 봐도 대중적인 반응이 어느 정도인지 감이 옵니다.",
-                f"평점은 작품에 대한 첫인상을 빠르게 확인할 수 있는 방법입니다.",
-                f"숫자로 표현된 평점은 관객들의 솔직한 마음을 보여주죠.",
-                f"{title}의 점수는 화제성과 인기를 짐작하게 해줍니다.",
-                f"평점은 작품이 얼마나 사랑받았는지 보여주는 잣대가 되기도 합니다.",
-                f"관객들의 기대치와 만족도를 가늠할 수 있는 게 바로 평점이죠.",
-                f"평점은 작품의 흥행 흐름을 가장 쉽게 확인할 수 있는 지표입니다.",
-                f"{title}의 점수는 사람들이 얼마나 열광했는지를 간접적으로 보여줍니다.",
-                f"한눈에 보기 좋은 평점으로 작품의 위상을 확인할 수 있습니다."
-            ),
-            choose(
-                "투표 수와 평균 점수는 단순 숫자 이상으로 작품의 화제성을 말해줍니다.",
-                "참여한 투표 수가 많을수록 점수의 신뢰도가 올라가요.",
-                "평균값과 함께 표본 크기를 보면 더 정확한 느낌이 옵니다.",
-                "투표가 많이 쌓일수록 작품의 대중적 인지도를 실감할 수 있습니다.",
-                "평점 수가 많다는 건 그만큼 화제가 된 작품이라는 뜻이겠죠.",
-                "많은 사람들이 평가에 참여했다는 건 작품에 관심이 높았다는 의미예요.",
-                "평균 점수만이 아니라 표본 크기도 중요하게 보셔야 합니다.",
-                "투표 수는 작품이 얼마나 널리 알려졌는지를 가늠하게 해줍니다.",
-                "참여자 수와 평균 점수를 함께 보면 작품의 입지를 알 수 있어요.",
-                "평점 데이터는 단순히 점수 이상의 의미를 담고 있습니다."
-            ),
-            choose(
-                "물론 숫자가 모든 걸 말해주진 않아요. 결국 직접 보는 게 가장 정확합니다.",
-                "평점이 높다고 무조건 재밌는 건 아니고, 낮다고 재미없는 것도 아니죠.",
-                "점수는 참고만 하시고 본인의 취향이 훨씬 중요합니다.",
-                "평점은 가이드일 뿐, 최종 판단은 본인이 하시는 게 좋아요.",
-                "수치가 높아도 취향에 맞지 않으면 재미없을 수 있습니다.",
-                "점수가 낮아도 본인에게는 인생작이 될 수 있죠.",
-                "결국 가장 중요한 건 내가 재미있게 보느냐입니다.",
-                "평점은 참고 자료일 뿐이니 너무 신경 쓰지 마세요.",
-                "점수는 대중의 목소리일 뿐, 본인의 느낌이 제일 중요해요.",
-                "평점은 가벼운 가이드라인 정도로만 활용하시면 됩니다."
-            ),
-            choose(
-                "아래 수치를 보시고, 가볍게 참고만 해주세요.",
-                "숫자는 참고용으로만 확인하시고, 나머지는 본능에 맡기세요.",
-                "표를 보면서 대중적 반응을 한눈에 확인해보세요.",
-                "수치와 함께 관객들의 생생한 반응도 같이 보시면 더 재미있습니다.",
-                "데이터는 가볍게 참고만 하시고, 본편에서 직접 답을 찾아보세요.",
-                "평균값보다는 분포와 분위기를 보는 것도 재미있습니다.",
-                "숫자만 보지 마시고, 리뷰와 함께 읽으면 더 도움이 됩니다.",
-                "아래 표는 빠르게 반응을 정리한 거라 가볍게만 보시면 돼요.",
-                "결국 선택은 본인 취향이니, 숫자는 그냥 참고만 하시면 충분합니다.",
-                "표와 수치를 보며 작품의 반응 흐름만 살짝 체크해 보세요."
-            )
-        ]
+            base = [
+                choose(
+                    f"A avaliação de {title} é um indicador claro da reação do público.",
+                    f"Só de ver a nota desta obra já dá para ter uma ideia da recepção popular.",
+                    f"A nota é uma forma rápida de entender a primeira impressão da obra.",
+                    f"A pontuação numérica mostra os sentimentos honestos dos espectadores.",
+                    f"A avaliação de {title} sugere o nível de popularidade e relevância.",
+                    f"A nota também serve como um termômetro de quanto a obra foi querida.",
+                    f"A pontuação ajuda a medir as expectativas e a satisfação do público.",
+                    f"A nota é o jeito mais simples de ver o desempenho de bilheteria.",
+                    f"A pontuação de {title} mostra indiretamente o entusiasmo do público.",
+                    f"Com uma avaliação visível, dá para sentir a importância da obra."
+                ),
+                choose(
+                    "O número de votos e a média dizem mais do que simples estatísticas.",
+                    "Quanto mais votos, maior a confiabilidade da avaliação.",
+                    "Olhar a média junto com o tamanho da amostra dá mais precisão.",
+                    "Quando os votos aumentam, fica claro o reconhecimento popular.",
+                    "Muitos votos significam que o filme realmente foi comentado.",
+                    "O grande número de avaliações mostra o alto interesse pela obra.",
+                    "Não só a média, mas também o volume de avaliações é importante.",
+                    "O total de votos indica o quão difundida foi a obra.",
+                    "Ver a média junto com a participação dá uma noção melhor da posição do filme.",
+                    "Os dados de avaliação carregam significados além dos números."
+                ),
+                choose(
+                    "Claro, números não dizem tudo. Assistir é sempre o mais certeiro.",
+                    "Uma nota alta não garante diversão, e uma baixa não significa tédio.",
+                    "Use a pontuação apenas como referência: seu gosto importa mais.",
+                    "A avaliação é só um guia, a decisão final é sua.",
+                    "Mesmo notas altas podem não agradar se não for seu estilo.",
+                    "Uma nota baixa pode esconder um filme inesquecível para você.",
+                    "No fim, o mais importante é se você aproveita a experiência.",
+                    "Use a nota como referência leve, sem se preocupar demais.",
+                    "A pontuação mostra a voz do público, mas sua opinião é o que conta.",
+                    "Use a nota apenas como uma orientação superficial."
+                ),
+                choose(
+                    "Veja abaixo os números apenas como referência leve.",
+                    "Considere os dados apenas como guia e siga sua intuição.",
+                    "Confira a tabela e perceba a reação geral do público.",
+                    "Junto dos números, ver as reações reais é ainda mais divertido.",
+                    "Considere os dados como referência, mas encontre sua resposta assistindo.",
+                    "Mais interessante que a média é observar a distribuição e o clima.",
+                    "Não olhe só os números, leia também as críticas para entender melhor.",
+                    "A tabela abaixo resume a reação, encare de forma leve.",
+                    "No fim, a escolha é sua, os números são apenas uma pista.",
+                    "Veja a tabela e sinta apenas o fluxo geral das reações."
+                )
+            ]
+
 
 
     
     elif name == "베스트 리뷰":
         base = [
             choose(
-                "관객 리뷰는 짧은 글 속에서도 생생한 감정이 묻어나요.",
-                "리뷰 한 줄만 읽어도 실제 관람 분위기가 느껴집니다.",
-                "관객들의 후기를 보면 작품이 어떻게 받아들여졌는지 바로 알 수 있어요.",
-                "짧지만 강렬한 리뷰가 영화의 매력을 잘 보여줍니다.",
-                "리뷰는 수치보다 더 직접적인 관객의 목소리예요.",
-                "짧은 코멘트에도 진짜 관객의 감정이 스며 있습니다.",
-                "한두 줄 리뷰에도 의외로 영화의 핵심이 담겨 있어요.",
-                "관객들의 솔직한 느낌은 데이터보다 더 와 닿습니다.",
-                "실제 본 사람들의 말이라 신뢰가 가죠.",
-                "리뷰는 생생한 현장감이 있어 읽는 재미가 쏠쏠합니다."
+                "Mesmo em poucas palavras, as críticas dos espectadores carregam emoções vivas.",
+                "Basta ler uma linha de review para sentir a atmosfera da sessão real.",
+                "Ao ver os comentários do público, já dá para entender como a obra foi recebida.",
+                "Críticas curtas e diretas revelam bem o charme do filme.",
+                "As reviews são a voz mais direta dos espectadores, mais do que números.",
+                "Até em comentários breves transparecem sentimentos genuínos do público.",
+                "Em apenas uma ou duas linhas, muitas vezes está o essencial do filme.",
+                "As impressões honestas dos espectadores são mais impactantes que dados frios.",
+                "São palavras de quem realmente assistiu, por isso ganham confiança.",
+                "As críticas transmitem uma sensação de presença que dá gosto de ler."
             ),
             choose(
-                "취향에 따라 호불호가 갈릴 수 있지만, 그게 또 영화의 매력이죠.",
-                "좋다는 의견도, 아쉽다는 의견도 모두 작품의 또 다른 해석입니다.",
-                "긍정적인 반응과 비판적인 시선이 함께 어우러져 전체적인 그림을 만듭니다.",
-                "감상평은 다양할수록 영화가 가진 폭이 넓다는 뜻이에요.",
-                "호평과 혹평이 동시에 존재한다는 건 그만큼 화제가 됐다는 증거죠.",
-                "서로 다른 시선이 모여서 영화의 다층적인 면을 보여줍니다.",
-                "리뷰는 같아도 사람마다 해석이 달라지는 게 흥미롭습니다.",
-                "찬반이 갈려도, 결국은 그게 영화의 재미 아닐까요?",
-                "누군가에겐 인생작, 누군가에겐 평범작. 이런 다양성이 소중합니다.",
-                "취향이 다른 만큼 감상평도 다채롭게 나오는 게 자연스러워요."
+                "Dependendo do gosto, opiniões podem divergir — e isso é parte do encanto do cinema.",
+                "Elogios ou críticas, todas são interpretações válidas da obra.",
+                "O conjunto de reações positivas e negativas compõe o quadro completo.",
+                "Quanto mais diversas as opiniões, mais ampla é a dimensão do filme.",
+                "Ter elogios e críticas ao mesmo tempo prova que foi muito comentado.",
+                "Olhares diferentes revelam as múltiplas camadas do cinema.",
+                "Mesmo sobre a mesma cena, interpretações variam e isso é fascinante.",
+                "Concordando ou discordando, essa diversidade é a graça da sétima arte.",
+                "Para uns é um filme da vida, para outros algo comum — essa variedade é valiosa.",
+                "Assim como os gostos variam, as críticas naturalmente são diversas."
             ),
             choose(
-                "아래에는 인상적인 리뷰들을 간추려 담아봤습니다.",
-                "스포일러를 최대한 피해 간단한 후기만 모아봤습니다.",
-                "대표적인 리뷰를 모아 작품의 인상을 엿보실 수 있습니다.",
-                "짧고 굵은 리뷰들을 모아 읽는 재미가 있어요.",
-                "후기를 요약해 정리했으니 편하게 확인해 보세요.",
-                "관람 후기를 정리해 두었으니 참고하시면 도움이 됩니다.",
-                "짧은 코멘트들이지만, 영화의 분위기를 충분히 전합니다.",
-                "핵심만 정리된 리뷰라 빠르게 훑어보기 좋습니다.",
-                "인상적인 문장 위주로 추려 소개해 드립니다.",
-                "짧은 후기들이 모여 영화의 또 다른 면을 보여줍니다."
+                "Abaixo reuni algumas críticas marcantes.",
+                "Selecionei comentários breves, evitando ao máximo spoilers.",
+                "Críticas representativas dão uma boa ideia da impressão deixada pelo filme.",
+                "Um conjunto de reviews curtas e intensas torna a leitura divertida.",
+                "Organizei os comentários resumidos para você conferir facilmente.",
+                "Preparei uma seleção de críticas para servir de referência.",
+                "Mesmo frases curtas já transmitem a atmosfera da obra.",
+                "Por serem concisas, as críticas são rápidas de acompanhar.",
+                "Separei as frases mais impactantes para apresentar.",
+                "Esses breves comentários mostram outra faceta do filme."
             ),
             choose(
-                "읽다 보면 본인이 어떤 포인트를 좋아하는지 자연스럽게 드러납니다.",
-                "마음에 드는 표현이 있다면 감상 후 다시 확인해 보셔도 좋아요.",
-                "리뷰 속 문장이 나의 감정과 겹칠 때 묘한 공감이 생깁니다.",
-                "다른 사람의 시선에서 작품을 다시 보는 재미가 있습니다.",
-                "후기를 읽으며 관람 포인트를 미리 체크할 수 있습니다.",
-                "짧은 감상 속에서도 ‘아, 이런 느낌이구나’ 하고 감이 옵니다.",
-                "리뷰를 통해 영화의 또 다른 매력을 발견할 수도 있어요.",
-                "관객들의 말에서 영화의 숨은 포인트가 보일 때가 있습니다.",
-                "다른 시각의 후기를 읽으면 내 감상이 더 깊어질 수도 있어요.",
-                "리뷰 속 감정이 내 취향과 맞아떨어질 때 묘하게 기분이 좋아집니다."
+                "Ao ler, você percebe naturalmente quais pontos mais gosta.",
+                "Se encontrar uma frase que tocar você, releia após assistir.",
+                "Quando uma crítica coincide com sua própria emoção, surge uma empatia curiosa.",
+                "É interessante revisitar a obra através do olhar de outras pessoas.",
+                "Lendo críticas, você pode identificar antecipadamente pontos de atenção.",
+                "Mesmo em comentários curtos dá para pensar: ‘Ah, é essa a sensação’.",
+                "As reviews podem revelar outro charme escondido do filme.",
+                "Às vezes, nos comentários do público estão os pontos secretos da obra.",
+                "Lendo opiniões diferentes, sua própria visão pode se aprofundar.",
+                "Quando as palavras de uma crítica combinam com seu gosto, a sensação é ótima."
             )
         ]
 
 
-    
     elif name == "예고편":
-        base = [
-            choose(
-                "예고편은 영화의 분위기와 톤을 가장 빠르게 알려줍니다.",
-                "짧은 예고편 속에 영화의 핵심 무드가 담겨 있어요.",
-                "예고편만 봐도 이 영화가 어떤 느낌인지 감이 옵니다.",
-                "짧지만 강렬한 예고편이 본편에 대한 기대를 높여줍니다.",
-                "예고편은 본격 감상 전, 작품의 색깔을 엿볼 수 있는 창문 같아요.",
-                "예고편은 영화의 첫인상을 보여주는 명함 같은 역할을 합니다.",
-                "몇 초 안 되는 영상만으로도 영화의 매력이 살아납니다.",
-                "짧게 스쳐가는 장면들만 봐도 전체적인 무드가 전달됩니다.",
-                "예고편은 본편에 들어가기 전 흥미를 끌어올리는 장치입니다.",
-                "예고편만으로도 영화의 매력을 충분히 맛볼 수 있습니다."
-            ),
-            choose(
-                "스포일러 걱정 없이 분위기만 살짝 확인하실 수 있습니다.",
-                "예고편은 긴장감을 살짝 풀어주면서도 궁금증을 남겨줍니다.",
-                "짧은 시간 안에 영화의 리듬과 감정을 전해줍니다.",
-                "컷 편집과 사운드만으로도 몰입감을 체감할 수 있어요.",
-                "예고편을 보고 나면 본편이 더 궁금해집니다.",
-                "음악과 장면의 배치만으로도 영화의 성격이 드러납니다.",
-                "리듬과 템포가 본편의 기운을 미리 전해줍니다.",
-                "예고편은 짧지만 서사의 방향을 암시합니다.",
-                "음향과 영상만으로도 ‘아, 이런 영화구나’ 하고 감이 옵니다.",
-                "짧은 영상인데도 인상적인 장면이 많이 담겨 있습니다."
-            ),
-            choose(
-                f"{runtime_txt+' 동안 ' if runtime_txt else ''}집중해서 예고편을 보시면 본편의 색깔이 빠르게 잡힙니다.",
-                "예고편 속 몇 초의 대사가 영화의 전체 톤을 대변합니다.",
-                "첫 장면과 마지막 장면이 본편의 힌트를 담고 있기도 합니다.",
-                "짧은 영상이지만 메시지가 꽤 강렬하게 다가옵니다.",
-                "예고편만 보고도 어떤 감정선을 따라갈지 감이 옵니다.",
-                "영상미와 음악만으로도 매력을 전달하기 충분합니다.",
-                "예고편 속 한 장면이 본편을 관람하게 만드는 결정적 계기가 되기도 합니다.",
-                "짧은 분량에도 몰입을 이끌어내는 힘이 있습니다.",
-                "예고편은 본편의 작은 티저지만 여운은 길게 남습니다.",
-                "몇 장면만 보고도 영화의 주제 의식이 드러나기도 합니다."
-            ),
-            choose(
-                "가능하다면 이어폰으로 한 번, 큰 스피커로 한 번 보세요. 느낌이 달라집니다.",
-                "자막을 켜고 보면 대사 톤과 뉘앙스가 더 잘 들어옵니다.",
-                "짧지만 몰입해서 보시면 본편의 매력이 더 크게 다가올 거예요.",
-                "첫 10초, 마지막 10초에 영화의 매력이 압축돼 있는 경우도 많습니다.",
-                "짧은 예고편을 여러 번 돌려보면 숨겨진 디테일이 보입니다.",
-                "예고편 속 장면을 기억해두면 본편에서 만났을 때 반가움이 배가됩니다.",
-                "빠르게 훑어보는 것보다 집중해서 보는 게 훨씬 좋습니다.",
-                "짧은 시간에도 제작진의 디테일이 숨어 있으니 눈여겨보세요.",
-                "사운드와 화면의 합이 본편 못지않게 인상적일 때가 있습니다.",
-                "짧은 예고편이지만 영화의 무드를 제대로 보여줍니다."
-            ),
-            choose(
-                "아래 영상을 보시고 끌린다면 본편으로 자연스럽게 이어가 보세요.",
-                "예고편은 본편의 작은 맛보기이자 초대장 같은 역할을 합니다.",
-                "짧은 클립을 보고 마음이 움직이면 본편도 즐겁게 보실 수 있을 거예요.",
-                "취향에 맞는지 확인하기에 예고편만큼 좋은 것도 없습니다.",
-                "예고편을 보고 나면 본편 선택이 훨씬 쉬워집니다.",
-                "영상 하나로도 이 작품이 내 취향인지 금방 알 수 있어요.",
-                "예고편은 본편에 대한 기대를 키우는 가장 좋은 도구입니다.",
-                "작품을 처음 접할 때는 예고편이 가장 좋은 길잡이가 됩니다.",
-                "마음이 움직였다면 본편으로 바로 이어가도 후회 없으실 거예요.",
-                "예고편을 통해 영화의 매력을 가볍게 먼저 느껴보세요."
-            )
-        ]
-
-
+            base = [
+                choose(
+                    "O trailer é a forma mais rápida de sentir o tom e a atmosfera do filme.",
+                    "Em poucos segundos, o trailer já mostra o mood principal da obra.",
+                    "Só de assistir ao trailer, dá para captar a essência do filme.",
+                    "Curto mas intenso, o trailer aumenta a expectativa pelo longa.",
+                    "O trailer funciona como uma janela para espiar a cor da obra antes de assistir.",
+                    "É como um cartão de visita, mostrando a primeira impressão do filme.",
+                    "Mesmo em poucos segundos, o trailer transmite todo o charme.",
+                    "Cenas rápidas já comunicam bem a atmosfera geral.",
+                    "O trailer é o recurso que desperta interesse antes da sessão.",
+                    "Só o trailer já permite saborear bastante da magia do filme."
+                ),
+                choose(
+                    "Sem medo de spoilers, você pode conferir apenas a atmosfera.",
+                    "O trailer relaxa um pouco a tensão mas deixa curiosidade no ar.",
+                    "Em pouco tempo já transmite ritmo e emoção da obra.",
+                    "Só com cortes e som já dá para sentir a imersão.",
+                    "Depois do trailer, a vontade de ver o longa só aumenta.",
+                    "A música e a montagem revelam bem a identidade do filme.",
+                    "O ritmo e o tempo já antecipam a energia do longa.",
+                    "Mesmo curto, o trailer dá pistas sobre a narrativa.",
+                    "Som e imagem juntos já fazem pensar: ‘Ah, esse é o estilo do filme’.",
+                    "Em poucos segundos, já traz várias cenas memoráveis."
+                ),
+                choose(
+                    f"Assistindo ao trailer {runtime_txt+' inteiro ' if runtime_txt else ''}você capta rapidamente o tom do longa.",
+                    "Às vezes, uma única fala no trailer já representa o tom inteiro do filme.",
+                    "A primeira e a última cena do trailer podem conter pistas importantes.",
+                    "Mesmo curto, o vídeo traz uma mensagem forte.",
+                    "Só pelo trailer já dá para sentir a linha emocional que será seguida.",
+                    "A beleza visual e a trilha já bastam para transmitir o encanto.",
+                    "Uma cena do trailer pode ser o motivo decisivo para ver o filme.",
+                    "Mesmo breve, o trailer tem força para gerar imersão.",
+                    "É só um teaser, mas deixa um impacto duradouro.",
+                    "Algumas cenas já revelam o tema central da obra."
+                ),
+                choose(
+                    "Se possível, veja uma vez de fones e outra em caixas de som, a sensação muda.",
+                    "Ative as legendas: você vai captar melhor o tom e a nuance dos diálogos.",
+                    "Se mergulhar mesmo em poucos segundos, o encanto do longa é maior.",
+                    "Nos primeiros e últimos 10 segundos muitas vezes está a essência do filme.",
+                    "Rever várias vezes o trailer revela detalhes escondidos.",
+                    "Quando reencontrar no longa as cenas vistas no trailer, a experiência será prazerosa.",
+                    "Mais do que passar rápido, é melhor assistir com foco.",
+                    "Mesmo em pouco tempo, há muitos detalhes de produção para notar.",
+                    "A combinação de som e imagem pode ser tão marcante quanto o próprio longa.",
+                    "Embora curto, o trailer mostra fielmente o mood do filme."
+                ),
+                choose(
+                    "Assista ao vídeo abaixo e, se sentir vontade, siga naturalmente para o longa.",
+                    "O trailer é um aperitivo e um convite para o filme completo.",
+                    "Se este pequeno clipe já tocar você, o longa será ainda mais envolvente.",
+                    "Não há melhor forma de confirmar se combina com seu gosto do que pelo trailer.",
+                    "Depois de ver o trailer, escolher o filme fica mais fácil.",
+                    "Um vídeo já basta para saber se é do seu estilo.",
+                    "O trailer é a melhor ferramenta para criar expectativa pelo longa.",
+                    "Ao conhecer a obra pela primeira vez, o trailer é o melhor guia.",
+                    "Se o trailer já emocionar, seguir para o longa será sem arrependimentos.",
+                    "Sinta levemente o encanto do filme através do trailer."
+                )
+            ]
     
+    
+        
 
  
     elif name == "추천 영화":
         base = [
             choose(
-                f"{title}을(를) 보셨다면 아래 포스터 속 작품들도 한 번 눈여겨보세요.",
-                f"{title}을(를) 즐기셨다면 분위기가 비슷한 영화들을 모아봤습니다.",
-                f"{title}과(와) 어울리는 추천작들을 포스터로 준비했습니다.",
-                f"비슷한 무드의 영화들을 이미지로 소개해드려요.",
-                f"아래 포스터에서 취향에 맞는 작품을 찾아보세요.",
-                f"{title}과(와) 연결되는 또 다른 영화들을 포스터로 만나보세요."
+                f"Se você já assistiu {title}, vale a pena conferir também os filmes abaixo.",
+                f"Se você gostou de {title}, reuni aqui obras com uma atmosfera parecida.",
+                f"Preparei recomendações que combinam com {title}, apresentadas em pôsteres.",
+                f"Filmes com um mood semelhante estão reunidos em imagens para você.",
+                f"Veja nos pôsteres abaixo se encontra algo que combina com seu gosto.",
+                f"Conheça outros filmes relacionados a {title} através destes pôsteres."
             ),
             choose(
-                "이번 추천 영화들은 간단히 제목과 포스터만 담았습니다.",
-                "상세 설명 대신 깔끔하게 이미지로만 준비했어요.",
-                "부담 없이 스크롤하면서 가볍게 확인해 보시면 됩니다.",
-                "짧고 직관적으로 포스터만 모아봤습니다.",
-                "텍스트 설명은 생략하고, 직관적인 이미지로 보여드립니다."
+                "Desta vez as recomendações trazem apenas título e pôster.",
+                "Sem descrições detalhadas, preparei apenas imagens objetivas.",
+                "Basta rolar a tela e conferir de forma leve e rápida.",
+                "Separei pôsteres curtos e diretos para você ver sem esforço.",
+                "Sem explicações textuais — aqui mostro só imagens intuitivas."
             ),
             choose(
-                "마음에 드는 포스터가 있다면 체크해 두세요.",
-                "눈에 들어오는 작품은 바로 리스트에 담아두셔도 좋습니다.",
-                "포스터만 봐도 무드가 전해질 거예요.",
-                "한눈에 비교하면서 골라보시면 재미있습니다.",
-                "이미지 속 작품 중에서 ‘오늘의 영화’를 골라보세요."
+                "Se algum pôster chamar sua atenção, guarde a dica.",
+                "Pode adicionar imediatamente à sua lista o filme que se destacar para você.",
+                "Só pelo pôster já dá para sentir o mood da obra.",
+                "Comparar todos de uma vez deixa a escolha divertida.",
+                "Entre as imagens, escolha aquele que será ‘o filme do dia’."
             ),
             choose(
-                "그럼 추천 영화 포스터들을 함께 살펴보겠습니다.",
-                "아래 이미지를 보면서 취향에 맞는 영화를 골라보세요.",
-                "포스터만으로도 충분히 매력을 느끼실 수 있을 겁니다.",
-                "아래 영화들을 가볍게 확인해보세요.",
-                "즐겁게 감상할 수 있는 추천작들을 지금 만나보세요."
+                "Então vamos dar uma olhada juntos nos pôsteres recomendados.",
+                "Veja as imagens abaixo e escolha os filmes que combinam com você.",
+                "Mesmo apenas pelos pôsteres já é possível sentir o charme.",
+                "Confira rapidamente os filmes listados abaixo.",
+                "Aqui estão recomendações leves e divertidas para você aproveitar."
             )
         ]
 
@@ -724,134 +807,31 @@ def make_section_lead(name, title, year, genres_str, cert_label, extras=None):
     else:
         base = [
             choose(
-                "핵심만 빠르게 훑고, 필요한 건 바로 체크할 수 있게 정리했어요.",
-                "한눈에 들어오는 구조로 준비했으니, 편하게 내려가며 보시면 됩니다.",
-                "중요한 포인트부터 차근차근 담았으니, 필요한 부분만 골라 읽어도 좋아요."
+                "Resumi apenas os pontos principais para você conferir rápido e marcar o que precisa.",
+                "A estrutura está organizada para ser clara, basta rolar e acompanhar tranquilamente.",
+                "Separei os pontos mais importantes — você pode ler só o que interessa."
             ),
             choose(
-                "섹션은 직관적인 순서로 배치했고, 각 항목마다 짧은 코멘트를 붙였습니다.",
-                "장면·정보·후기 흐름으로 이어지니, 자연스럽게 따라오실 거예요.",
-                "필요하면 북마크해 두고 천천히 보셔도 좋습니다."
+                "As seções foram organizadas em ordem intuitiva, cada uma com um breve comentário.",
+                "A leitura flui naturalmente entre cenas, informações e críticas.",
+                "Se preferir, pode marcar nos favoritos e reler com calma depois."
             ),
             choose(
-                "중간중간 개인 취향 팁도 살짝 얹어둘게요.",
-                "과한 수사는 덜고, 실용적인 힌트를 조금 더 챙겼습니다.",
-                "부담 없이 읽히는 길이로 맞춰놨어요."
+                "Adicionei também algumas dicas pessoais no meio do conteúdo.",
+                "Reduzi os exageros e foquei em trazer sugestões práticas.",
+                "Mantive o texto em um tamanho leve e agradável para ler."
             ),
             choose(
-                "그럼 아래부터 바로 보시죠.",
-                "이제 본격적으로 들어가 볼게요."
+                "Então, vamos direto ao conteúdo abaixo.",
+                "Agora sim, vamos entrar no assunto de verdade."
             )
         ]
+
 
     return " ".join(base)
 
 
-def make_outro_6(title, year, genres_str, director_names, keywords):
-    director_one = director_names[0] if director_names else ""
-    year_txt = year if year else "개봉연도 미상"
 
-    # 1. 오프닝 멘트
-    s1 = choose(
-        f"지금까지 <b>{title}</b>({year_txt})에 대해 함께 이야기 나눠봤습니다.",
-        f"오늘은 <b>{title}</b>({year_txt})의 매력 포인트를 정리해봤는데 어떠셨나요?",
-        f"<b>{title}</b>({year_txt})의 주요 정보들을 쭉 살펴봤습니다.",
-        f"<b>{title}</b>({year_txt})에 대해 제가 느낀 부분들을 정리해봤습니다.",
-        f"짧게나마 <b>{title}</b>({year_txt})를 정리했는데, 도움이 되셨길 바랍니다.",
-        f"오늘 포스팅은 <b>{title}</b>({year_txt})에 대한 제 생각과 정보였어요.",
-        f"<b>{title}</b>({year_txt}) 관람 포인트들을 한 번에 모아봤습니다.",
-        f"<b>{title}</b>({year_txt})가 가진 매력들을 요약해서 정리했어요.",
-        f"<b>{title}</b>({year_txt})에 대한 소개, 여러분 마음에 와닿았길 바랍니다.",
-        f"저와 함께한 <b>{title}</b>({year_txt}) 이야기, 어떠셨나요?"
-    )
-
-    # 2. 내용 요약
-    s2 = choose(
-        "줄거리부터 연출, 배우들의 연기까지 한눈에 담아봤고,",
-        "스토리 라인과 연출, 연기 톤을 고르게 다뤄봤으며,",
-        "작품 전반의 흐름과 감정선, 그리고 연출 포인트까지 정리했고,",
-        "연출·연기·스토리 균형을 중심으로 살펴봤고,",
-        "영상미, 캐릭터, 사운드까지 빠짐없이 챙겨봤고,",
-        "주요 장면과 디테일을 놓치지 않고 담아봤으며,",
-        "전체적인 톤과 메시지, 그리고 배우들의 합까지 다뤄봤습니다.",
-        "작품이 가진 강점들을 종합적으로 점검해봤습니다.",
-        "여러 요소를 함께 훑어보면서 균형 있게 정리해봤습니다.",
-        "작품을 이해하는 데 꼭 필요한 핵심만 간추려봤습니다."
-    ) + " " + choose(
-        f"{genres_str} 장르 특유의 매력도 함께 확인해봤습니다." if genres_str else "장르적 매력도 함께 다뤘습니다.",
-        f"{director_one} 감독의 연출 색깔도 눈여겨봤습니다." if director_one else "연출의 흐름과 호흡도 챙겨봤습니다.",
-        "연출적인 디테일도 살짝 짚어봤습니다.",
-        "전체적인 톤 앤 무드도 함께 살펴봤습니다."
-    )
-
-    # 3. 평점/판단 관련 멘트
-    s3 = choose(
-        "관객 평점과 인기 지수는 참고만 하시고,",
-        "평점과 수치는 어디까지나 가이드일 뿐이고,",
-        "숫자와 지표는 보조 도구일 뿐이니,",
-        "평점과 지표는 감상 전에 참고만 해보시고,",
-        "수치보다는 직접적인 감상이 더 중요하니,",
-        "숫자는 참고만 하고 너무 의존하지 마시고,",
-        "지표는 방향만 알려줄 뿐이니,",
-        "수치는 참고 자료일 뿐이라는 점, 잊지 마세요.",
-        "평점은 참고하시되, 최종 선택은 본인의 몫이고,",
-        "데이터는 보조 수단일 뿐이니,"
-    ) + " " + choose(
-        "최종 판단은 여러분 취향에 맡기시면 됩니다.",
-        "결정은 결국 본인이 가장 즐길 수 있는 쪽으로 하시면 돼요.",
-        "선택은 본인의 감각을 믿는 게 가장 좋습니다.",
-        "마지막 결정은 스스로의 감정에 맡기시면 됩니다.",
-        "본인이 느끼는 감각이 가장 정확한 기준이 될 거예요.",
-        "취향에 맞는 작품을 직접 선택하시는 게 제일 좋습니다.",
-        "최종 선택은 본인이 하고 싶은 대로 하시면 충분해요.",
-        "여러분의 직감이 가장 좋은 나침반이 될 겁니다.",
-        "결국 본인이 끌리는 작품을 고르는 게 정답이에요.",
-        "스스로의 감각을 믿으시면 됩니다."
-    )
-
-    # 4. 추천작 안내
-    s4 = choose(
-        "비슷한 장르의 추천작도 함께 소개해드렸으니 이어서 감상하시면 좋습니다.",
-        "추천 영화들도 함께 준비했으니 재미있게 이어가 보세요.",
-        "분위기가 닮은 작품들을 함께 보시면 더 깊은 여운이 남을 겁니다.",
-        "비슷한 결의 작품들을 챙기면 감상이 훨씬 풍성해집니다.",
-        "비슷한 장르의 영화들을 이어서 보면 몰입도가 배가됩니다.",
-        "추천작까지 챙기시면 영화 여행이 훨씬 즐거워질 거예요.",
-        "분위기나 톤이 닮은 영화들이라 연달아 보기도 좋습니다.",
-        "비슷한 무드의 작품을 함께 보면 감정선이 이어져요.",
-        "비슷한 영화들을 골라보시면 의외의 인생작을 만날 수도 있어요.",
-        "추천작을 통해 새로운 작품도 발견해 보시길 바랍니다."
-    )
-
-    # 5. 키워드 안내
-    s5 = choose(
-        f"검색 키워드: {', '.join(keywords[:8])}",
-        f"관련 키워드: {', '.join(keywords[:8])}",
-        f"이번 글의 주요 키워드는 {', '.join(keywords[:8])}입니다.",
-        f"키워드 정리: {', '.join(keywords[:8])}",
-        f"참고 키워드: {', '.join(keywords[:8])}",
-        f"검색 시 참고할 키워드: {', '.join(keywords[:8])}",
-        f"작품 연관 키워드: {', '.join(keywords[:8])}",
-        f"함께 보면 좋은 키워드: {', '.join(keywords[:8])}",
-        f"관련 검색어: {', '.join(keywords[:8])}",
-        f"이번 리뷰 키워드: {', '.join(keywords[:8])}"
-    )
-
-    # 6. 마무리 멘트
-    s6 = choose(
-        "오늘 글이 영화 고르실 때 작은 도움이 되었길 바라요. 편하게 댓글로 얘기 나눠주세요 🙂",
-        "읽어주셔서 감사합니다! 도움이 되셨다면 따뜻한 ♥ 눌러주시면 힘이 됩니다.",
-        "오늘 내용이 괜찮으셨다면 다른 영화 글들도 함께 확인해 보세요!",
-        "끝까지 읽어주셔서 감사드려요. 댓글로 의견 남겨주시면 소통할 수 있어 즐겁습니다.",
-        "앞으로도 다양한 작품 소개해드릴게요. 이웃 추가하시면 새 글도 바로 보실 수 있습니다!",
-        "영화 이야기 함께 나누는 시간이 즐겁네요. 다음 글도 기대해 주세요!",
-        "조금이나마 도움이 되었다면 정말 기쁩니다. 공감 ♥ 부탁드려요.",
-        "혹시 더 궁금한 점 있으면 댓글 남겨주세요. 같이 이야기 나눠봐요!",
-        "도움이 되셨길 바라며, 여러분의 영화 생활이 더 즐겁길 응원합니다.",
-        "오늘의 포스팅이 유익하셨다면 주변에도 공유해 주시면 큰 힘이 됩니다!"
-    )
-
-    return " ".join([s1, s2, s3, s4, s5, s6])
 
 
 # ===============================
@@ -874,8 +854,9 @@ def get_related_posts(blog_id, count=4):
             margin: 2em 10px; padding: 2em;">
   <p data-ke-size="size16" 
      style="border-bottom: 1px solid rgb(85, 85, 85); color: #555555; font-size: 16px; 
-            margin-bottom: 15px; padding-bottom: 5px;">♡♥ 같이 보면 좋은글</p>
+            margin-bottom: 15px; padding-bottom: 5px;">♡♥ Posts recomendados</p>
 """
+
 
     for entry in entries:
         title = entry.title
@@ -886,11 +867,13 @@ def get_related_posts(blog_id, count=4):
     return html_box
 
 
-def build_html(post, cast_count=10, stills_count=8):
+def build_html(post, title, cast_count=10, stills_count=8):
     esc = html.escape
-    title = esc(post.get("title") or post.get("original_title") or "제목 미상")
+    # Título (pt-BR → fallback em inglês)
     
-    overview = esc(post.get("overview") or "줄거리 정보가 아직 준비되지 않았습니다.")
+
+    
+    overview = esc(post.get("overview") or "As informações da sinopse ainda não estão disponíveis.")
     release_date = esc(post.get("release_date") or "")
     year = release_date[:4] if release_date else ""
     runtime = post.get("runtime") or 0
@@ -898,13 +881,10 @@ def build_html(post, cast_count=10, stills_count=8):
     genres_str = ", ".join(genres_list)
     tagline = esc(post.get("tagline") or "")
     adult_flag = bool(post.get("adult", False))
-       # 장르
-    genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
-    genres_str = ", ".join(genres_list)
 
     # 제작 국가
     countries = [c.get("name","") for c in post.get("production_countries",[]) if c.get("name")]
-    country_str = ", ".join(countries) if countries else "국가 정보 없음"
+    country_str = ", ".join(countries) if countries else "Sem informações de país"
 
     backdrop = img_url(post.get("backdrop_path"), "w1280")
 
@@ -919,56 +899,39 @@ def build_html(post, cast_count=10, stills_count=8):
     backdrops = sorted(backdrops, key=lambda b: (b.get("vote_count",0), b.get("vote_average",0)), reverse=True)[:stills_count]
 
     cert = get_movie_release_cert(post["id"], bearer=BEARER, api_key=API_KEY)
-    if not cert and adult_flag: cert = "성인 컨텐츠"
+    if not cert and adult_flag: 
+        cert = "Conteúdo adulto"
 
     # 키워드 생성
     base_keywords = []
     for w in (title.replace(":", " ").replace("-", " ").split()):
-        if len(w) > 1: base_keywords.append(w)
-    base_keywords += genres_list
-    base_keywords += director_names[:2]
-    base_keywords += cast_names[:3]
-    if year: base_keywords.append(year)
-    if cert: base_keywords.append(cert)
-    
-        # 키워드 생성
-    base_keywords = []
-    for w in (title.replace(":", " ").replace("-", " ").split()):
         if len(w) > 1:
             base_keywords.append(str(w))
+    base_keywords += genres_list + director_names[:2] + cast_names[:3]
+    if year: base_keywords.append(str(year))
+    if cert: base_keywords.append(str(cert))
 
-    # 장르, 감독, 배우 이름도 문자열만
-    for g in genres_list:
-        if g: base_keywords.append(str(g))
-    for d in director_names[:2]:
-        if d: base_keywords.append(str(d))
-    for c in cast_names[:3]:
-        if c: base_keywords.append(str(c))
+    base_keywords += ["Crítica", "Avaliação", "Elenco", "Trailer", "Stills", "Filmes Recomendados"]
 
-    if year:
-        base_keywords.append(str(year))
-    if cert:
-        base_keywords.append(str(cert))
-
-    # 고정 키워드
-    base_keywords += ["리뷰", "평점", "출연진", "예고편", "스틸컷", "추천영화", "관람포인트", "해석"]
-
-    # 중복 제거 (문자열만)
-    seen = set()
-    keywords = []
+    seen, keywords = set(), []
     for k in base_keywords:
-        if isinstance(k, str):
-            if k and k not in seen:
-                keywords.append(k)
-                seen.add(k)
-
+        if isinstance(k, str) and k and k not in seen:
+            keywords.append(k)
+            seen.add(k)
 
     intro_6 = make_intro_6(title, year, genres_str, director_names, cast_names, cert, runtime, keywords)
+
 
     # 출연진 테이블
     cast_rows = []
     for p in cast:
         name = esc(p.get("name",""))
+        # 🔑 이름이 한글이면 영어 이름으로 교체 시도
+        if re.search(r"[ㄱ-ㅎ가-힣]", name):
+            name_en = get_person_name_en(p.get("id"), bearer=BEARER, api_key=API_KEY)
+            if name_en:
+                name = esc(name_en)
+    
         ch = esc(p.get("character",""))
         prof = img_url(p.get("profile_path"), "w185")
         img_tag = f'<img src="{prof}" alt="{name}" style="width:72px;height:auto;border-radius:8px;">' if prof else ""
@@ -978,9 +941,10 @@ def build_html(post, cast_count=10, stills_count=8):
             f'<td style="vertical-align:top;padding:8px 10px;"><b>{name}</b><br><span style="color:#666;">{ch}</span></td>'
             f'</tr>'
         )
+
     cast_table = (
         '<table style="width:100%;border-collapse:collapse;border:1px solid #eee;">' +
-        "".join(cast_rows or ['<tr><td style="padding:10px;">출연진 정보가 없습니다.</td></tr>']) +
+        "".join(cast_rows or ['<tr><td style="padding:10px;">Sem informações do elenco.</td></tr>']) +
         '</table>'
     )
 
@@ -990,15 +954,15 @@ def build_html(post, cast_count=10, stills_count=8):
         p = img_url(b.get("file_path"), "w780")
         if not p: continue
         still_divs.append(
-            f'<div style="flex:0 0 49%;margin:0.5%;"><img src="{p}" alt="{title} 스틸컷" style="width:100%;height:auto;border-radius:10px;"></div>'
+            f'<div style="flex:0 0 49%;margin:0.5%;"><img src="{p}" alt="Still de {title}" style="width:100%;height:auto;border-radius:10px;"></div>'
         )
     stills_html = (
         '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;">' +
-        "".join(still_divs or ['<div style="padding:10px;">스틸컷 이미지가 없습니다.</div>']) +
+        "".join(still_divs or ['<div style="padding:10px;">Nenhuma imagem de still disponível.</div>']) +
         '</div>'
     )
 
-    # 평점·예고편
+    # 평점
     rating_lead = make_section_lead("평점 및 인기", title, year, genres_str, cert)
 
     vote_avg = post.get("vote_average", 0)
@@ -1012,71 +976,34 @@ def build_html(post, cast_count=10, stills_count=8):
                 box-shadow:0 4px 12px rgba(0,0,0,0.08);
                 text-align:center;">
     <div style="font-size:20px;font-weight:bold;margin-bottom:12px;color:#333;">
-        ⭐ 평점 & 📊 인기 지수
+        ⭐ Avaliação & 📊 Popularidade
     </div>
     <div style="font-size:18px;color:#222;margin:8px 0;">
-        <b style="color:#ff9800;">평균 평점:</b> {vote_avg:.1f}/10
+        <b style="color:#ff9800;">Nota média:</b> {vote_avg:.1f}/10
     </div>
     <div style="font-size:16px;color:#555;margin:6px 0;">
-        투표 참여자: {vote_count:,}명
+        Número de votos: {vote_count:,}
     </div>
     <div style="font-size:18px;color:#0066cc;margin-top:10px;">
-        <b>인기 지수:</b> {popularity:.1f}
+        <b>Popularidade:</b> {popularity:.1f}
     </div>
     </div>
     """
 
-
-   
-    # 🎬 예고편 영역
+    # 예고편
     video_html = ""
     video_lead = make_section_lead("예고편", title, year, genres_str, cert)
 
-    # ✅ 안내 문구 후보 (항상 정의)
-    video_notice_variants = [
-        "아래 예고편 영상이 가끔 오류로 인해 다른 유튜브 영상이 보일 수도 있습니다. 참고 부탁드려요 😊",
-        "간혹 아래 예고편 영상이 정상적으로 로드되지 않거나 다른 영상이 나올 수 있습니다. 양해 바랍니다 🙏",
-        "예고편 영상이 불안정하게 표시될 수 있으며, 때때로 다른 영상이 뜰 수 있습니다. 참고하세요 ^^",
-        "아래 동영상은 자동으로 불러오는 과정에서 오류가 생길 경우 엉뚱한 영상이 재생될 수도 있어요.",
-        "예고편 영상이 제대로 안 보이거나 다른 영상으로 연결될 수 있습니다. 참고 부탁드립니다.",
-        "예고편 영상이 정상적으로 보이지 않거나 다른 영상이 표시될 수 있으니 양해 부탁드립니다.",
-        "아래 영상은 자동으로 가져오므로 가끔은 다른 영상이 나타날 수 있습니다. 미리 알려드려요!",
-        "예고편 로딩 중 오류가 생기면 엉뚱한 영상이 나올 수 있으니 감안하고 시청해주세요 ^^",
-        "유튜브 영상이 간혹 오류로 인해 다른 영상이 보일 수 있습니다. 이해 부탁드려요.",
-        "예고편 영상이 간혹 정상적으로 재생되지 않을 수 있어요. 다른 영상이 뜨면 무시해 주세요.",
-        "동영상 로딩 문제로 인해 다른 콘텐츠가 표시될 수 있습니다.",
-        "예고편 영상은 자동으로 연결되며, 오류 시 다른 영상이 표시될 수 있습니다.",
-        "아래 유튜브 영상이 잘못 연결될 수 있습니다. 감안하시고 봐주세요 ^^",
-        "영상 불러오기 오류가 생기면 예고편 대신 다른 영상이 나올 수도 있어요.",
-        "예고편 영상이 정상적으로 표시되지 않을 경우 다른 영상이 보일 수 있습니다.",
-        "동영상 불러오기 과정에서 오류가 발생하면 다른 영상이 표시될 수 있어요.",
-        "예고편 영상이 불안정하게 뜨거나 다른 영상이 재생될 수 있으니 참고 바랍니다.",
-        "간혹 예고편 대신 관련 없는 영상이 뜰 수 있습니다. 양해 부탁드립니다.",
-        "예고편 영상은 자동으로 불러오기 때문에 다른 영상이 나타날 수 있습니다.",
-        "예고편 영상이 오류로 인해 제대로 표시되지 않을 수도 있습니다."
-    ]
-
-    # 1) TMDB 공식 예고편 먼저 확인
     videos = get_movie_videos(post["id"], lang=LANG, bearer=BEARER, api_key=API_KEY)
     yt = next((v for v in videos if v.get("site") == "YouTube" and v.get("type") in ("Trailer", "Teaser")), None)
     if yt:
         yt_key = yt.get("key")
         video_html += f"<p>{video_lead}</p><iframe width='560' height='315' src='https://www.youtube.com/embed/{yt_key}' frameborder='0' allowfullscreen></iframe>"
 
-    # 2) YouTube API 검색으로 보조 영상 가져오기
-    query = f"{title} 예고편"
-        # 2) YouTube API 검색 (한국어 → 영어 fallback)
-    yt_results = get_youtube_trailers(
-        post.get("title") or "",
-        post.get("original_title") or "",
-        max_results=2
-    )
-
+    # YouTube API 보조 검색
+    yt_results = get_youtube_trailers(post.get("title") or "", post.get("original_title") or "", max_results=2)
     if yt_results:
-        # ✅ 안내문 출력 (항상 공식 영상 아래, 유튜브 검색 영상 위)
-        video_notice = random.choice(video_notice_variants)
-        video_html += f"<br /><p>{video_notice}</p>"
-
+        video_html += "<br /><p>⚠️ O trailer abaixo pode não ser o oficial.</p>"
         for vid, vtitle in yt_results:
             video_html += (
                 f"<p><b>{vtitle}</b></p>"
@@ -1084,8 +1011,7 @@ def build_html(post, cast_count=10, stills_count=8):
                 f"frameborder='0' allowfullscreen></iframe><br>"
             )
 
-
-    # 리뷰 (없으면 섹션 생략)
+    # 리뷰
     reviews = get_movie_reviews(post["id"], lang=LANG, bearer=BEARER, api_key=API_KEY)
     reviews_html = ""
     if reviews:
@@ -1096,8 +1022,8 @@ def build_html(post, cast_count=10, stills_count=8):
             content = html.escape((r.get("content","") or "").strip())
             if len(content) > 300:
                 content = content[:300] + "..."
-            review_blocks.append(f"<div style='margin:10px 0;'><b>{auth}</b> ({rating if rating else 'N/A'}점)<br>{content}</div>")
-        reviews_html = "<br /><br /><br />\n<h2>"+title+" 베스트 리뷰</h2>" + "".join(review_blocks)
+            review_blocks.append(f"<div style='margin:10px 0;'><b>{auth}</b> ({rating if rating else 'N/A'})<br>{content}</div>")
+        reviews_html = "<br /><br /><br />\n<h2>Melhores críticas de "+title+"</h2>" + "".join(review_blocks)
 
     # 추천 영화
     recs = get_movie_recommendations(post["id"], lang=LANG, bearer=BEARER, api_key=API_KEY)[:6]
@@ -1109,118 +1035,88 @@ def build_html(post, cast_count=10, stills_count=8):
             year2 = (m.get("release_date") or "")[:4]
             poster2 = img_url(m.get("poster_path"), "w185")
             poster_tag = f"<img src='{poster2}' style='width:100%;border-radius:10px;'>" if poster2 else ""
-
-            # 🔗 블로그스팟 검색 링크 만들기
-            # "이치, 더 킬러 (2001)" → URL 인코딩된 쿼리 문자열
             query = urllib.parse.quote(f"{mtitle} ({year2})")
-            search_url = f"https://movie.appsos.kr/search?q={query}"
-
-            # 카드 HTML에 링크 적용 (포스터 + 제목 모두 클릭 가능)
+            search_url = f"https://cinebr.appsos.kr/search?q={query}"
             cards.append(
-            f"<div style='flex:0 0 30%;margin:1%;text-align:center;'>"
-            f"<a href='{search_url}' target='_blank' style='color:#000; !important; text-decoration:none;'>{poster_tag}<br>{mtitle} ({year2})</a>"
-            "</div>"
+                f"<div style='flex:0 0 30%;margin:1%;text-align:center;'>"
+                f"<a href='{search_url}' target='_blank' style='color:#000;text-decoration:none;'>{poster_tag}<br>{mtitle} ({year2})</a>"
+                "</div>"
             )
-
-
-        # ✅ 리드 멘트 추가
         rec_lead = make_section_lead("추천 영화", title, year, genres_str, cert)
-
         rec_html = (
-            "<br /><br /><br />\n<h2>비슷한 장르의 추천 영화</h2>"
+            "<br /><br /><br />\n<h2>Filmes recomendados</h2>"
             f"<p>{rec_lead}</p>"
             "<div style='display:flex;flex-wrap:wrap;'>"
             + "".join(cards) +
             "</div>"
         )
 
-
-
     outro_6 = make_outro_6(title, year, genres_str, director_names, keywords)
-
-     # ✅ 블로그 추천글 4개 추가
     related_box = get_related_posts(BLOG_ID, count=4)
 
-    # 최종 HTML (전체 래퍼로 감싸기)
-
-    blog_title1 = f"영화 {title} ({year}) 줄거리 출연진 주인공 예고편"
+    blog_title1 = f"Filme {title} ({year}) Sinopse Elenco Trailer"
     hashtags = make_hashtags_from_title(blog_title1)
 
-
     html_out = f"""
-
 <p>{intro_6}</p>
-<!--more-->   <!-- ✅ 점프 브레이크 추가 --><br />
-{"<p><img src='"+backdrop+"' style='width:100%;height:auto;border-radius:12px;'></p>" if backdrop else ""}
+<!--more--><br />
+{"<p><img src='"+backdrop+"' style='width:100%;border-radius:12px;'></p>" if backdrop else ""}
 {"<p><i>"+html.escape(tagline)+"</i></p>" if tagline else ""}
 
-
 <br /><br /><br />
-<h2>영화 {title} 줄거리</h2>
-<p><b>제작 국가:</b> {country_str} | <b>장르:</b> {genres_str if genres_str else "장르 정보 없음"}</p>
+<h2>Filme {title} – Sinopse</h2>
+<p><b>País:</b> {country_str} | <b>Gênero:</b> {genres_str if genres_str else "Sem informações"}</p>
 <p>{make_section_lead("줄거리", title, year, genres_str, cert)}</p>
 
 {f'''<div class="ottistMultiRelated">
-  <a class="extL alt" href="https://movie.appsos.kr/search/label/{year}?&max-results=10">
-    <span style="font-size: medium;"><strong>{year}년 추천영화 보러가기</strong></span>
+  <a class="extL alt" href="https://cinebr.appsos.kr/search/label/{year}?&max-results=10" target="_blank">
+    <span style="font-size: medium;"><strong>Filmes recomendados de {year}</strong></span>
     <i class="fas fa-link 2xs"></i>
   </a>
 </div>''' if year else ''}
 
-<div style="background:#fafafa;border:2px solid #ddd;border-radius:12px;
-            padding:10px 18px 25px;margin:18px 0;line-height:1.7;color:#333;
-            box-shadow:0 3px 8px rgba(0,0,0,0.05);">
-  <p style="font-weight:bold;font-size:16px;margin-bottom:10px;">🎬 {title} 줄거리</p>
+<div style="background:#fafafa;border:2px solid #ddd;border-radius:12px;padding:10px 18px;">
+  <p style="font-weight:bold;">🎬 Sinopse de {title}</p>
   {overview}
 </div>
-<br />
-{hashtags}
+<br />{hashtags}
 
 <br /><br /><br />
-<h2>영화 {title} 출연진</h2>
+<h2>Elenco de {title}</h2>
 <p>{make_section_lead("출연진", title, year, genres_str, cert, extras={"cast_top": cast_names})}</p>
-
 {cast_table}
-<br />
-{hashtags}
+<br />{hashtags}
+
 <br /><br /><br />
-<h2>{title} 스틸컷</h2>
+<h2>Stills de {title}</h2>
 <p>{make_section_lead("스틸컷", title, year, genres_str, cert)}</p>
 
 {f'''<div class="ottistMultiRelated">
-  <a class="extL alt" href="https://movie.appsos.kr/search/label/{urllib.parse.quote(genres_list[0])}?&max-results=10">
-    <span style="font-size: medium;"><strong>추천 {genres_list[0]} 영화 보러가기</strong></span>
+  <a class="extL alt" href="https://cinebr.appsos.kr/search/label/{urllib.parse.quote(genres_list[0])}?&max-results=10" target="_blank">
+    <span style="font-size: medium;"><strong>Recomendações de filmes de {genres_list[0]}</strong></span>
     <i class="fas fa-link 2xs"></i>
   </a>
 </div>''' if genres_list else ''}
 
 {stills_html}
-<br />
-{hashtags}
+<br />{hashtags}
+
 <br /><br /><br />
-
-<h2>영화 {title} 평점 및 예고편</h2>
+<h2>Avaliação e Trailer</h2>
 <p>{rating_lead}</p>
-{rating_html}
-{video_html}
+{rating_html}{video_html}
+{reviews_html}{rec_html}
+<br />{hashtags}
 
-{reviews_html}
-
-{rec_html}
-<br />
-{hashtags}
-<br /><br />
 <p>{outro_6}</p>
-
-{related_box}   <!-- ✅ 여기서 추천글 박스 삽입 -->
-
-<p style="font-size:12px;color:#666;">
-본 콘텐츠는 <a href="https://www.themoviedb.org/" target="_blank" style="color:#666;text-decoration:underline;">TMDB</a> 데이터를 기반으로 작성되었습니다.
-</p>
-
+{related_box}
+<p style="font-size:12px;">Fonte: <a href="https://www.themoviedb.org/" target="_blank">TMDB</a></p>
 
 """
+
     return textwrap.dedent(html_out).strip()
+
+
 
 # ===============================
 # Blogger 인증/발행
@@ -1294,20 +1190,26 @@ def main():
                 # 1) TMDB에서 상세 번들 수집
                 post = get_movie_bundle(movie_id, lang=LANG, bearer=BEARER, api_key=API_KEY)
 
-                # 2) HTML 구성
-                html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
 
-                # 3) 포스트 제목 (로테이션 적용)
-                title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
+                # 3) 포스트 제목
+                # title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
+                title = get_movie_title(movie_id, bearer=BEARER, api_key=API_KEY)
+
                 year = (post.get("release_date") or "")[:4]
+                # ws 객체 준비
+                ws = get_sheet()   # 이미 sheet2 반환하도록 되어 있으면 ws2 사용
+
+                # 2) HTML 구성
+                html_out = build_html(post, title, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
                 
-                # ✅ 로테이션 제목 생성 함수 호출
-                blog_title = get_rotating_title(ws, title, year)
+                # 블로그 제목 생성
+                blog_title = get_next_title_pattern(ws, title, year)
 
 
                 # 4) Blogger 발행
                 genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
-                labels = ["영화"] + ([year] if year else []) + genres_list
+                labels = ["Filme"] + ([year] if year else []) + genres_list
+
                 res = post_to_blogger(service, BLOG_ID, blog_title, html_out, labels=labels, is_draft=False)
                 print(f"✅ 발행 완료: {res.get('url','(URL 미확인)')}")
 
@@ -1345,6 +1247,16 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
+
+
+
+
+
+
+
+
+
 
 
 
