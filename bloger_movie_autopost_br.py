@@ -1188,8 +1188,6 @@ def main():
                 # 1) TMDB에서 상세 번들 수집
                 post = get_movie_bundle(movie_id, lang=LANG, bearer=BEARER, api_key=API_KEY)
 
-                # 2) HTML 구성
-                html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
 
                 # 3) 포스트 제목
                 # title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
@@ -1198,6 +1196,9 @@ def main():
                 year = (post.get("release_date") or "")[:4]
                 # ws 객체 준비
                 ws = get_sheet()   # 이미 sheet2 반환하도록 되어 있으면 ws2 사용
+
+                # 2) HTML 구성
+                html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
                 
                 # 블로그 제목 생성
                 blog_title = get_next_title_pattern(ws, title, year)
@@ -1244,6 +1245,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
