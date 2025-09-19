@@ -20,7 +20,6 @@ from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 
-
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
@@ -1240,6 +1239,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ Tunggu {POST_DELAY_MIN} menit sebelum posting berikutnya...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
