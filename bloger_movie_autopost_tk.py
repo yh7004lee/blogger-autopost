@@ -98,6 +98,28 @@ def make_hashtags_from_title(title: str) -> str:
     hashtags = ["#" + w for w in words if w.strip()]
     return " ".join(hashtags)
 
+import re, html
+
+def is_turkish_or_english(name: str) -> bool:
+    """
+    이름이 터키어/영어 알파벳으로만 되어 있는지 검사
+    허용 문자: a-z A-Z, 터키어 문자(ıiİşŞğĞüÜöÖçÇ), 공백, 점, 하이픈, 아포스트로피
+    """
+    pattern = r"^[a-zA-ZıiİşŞğĞüÜöÖçÇ\s\.\-']+$"
+    return re.match(pattern, name) is not None
+
+def normalize_person_name(person, bearer=None, api_key=None):
+    """
+    TMDB 배우/스태프 이름을 가져오되,
+    터키어나 영어가 아니면 영어 이름으로 교체
+    """
+    name = html.escape(person.get("name", ""))
+    if not is_turkish_or_english(name):  # 터키어나 영어가 아니면
+        name_en = get_person_name_en(person.get("id"), bearer=bearer, api_key=api_key)
+        if name_en:
+            name = html.escape(name_en)
+    return name
+
 def get_movie_overview(movie_id, bearer=None, api_key=None):
     # 1차: 터키어
     data_tr = tmdb_get(f"/movie/{movie_id}", params={"language": "tr-TR"}, bearer=bearer, api_key=api_key)
@@ -917,7 +939,11 @@ def build_html(post, title, cast_count=10, stills_count=8):
     crew = credits.get("crew", [])
     directors = [c for c in crew if c.get("job") == "Director"]
     director_names = [esc(d.get("name","")) for d in directors]
-    cast_names = [esc(p.get("name","")) for p in cast]
+    cast_names = []
+    for p in cast:
+        name = normalize_person_name(p, bearer=BEARER, api_key=API_KEY)
+        cast_names.append(name)
+
 
     backdrops = (post.get("images", {}) or {}).get("backdrops", [])
     backdrops = sorted(backdrops, key=lambda b: (b.get("vote_count",0), b.get("vote_average",0)), reverse=True)[:stills_count]
@@ -1254,6 +1280,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ Sonraki gönderiden önce {POST_DELAY_MIN} dakika bekleniyor...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
