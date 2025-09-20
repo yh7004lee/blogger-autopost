@@ -101,6 +101,21 @@ def make_hashtags_from_title(title: str) -> str:
     return " ".join(hashtags)
 
 
+def get_movie_overview(movie_id, bearer=None, api_key=None):
+    # 1차: 포르투갈어 (pt-BR)
+    data_pt = tmdb_get(f"/movie/{movie_id}", params={"language": "pt-BR"}, bearer=bearer, api_key=api_key)
+    overview_pt = data_pt.get("overview")
+    if overview_pt:
+        return overview_pt
+
+    # 2차: 영어 fallback
+    data_en = tmdb_get(f"/movie/{movie_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
+    overview_en = data_en.get("overview")
+    if overview_en:
+        return overview_en
+
+    # 3차: 아무것도 없으면 기본 메시지
+    return "As informações da sinopse ainda não estão disponíveis."
 
 
 
@@ -873,7 +888,12 @@ def build_html(post, title, cast_count=10, stills_count=8):
     
 
     
-    overview = esc(post.get("overview") or "As informações da sinopse ainda não estão disponíveis.")
+   
+    overview = esc(get_movie_overview(post["id"], bearer=BEARER, api_key=API_KEY))
+
+
+
+    
     release_date = esc(post.get("release_date") or "")
     year = release_date[:4] if release_date else ""
     runtime = post.get("runtime") or 0
@@ -1247,6 +1267,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
