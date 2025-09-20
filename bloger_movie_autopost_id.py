@@ -98,7 +98,21 @@ def make_hashtags_from_title(title: str) -> str:
     words = re.findall(r"[가-힣A-Za-zÀ-ÿ0-9]+", title)
     hashtags = ["#" + w for w in words if w.strip()]
     return " ".join(hashtags)
+def get_movie_overview(movie_id, bearer=None, api_key=None):
+    # 1차: 인도네시아어
+    data_id = tmdb_get(f"/movie/{movie_id}", params={"language": "id-ID"}, bearer=bearer, api_key=api_key)
+    overview_id = data_id.get("overview")
+    if overview_id:
+        return overview_id
 
+    # 2차: 영어 fallback
+    data_en = tmdb_get(f"/movie/{movie_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
+    overview_en = data_en.get("overview")
+    if overview_en:
+        return overview_en
+
+    # 3차: 원래 값
+    return "Informasi sinopsis belum tersedia."
 
 def get_movie_title(movie_id, bearer=None, api_key=None):
     import html, re
@@ -881,7 +895,9 @@ def get_related_posts(blog_id, count=4):
 def build_html(post, title, cast_count=10, stills_count=8):
     esc = html.escape
     
-    overview = esc(post.get("overview") or "Informasi sinopsis belum tersedia.")
+
+    overview = esc(get_movie_overview(post["id"], bearer=BEARER, api_key=API_KEY))
+
     release_date = esc(post.get("release_date") or "")
     year = release_date[:4] if release_date else ""
     runtime = post.get("runtime") or 0
@@ -1239,6 +1255,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ Tunggu {POST_DELAY_MIN} menit sebelum posting berikutnya...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
