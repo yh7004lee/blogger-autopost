@@ -632,19 +632,35 @@ if __name__ == "__main__":
                 )
 
                 section_html = f"""
-<h2 data-ke-size="size26">{j}. {app_name} 어플 소개</h2>
-<br />
-{desc_html}
-<p data-ke-size="size18"><b>2) {app_name} 어플 스크린샷</b></p>
-<div class="img-group">{img_group_html}</div>
-<br />
-<p data-ke-size="size18" style="text-align:center;">
-  <a href="{app_url}" class="myButton">{app_name} 앱 다운</a>
-</p>
-<br />
-<p data-ke-size="size18">{tag_str}</p>
-<br /><br />
-"""
+                <h2 data-ke-size="size26">{j}. {app_name} 어플 소개</h2>
+                <br />
+                {desc_html}
+                <p data-ke-size="size18"><b>2) {app_name} 어플 스크린샷</b></p>
+                <div class="img-group">{img_group_html}</div>
+                <br />
+                <p data-ke-size="size18" style="text-align:center;">
+                  <a href="{app_url}" class="myButton">{app_name} 앱 다운</a>
+                </p>
+                <br />
+                <p data-ke-size="size18">{tag_str}</p>
+                <br /><br />
+                """
+                # ✅ 3번째 섹션이면 라벨 기반 추천 박스 삽입
+                if j == 3 and label_val:
+                    encoded_label = urllib.parse.quote(label_val)
+                    section_html += f"""
+                <div class="ottistMultiRelated">
+                  <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
+                    <span style="font-size: medium;"><strong>추천 {label_val} 어플 보러가기</strong></span>
+                    <i class="fas fa-link 2xs"></i>
+                  </a>
+                </div>
+                <br /><br />
+                """
+                
+                html_full += section_html
+
+
                 html_full += section_html
                 sheet_append_log(ws3, target_row, f"[{j}] {app_name} 섹션 완료")
             except Exception as e_each:
@@ -684,5 +700,6 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
