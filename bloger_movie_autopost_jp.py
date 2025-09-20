@@ -139,6 +139,21 @@ def get_rotating_title_ja(ws, title, year):
         print(f"⚠️ P1セル更新失敗: {e}")
 
     return blog_title
+def get_movie_overview(movie_id, bearer=None, api_key=None):
+    # 1차: 일본어
+    data_ja = tmdb_get(f"/movie/{movie_id}", params={"language": "ja-JP"}, bearer=bearer, api_key=api_key)
+    overview_ja = data_ja.get("overview")
+    if overview_ja:
+        return overview_ja
+
+    # 2차: 영어 fallback
+    data_en = tmdb_get(f"/movie/{movie_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
+    overview_en = data_en.get("overview")
+    if overview_en:
+        return overview_en
+
+    # 3차: 기본 메시지
+    return "あらすじ情報はまだ準備されていません。"
 
 
 def get_movie_bundle(movie_id, lang="ja-JP", bearer=None, api_key=None):
@@ -790,7 +805,9 @@ def build_html(post, cast_count=10, stills_count=8):
     esc = html.escape
     title = esc(post.get("title") or post.get("original_title") or "タイトル不明")
 
-    overview = esc(post.get("overview") or "あらすじ情報はまだ準備されていません。")
+    
+    overview = esc(get_movie_overview(post["id"], bearer=BEARER, api_key=API_KEY))
+
     release_date = esc(post.get("release_date") or "")
     year = release_date[:4] if release_date else ""
     runtime = post.get("runtime") or 0
@@ -1257,6 +1274,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
