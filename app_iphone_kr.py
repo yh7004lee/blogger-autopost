@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
-
+import urllib.parse
 # =============== Imports ===============
 import os, re, json, random, requests, traceback, pickle, glob, textwrap, time
 from bs4 import BeautifulSoup
@@ -700,6 +700,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
