@@ -158,7 +158,21 @@ def get_sheet():
     SHEET_ID = "10kqYhxmeewG_9-XOdXTbv0RVQG9_-jXjtg0C6ERoGG0"
     return gc.open_by_key(SHEET_ID).sheet1
 
+def get_movie_overview(movie_id, bearer=None, api_key=None):
+    # 1차: 한국어
+    data_ko = tmdb_get(f"/movie/{movie_id}", params={"language": "ko-KR"}, bearer=bearer, api_key=api_key)
+    overview_ko = data_ko.get("overview")
+    if overview_ko:
+        return overview_ko
 
+    # 2차: 영어 fallback
+    data_en = tmdb_get(f"/movie/{movie_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
+    overview_en = data_en.get("overview")
+    if overview_en:
+        return overview_en
+
+    # 3차: 기본 메시지
+    return "줄거리 정보가 아직 준비되지 않았습니다."
 
 
 
@@ -890,7 +904,7 @@ def build_html(post, cast_count=10, stills_count=8):
     esc = html.escape
     title = esc(post.get("title") or post.get("original_title") or "제목 미상")
     
-    overview = esc(post.get("overview") or "줄거리 정보가 아직 준비되지 않았습니다.")
+    overview = esc(get_movie_overview(post["id"], bearer=BEARER, api_key=API_KEY))
     release_date = esc(post.get("release_date") or "")
     year = release_date[:4] if release_date else ""
     runtime = post.get("runtime") or 0
@@ -1345,6 +1359,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
