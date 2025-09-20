@@ -496,6 +496,37 @@ def build_ending_block(title: str, keyword: str) -> str:
 </div>
 """
     return last
+# ================================
+# 같이 보면 좋은글 박스 (RSS 랜덤 4개)
+# ================================
+def get_related_posts(blog_id, count=4):
+    import feedparser, random
+    rss_url = f"https://www.blogger.com/feeds/{blog_id}/posts/default?alt=rss"
+    feed = feedparser.parse(rss_url)
+
+    if not feed.entries:
+        return ""
+
+    # 랜덤으로 count개 추출
+    entries = random.sample(feed.entries, min(count, len(feed.entries)))
+
+    # HTML 박스 생성
+    html_box = """
+<div style="background: rgb(239, 237, 233); border-radius: 8px; border: 2px dashed rgb(167, 162, 151); 
+            box-shadow: rgb(239, 237, 233) 0px 0px 0px 10px; color: #565656; font-weight: bold; 
+            margin: 2em 10px; padding: 2em;">
+  <p data-ke-size="size16" 
+     style="border-bottom: 1px solid rgb(85, 85, 85); color: #555555; font-size: 16px; 
+            margin-bottom: 15px; padding-bottom: 5px;">♡♥ 같이 보면 좋은글</p>
+"""
+
+    for entry in entries:
+        title = entry.title
+        link = entry.link
+        html_box += f'<a href="{link}" style="color: #555555; font-weight: normal;">● {title}</a><br>\n'
+
+    html_box += "</div>\n"
+    return html_box
 
 # =============== 대상 행/키워드/라벨 선택 ===============
 def pick_target_row(ws):
@@ -622,6 +653,8 @@ if __name__ == "__main__":
         # 9) 마무리
         html_full += build_ending_block(title, keyword)
         sheet_append_log(ws3, target_row, "마무리 블록 생성 완료")
+        related_box = get_related_posts(BLOG_ID, count=4)
+        html_full += related_box
 
         # 10) 업로드
         try:
@@ -651,4 +684,5 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
