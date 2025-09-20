@@ -937,9 +937,13 @@ def build_html(post, title, cast_count=10, stills_count=8):
     credits = post.get("credits", {}) or {}
     cast = credits.get("cast", [])[:cast_count]
     crew = credits.get("crew", [])
+    # 감독
     directors = [c for c in crew if c.get("job") == "Director"]
-    director_names = [esc(d.get("name","")) for d in directors]
-    cast_names = []
+    director_names = []
+    for d in directors:
+        name = normalize_person_name(d, bearer=BEARER, api_key=API_KEY)
+        director_names.append(name)
+        cast_names = []
     for p in cast:
         name = normalize_person_name(p, bearer=BEARER, api_key=API_KEY)
         cast_names.append(name)
@@ -1280,6 +1284,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ Sonraki gönderiden önce {POST_DELAY_MIN} dakika bekleniyor...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
