@@ -244,8 +244,21 @@ def get_movie_bundle(movie_id, lang="tr-TR", bearer=None, api_key=None):
 
 
 def get_movie_reviews(movie_id, lang="tr-TR", bearer=None, api_key=None):
-    j = tmdb_get(f"/movie/{movie_id}/reviews", params={"language": lang}, bearer=bearer, api_key=api_key)
-    return j.get("results", [])
+    """
+    TMDB 리뷰 가져오기 (언어 폴백: tr-TR -> en-US -> 언어 미지정)
+    """
+    for lang_try in (lang, "en-US", None):
+        try:
+            params = {"language": lang_try} if lang_try else {}
+            j = tmdb_get(f"/movie/{movie_id}/reviews", params=params, bearer=bearer, api_key=api_key)
+            results = j.get("results", []) or []
+            if results:
+                return results
+        except Exception as e:
+            # 디버깅용 로그 (필요시)
+            print(f"⚠️ reviews 요청 실패 (lang={lang_try}): {e}")
+    return []
+
 
 
 def get_movie_videos(movie_id, lang="tr-TR", bearer=None, api_key=None):
@@ -1241,5 +1254,6 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ Sonraki gönderiden önce {POST_DELAY_MIN} dakika bekleniyor...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
