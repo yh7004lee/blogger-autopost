@@ -661,7 +661,7 @@ if __name__ == "__main__":
                 html_full += section_html
 
 
-                html_full += section_html
+               
                 sheet_append_log(ws3, target_row, f"[{j}] {app_name} 섹션 완료")
             except Exception as e_each:
                 sheet_append_log(ws3, target_row, f"[{j}] 앱 처리 실패: {e_each}")
@@ -700,6 +700,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
