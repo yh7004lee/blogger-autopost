@@ -844,7 +844,7 @@ def make_section_lead(name, title, year, genres_str, cert_label, extras=None):
                 "Evet, artık incelemenin asıl kısmına geldik."
             )
         ]
-
+    return " ".join(base)   # ✅ 마지막에 반드시 반환
 
 # ===============================
 # HTML 빌더 - 추천 글 박스
@@ -1241,4 +1241,5 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ Sonraki gönderiden önce {POST_DELAY_MIN} dakika bekleniyor...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
