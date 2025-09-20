@@ -92,6 +92,17 @@ def get_blogger_service():
 
 blog_handler = get_blogger_service()
 
+# ================================
+# 메타 설명 추출 유틸
+# ================================
+def extract_meta_description(html_block: str, max_len: int = 150) -> str:
+    """HTML 블록에서 텍스트만 추출해 길이를 제한한 meta 설명 반환"""
+    text = BeautifulSoup(html_block, "html.parser").get_text(" ", strip=True)
+    if len(text) > max_len:
+        return text[:max_len] + "..."
+    return text
+
+
 # =============== 썸네일 로깅 (H열 사용) ===============
 def log_thumb_step(ws, row_idx, message):
     try:
@@ -590,9 +601,17 @@ if __name__ == "__main__":
             raise SystemExit(0)
         sheet_append_log(ws3, target_row, f"앱 ID={[(a['id'], a['name']) for a in apps]}")
 
+    
         # 5) 서론
-        html_full = build_css_block()  # CSS 블록 추가
-        html_full += build_intro_block(title, keyword)
+        intro_block = build_intro_block(title, keyword)
+        
+        # ✅ 메타 설명 자동 추출
+        meta_description = extract_meta_description(intro_block, max_len=150)
+        
+        # ✅ CSS + 서론 붙이기
+        html_full = build_css_block()
+        html_full += intro_block
+
         # ✅ 목차 블록 추가
         html_full += """
         <div class="mbtTOC"><button> 목차 </button>
@@ -684,7 +703,12 @@ if __name__ == "__main__":
         # 10) 업로드
         try:
             labels = make_post_labels(row)  # ["어플", B열 값]
-            post_body = {"content": html_full, "title": title, "labels": labels}
+            post_body = {
+                "content": html_full,
+                "title": title,
+                "labels": labels,
+                "customMetaDescription": meta_description   # ✅ 검색 설명 자동 반영
+            }
             res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body,
                                               isDraft=False, fetchImages=True).execute()
             post_url = res.get("url", "")
@@ -709,6 +733,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
