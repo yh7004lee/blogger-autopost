@@ -593,6 +593,13 @@ if __name__ == "__main__":
         # 5) 서론
         html_full = build_css_block()  # CSS 블록 추가
         html_full += build_intro_block(title, keyword)
+        # ✅ 목차 블록 추가
+        html_full += """
+        <div class="mbtTOC"><button> 목차 </button>
+        <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
+        </div>
+        <p>&nbsp;</p>
+        """
         sheet_append_log(ws3, target_row, "서론 블록 생성 완료")
 
         # 6) 썸네일 본문 삽입
@@ -671,6 +678,8 @@ if __name__ == "__main__":
         sheet_append_log(ws3, target_row, "마무리 블록 생성 완료")
         related_box = get_related_posts(BLOG_ID, count=4)
         html_full += related_box
+        # ✅ 자동 목차 스크립트 호출
+        html_full += "<script>mbtTOC();</script>"
 
         # 10) 업로드
         try:
@@ -700,6 +709,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
