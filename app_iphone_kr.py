@@ -653,7 +653,7 @@ if __name__ == "__main__":
                 <br /><br />
                 """
                 # ✅ 3번째 섹션이면 라벨 기반 추천 박스 삽입
-                if j == 3 and label_val:
+                if j == 2 and label_val:
                     encoded_label = urllib.parse.quote(label_val)
                     section_html += f"""
                 <div class="ottistMultiRelated">
@@ -662,7 +662,7 @@ if __name__ == "__main__":
                     <i class="fas fa-link 2xs"></i>
                   </a>
                 </div>
-                <br /><br />
+                <br /><br /><br />
                 """
                 
                 html_full += section_html
@@ -709,6 +709,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
