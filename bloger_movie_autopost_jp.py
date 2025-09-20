@@ -155,6 +155,33 @@ def get_movie_overview(movie_id, bearer=None, api_key=None):
     # 3차: 기본 메시지
     return "あらすじ情報はまだ準備されていません。"
 
+# ===============================
+# 名前を日本語 or 英語で取得 (他言語なら英語へフォールバック)
+def normalize_name(person_id, bearer=None, api_key=None):
+    try:
+        # まず日本語
+        data_ja = tmdb_get(
+            f"/person/{person_id}",
+            params={"language": "ja-JP"},
+            bearer=bearer,
+            api_key=api_key
+        )
+        name_ja = data_ja.get("name", "").strip()
+        if name_ja:
+            return name_ja
+
+        # 英語フォールバック
+        data_en = tmdb_get(
+            f"/person/{person_id}",
+            params={"language": "en-US"},
+            bearer=bearer,
+            api_key=api_key
+        )
+        name_en = data_en.get("name", "").strip()
+        return name_en if name_en else ""
+    except Exception as e:
+        print(f"⚠️ 名前取得失敗 (ID={person_id}): {e}")
+        return ""
 
 def get_movie_bundle(movie_id, lang="ja-JP", bearer=None, api_key=None):
     """映画の詳細・出演・画像をまとめて取得"""
@@ -826,8 +853,9 @@ def build_html(post, cast_count=10, stills_count=8):
     cast = credits.get("cast", [])[:cast_count]
     crew = credits.get("crew", [])
     directors = [c for c in crew if c.get("job") == "Director"]
-    director_names = [esc(d.get("name","")) for d in directors]
-    cast_names = [esc(p.get("name","")) for p in cast]
+    director_names = [normalize_name(d["id"], bearer=BEARER, api_key=API_KEY) for d in directors if d.get("id")]
+    cast_names = [normalize_name(p["id"], bearer=BEARER, api_key=API_KEY) for p in cast if p.get("id")]
+
 
     backdrops = (post.get("images", {}) or {}).get("backdrops", [])
     backdrops = sorted(backdrops, key=lambda b: (b.get("vote_count",0), b.get("vote_average",0)), reverse=True)[:stills_count]
@@ -1274,6 +1302,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
