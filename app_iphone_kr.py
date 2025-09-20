@@ -153,12 +153,16 @@ def make_thumb(save_path: str, var_title: str):
         return False
 
 # =============== Google Drive 업로드 → 공개 URL 반환 ===============
+# ================================
+# Google Drive 업로드 → 공개 URL(lh3) 반환
+# ================================
 def upload_to_drive(file_path, file_name):
     try:
         drive_service = get_drive_service()
         folder_id = DRIVE_FOLDER_ID
 
         if not folder_id or folder_id == "YOUR_DRIVE_FOLDER_ID":
+            # 기본 blogger 폴더 사용
             query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
             results = drive_service.files().list(q=query, fields="files(id, name)").execute()
             items = results.get("files", [])
@@ -173,15 +177,18 @@ def upload_to_drive(file_path, file_name):
         media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
         file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
+        # 공개 권한
         drive_service.permissions().create(
             fileId=file["id"],
             body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
         ).execute()
 
-        return f"https://drive.google.com/uc?id={file['id']}"
+        # ✅ 원래 방식 복구 (lh3 구글 CDN 경유)
+        return f"https://lh3.googleusercontent.com/d/{file['id']}"
     except Exception as e:
         print(f"에러: 구글드라이브 업로드 실패: {e}")
         return ""
+
 
 # =============== 썸네일 생성 + 로그 + 업로드 ===============
 def make_thumb_with_logging(ws, row_idx, save_path, title):
@@ -644,3 +651,4 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
