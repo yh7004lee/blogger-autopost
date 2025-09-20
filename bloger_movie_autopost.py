@@ -174,7 +174,33 @@ def get_movie_overview(movie_id, bearer=None, api_key=None):
     # 3차: 기본 메시지
     return "줄거리 정보가 아직 준비되지 않았습니다."
 
+import re
 
+def normalize_name(person_id, bearer=None, api_key=None):
+    """
+    TMDB 인물 이름을 가져올 때:
+    - 기본 언어(LANG=ko-KR)로 시도
+    - 한글/영문이 아니면 영어(en-US) 이름으로 교체
+    """
+    try:
+        # 1차: 한국어 이름 가져오기
+        data_ko = tmdb_get(f"/person/{person_id}", params={"language": "ko-KR"}, bearer=bearer, api_key=api_key)
+        name_ko = data_ko.get("name", "")
+
+        # 한글 또는 영문이면 그대로 반환
+        if re.match(r"^[\uAC00-\uD7A3A-Za-z\s\.\-']+$", name_ko):
+            return name_ko
+
+        # 2차: 영어 이름 fallback
+        data_en = tmdb_get(f"/person/{person_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
+        name_en = data_en.get("name", "")
+        if name_en:
+            return name_en
+
+        return name_ko or "이름 미상"
+    except Exception as e:
+        print(f"❌ normalize_name 오류 (person_id={person_id}): {e}")
+        return "이름 미상"
 
 # ===============================
 # 공통 유틸
@@ -926,8 +952,9 @@ def build_html(post, cast_count=10, stills_count=8):
     cast = credits.get("cast", [])[:cast_count]
     crew = credits.get("crew", [])
     directors = [c for c in crew if c.get("job") == "Director"]
-    director_names = [esc(d.get("name","")) for d in directors]
-    cast_names = [esc(p.get("name","")) for p in cast]
+    director_names = [esc(normalize_name(d["id"], bearer=BEARER, api_key=API_KEY)) for d in directors if d.get("id")]
+    cast_names = [esc(normalize_name(p["id"], bearer=BEARER, api_key=API_KEY)) for p in cast if p.get("id")]
+
 
     backdrops = (post.get("images", {}) or {}).get("backdrops", [])
     backdrops = sorted(backdrops, key=lambda b: (b.get("vote_count",0), b.get("vote_average",0)), reverse=True)[:stills_count]
@@ -1359,6 +1386,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
