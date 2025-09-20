@@ -1,7 +1,14 @@
 name: Movie Autopost tk
 
 on:
-  workflow_dispatch:   # 수동 실행도 가능
+  workflow_dispatch:
+  schedule:
+    # 오전 9시 30분
+    - cron: "30 0 * * *"
+    # 오후 3시 30분
+    - cron: "30 6 * * *"
+    # 오후 9시 30분
+    - cron: "30 12 * * *"
 
 
 jobs:
@@ -58,6 +65,7 @@ jobs:
 
       - name: Run autopost
         run: python bloger_movie_autopost_tk.py
+
 
 
 
