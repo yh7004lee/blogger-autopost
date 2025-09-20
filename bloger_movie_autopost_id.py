@@ -98,6 +98,34 @@ def make_hashtags_from_title(title: str) -> str:
     words = re.findall(r"[가-힣A-Za-zÀ-ÿ0-9]+", title)
     hashtags = ["#" + w for w in words if w.strip()]
     return " ".join(hashtags)
+
+def normalize_person_name(person_id, bearer=None, api_key=None):
+    """
+    배우/감독 이름을 인도네시아어(id-ID) → 영어(en-US) 순으로 가져오기
+    (터키어나 영어가 아니면 무조건 영어로 교체)
+    """
+    # 1. 인도네시아어 이름 시도
+    try:
+        data_id = tmdb_get(
+            f"/person/{person_id}",
+            params={"language": "id-ID"},
+            bearer=bearer,
+            api_key=api_key
+        )
+        name_id = data_id.get("name", "").strip()
+        if name_id:
+            # 한글, 일본어, 중국어 등 라틴 문자가 아닌 경우 영어로 fallback
+            if re.search(r"[^\x00-\x7F]", name_id):  
+                return get_person_name_en(person_id, bearer=bearer, api_key=api_key)
+            return name_id
+    except Exception:
+        pass
+
+    # 2. 영어 fallback
+    return get_person_name_en(person_id, bearer=bearer, api_key=api_key)
+
+
+
 def get_movie_overview(movie_id, bearer=None, api_key=None):
     # 1차: 인도네시아어
     data_id = tmdb_get(f"/movie/{movie_id}", params={"language": "id-ID"}, bearer=bearer, api_key=api_key)
@@ -916,8 +944,9 @@ def build_html(post, title, cast_count=10, stills_count=8):
     cast = credits.get("cast", [])[:cast_count]
     crew = credits.get("crew", [])
     directors = [c for c in crew if c.get("job") == "Director"]
-    director_names = [esc(d.get("name","")) for d in directors]
-    cast_names = [esc(p.get("name","")) for p in cast]
+    director_names = [esc(normalize_person_name(d["id"], bearer=BEARER, api_key=API_KEY)) for d in directors if d.get("id")]
+    cast_names = [esc(normalize_person_name(p["id"], bearer=BEARER, api_key=API_KEY)) for p in cast if p.get("id")]
+
 
     backdrops = (post.get("images", {}) or {}).get("backdrops", [])
     backdrops = sorted(backdrops, key=lambda b: (b.get("vote_count",0), b.get("vote_average",0)), reverse=True)[:stills_count]
@@ -1255,6 +1284,7 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ Tunggu {POST_DELAY_MIN} menit sebelum posting berikutnya...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
