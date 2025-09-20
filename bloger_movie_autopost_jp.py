@@ -183,6 +183,38 @@ def normalize_name(person_id, bearer=None, api_key=None):
         print(f"⚠️ 名前取得失敗 (ID={person_id}): {e}")
         return ""
 
+def normalize_name(person_id, bearer=None, api_key=None):
+    try:
+        # 일본어 이름 요청
+        data_ja = tmdb_get(
+            f"/person/{person_id}",
+            params={"language": "ja-JP"},
+            bearer=bearer,
+            api_key=api_key
+        )
+        name_ja = (data_ja.get("name") or "").strip()
+
+        # 일본어 문자가 포함된 경우 그대로 사용
+        if name_ja and re.search(r"[ぁ-んァ-ン一-龥]", name_ja):
+            return name_ja
+
+        # 영어 이름 요청
+        data_en = tmdb_get(
+            f"/person/{person_id}",
+            params={"language": "en-US"},
+            bearer=bearer,
+            api_key=api_key
+        )
+        name_en = (data_en.get("name") or "").strip()
+
+        # 영어가 있으면 영어 사용, 없으면 일본어 그대로
+        return name_en if name_en else name_ja
+
+    except Exception as e:
+        print(f"⚠️ 名前取得失敗 (ID={person_id}): {e}")
+        return ""
+
+
 def get_movie_bundle(movie_id, lang="ja-JP", bearer=None, api_key=None):
     """映画の詳細・出演・画像をまとめて取得"""
     params = {
@@ -854,7 +886,8 @@ def build_html(post, cast_count=10, stills_count=8):
     crew = credits.get("crew", [])
     directors = [c for c in crew if c.get("job") == "Director"]
     director_names = [normalize_name(d["id"], bearer=BEARER, api_key=API_KEY) for d in directors if d.get("id")]
-    cast_names = [normalize_name(p["id"], bearer=BEARER, api_key=API_KEY) for p in cast if p.get("id")]
+    cast_names     = [normalize_name(p["id"], bearer=BEARER, api_key=API_KEY) for p in cast if p.get("id")]
+
 
 
     backdrops = (post.get("images", {}) or {}).get("backdrops", [])
@@ -1302,6 +1335,7 @@ if __name__ == "__main__":
         if i < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
+
 
 
 
