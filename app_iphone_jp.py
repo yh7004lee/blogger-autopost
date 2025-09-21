@@ -122,7 +122,7 @@ def make_thumb(save_path: str, var_title: str):
 
         # 폰트 설정 (일본어 지원 폰트로 교체 필요할 수 있음)
         try:
-            font = ImageFont.truetype(os.path.join("assets", "fonts", "KimNamyun.ttf"), 48)
+            font = ImageFont.truetype(os.path.join("assets", "fonts", "NotoSansJP-VariableFont_wght.ttf"), 48)
         except Exception:
             font = ImageFont.load_default()
 
@@ -717,6 +717,7 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
+
 
 
 
