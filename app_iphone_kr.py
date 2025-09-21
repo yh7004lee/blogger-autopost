@@ -306,7 +306,7 @@ def search_app_store_ids(keyword, limit=20, country="kr", ws=None, row_idx=None)
     # ✅ 4차: 그래도 부족하면 시트 E열(영문 번역 키워드) 사용
     if len(all_apps) < 7 and ws is not None and row_idx is not None:
         try:
-            eng_keyword = ws.cell(row_idx, 5).value or ""   # E열 = 5번째
+            eng_keyword = ws.cell(row_idx, 4).value or ""   # D열 = 4번째
             eng_keyword = eng_keyword.strip()
             if eng_keyword:
                 print(f"[Fallback: E열 영문 키워드 사용 → {eng_keyword}]")
@@ -558,7 +558,7 @@ def pick_target_row(ws):
     rows = ws.get_all_values()
     for i, row in enumerate(rows[1:], start=2):  # 2행부터
         a = row[0].strip() if len(row) > 0 and row[0] else ""  # A열 = 키워드
-        d = row[3].strip() if len(row) > 3 and row[3] else ""  # D열 = 완료
+        d = row[4].strip() if len(row) > 4 and row[4] else ""  # E열 = 완료
         if a and d != "완":
             return i, row
     return None, None
@@ -614,7 +614,7 @@ if __name__ == "__main__":
         if not apps:
             sheet_append_log(ws3, target_row, "앱 ID 없음 → 종료")
             # 👉 완료 처리 후 종료
-            ws3.update_cell(target_row, 4, "완")      # D열 완료
+            ws3.update_cell(target_row, 5, "완")      # E열 완료
             ws3.update_cell(target_row, 7, "")        # G열 = URL 비움
             sheet_append_log(ws3, target_row, "시트 기록 완료: D='완', G='' (검색결과 없음)")
             raise SystemExit(0)
@@ -739,6 +739,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
