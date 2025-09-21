@@ -508,7 +508,14 @@ try:
     html += "<script>mbtTOC();</script><br /><br />"
 
     # ✅ Blogger 업로드 (고정 BLOG_ID + 라벨=B열 값)
-    post_body = {"content": html, "title": title, "labels": [label]}
+  
+    labels = [label, "갤럭시"] if label else ["갤럭시"]
+    
+    post_body = {
+        "content": html,
+        "title": title,
+        "labels": labels
+    }
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False).execute()
     url = res.get("url", "")
     print(f"✅ 업로드 성공: {url}")
@@ -522,6 +529,7 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 오류 메시지 기록
+
 
 
 
