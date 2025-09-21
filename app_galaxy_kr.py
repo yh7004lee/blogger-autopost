@@ -45,6 +45,35 @@ def get_sheet():
 
 ws = get_sheet()
 
+def get_related_posts(blog_id, count=6):
+    import feedparser, random
+    rss_url = f"https://www.blogger.com/feeds/{blog_id}/posts/default?alt=rss"
+    feed = feedparser.parse(rss_url)
+
+    if not feed.entries:
+        return ""
+
+    # 랜덤으로 count개 추출
+    entries = random.sample(feed.entries, min(count, len(feed.entries)))
+
+    # HTML 박스 생성
+    html_box = """
+<div style="background: rgb(239, 237, 233); border-radius: 8px; border: 2px dashed rgb(167, 162, 151); 
+            box-shadow: rgb(239, 237, 233) 0px 0px 0px 10px; color: #565656; font-weight: bold; 
+            margin: 2em 10px; padding: 2em;">
+  <p data-ke-size="size16" 
+     style="border-bottom: 1px solid rgb(85, 85, 85); color: #555555; font-size: 16px; 
+            margin-bottom: 15px; padding-bottom: 5px;">♡♥ 같이 보면 좋은글</p>
+"""
+
+    for entry in entries:
+        title = entry.title
+        link = entry.link
+        html_box += f'<a href="{link}" style="color: #555555; font-weight: normal;">● {title}</a><br>\n'
+
+    html_box += "</div>\n"
+    return html_box
+
 # ================================
 # Google Drive 인증
 # ================================
@@ -58,6 +87,29 @@ def get_drive_service():
         with open("drive_token_2nd.pickle", "wb") as f:
             pickle.dump(creds, f)
     return build("drive", "v3", credentials=creds)
+
+# ================================
+# 제목 생성 (G1 인덱스 활용)
+# ================================
+def make_rotating_title(ws, keyword: str) -> str:
+    front_choices = ["스마트폰", "핸드폰", "휴대폰", "갤럭시"]
+    back_choices = ["어플 추천 앱", "앱 추천 어플"]
+
+    # G1 셀에서 인덱스 불러오기 (없으면 0)
+    try:
+        idx_val = ws.cell(1, 7).value
+        idx = int(idx_val) if idx_val else 0
+    except:
+        idx = 0
+
+    # 로테이션
+    front = front_choices[idx % len(front_choices)]
+    back = back_choices[(idx // len(front_choices)) % len(back_choices)]
+
+    # 다음 인덱스 저장
+    ws.update_cell(1, 7, str(idx + 1))
+
+    return f"{front} {keyword} {back}"
 
 # ================================
 # Blogger 인증
@@ -370,7 +422,7 @@ try:
         done = row[5].strip() if len(row) > 5 else "" # F열: 완료 여부
         if kw and done != "완":
             target_row, keyword, label = i, kw, lb
-            title = f"{kw} 어플 추천 앱"
+            title = make_rotating_title(ws, keyword)
             break
 
     if not keyword:
@@ -386,6 +438,16 @@ try:
     img_url = make_thumb_with_logging(ws, target_row, thumb_path, title)
 
     html = make_intro(title, keyword)
+
+    # ✅ 자동 목차 (서론 바로 뒤)
+    html += """
+    <div class="mbtTOC"><button> 목차 </button>
+    <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
+    </div>
+    <p>&nbsp;</p>
+    """
+
+
     if img_url:
         html += f"""
         <p style="text-align:center;">
@@ -401,23 +463,46 @@ try:
     # ✅ 본문 작성
     tag_str = " ".join([f"#{t}" for t in title.split()])
     for j, app_url in enumerate(app_links, 1):
-        if j > 7:
-            break
-        resp = requests.get(app_url, headers={"User-Agent": "Mozilla/5.0"})
-        soup = BeautifulSoup(resp.text, "html.parser")
-        h1 = soup.find("h1").text if soup.find("h1") else f"앱 {j}"
-        raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
-        desc = rewrite_app_description(raw_desc, h1, keyword)
-        html += f"""
-        <h2 data-ke-size="size26">{j}. {h1} 어플 소개</h2>
-        {desc}
-        <p style="text-align: center;" data-ke-size="size18">
-          <a class="myButton" href="{app_url}">{h1} 앱 다운로드</a>
-        </p>
-        <p data-ke-size="size18">{tag_str}</p>
+    if j > 7:
+        break
+    resp = requests.get(app_url, headers={"User-Agent": "Mozilla/5.0"})
+    soup = BeautifulSoup(resp.text, "html.parser")
+    h1 = soup.find("h1").text if soup.find("h1") else f"앱 {j}"
+    raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
+    desc = rewrite_app_description(raw_desc, h1, keyword)
+
+    # ✅ 라벨 링크 추가 (1번째, 3번째 소제목 위)
+    if j in (1, 3) and label:
+        encoded_label = urllib.parse.quote(label)
+        link_block = f"""
+        <div class="ottistMultiRelated">
+          <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
+            <span style="font-size: medium;"><strong>추천 {label} 어플 보러가기</strong></span>
+            <i class="fas fa-link 2xs"></i>
+          </a>
+        </div>
         <br /><br /><br />
         """
+        html += link_block
+
+    # ✅ 기본 소제목+내용
+    html += f"""
+    <h2 data-ke-size="size26">{j}. {h1} 어플 소개</h2>
+    {desc}
+    <p style="text-align: center;" data-ke-size="size18">
+      <a class="myButton" href="{app_url}">{h1} 앱 다운로드</a>
+    </p>
+    <p data-ke-size="size18">{tag_str}</p>
+    <br /><br /><br />
+    """
+
     html += make_last(title)
+    # ✅ 추천글 박스 삽입 (여기!)
+    related_box = get_related_posts(BLOG_ID, count=6)
+    html += related_box
+
+    # ✅ 자동 목차 스크립트 (맨 끝에)
+    html += "<script>mbtTOC();</script><br /><br />"
 
     # ✅ Blogger 업로드 (고정 BLOG_ID + 라벨=B열 값)
     post_body = {"content": html, "title": title, "labels": [label]}
@@ -434,3 +519,4 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 오류 메시지 기록
+
