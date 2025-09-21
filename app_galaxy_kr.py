@@ -1,6 +1,6 @@
 import sys
 sys.stdout.reconfigure(encoding="utf-8")
-import os, re, json, random, requests, traceback, pickle
+import os, re, json, random, requests, traceback, pickle, glob, textwrap
 from bs4 import BeautifulSoup
 import gspread
 from google.oauth2.service_account import Credentials
@@ -10,7 +10,6 @@ from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials as UserCredentials
 from google.auth.transport.requests import Request
 from PIL import Image, ImageDraw, ImageFont
-import textwrap
 
 # ================================
 # 환경 변수 및 기본 설정
@@ -18,14 +17,13 @@ import textwrap
 SHEET_ID = os.getenv("SHEET_ID", "1SeQogbinIrDTMKjWhGgWPEQq8xv6ARv5n3I-2BsMrSc")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
-# 블로그 3개 ID (순환)
-BLOG_IDS = [
-    "1271002762142343021",
-    "4265887538424434999",
-    "6159101125292617147"
-]
+# ✅ 블로그 고정
+BLOG_ID = "6533996132181172904"
+BLOG_URL = "https://apk.appsos.kr/"
 
+# ================================
 # OpenAI API Key 로드
+# ================================
 OPENAI_API_KEY = ""
 if os.path.exists("openai.json"):
     with open("openai.json", "r", encoding="utf-8") as f:
@@ -36,14 +34,14 @@ if not OPENAI_API_KEY:
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # ================================
-# Google Sheets 인증
+# Google Sheets 인증 (시트3 사용)
 # ================================
 def get_sheet():
     SERVICE_ACCOUNT_FILE = "sheetapi.json"
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    return gc.open_by_key(SHEET_ID).sheet1
+    return gc.open_by_key(SHEET_ID).get_worksheet(2)  # index=2 → 3번째 시트
 
 ws = get_sheet()
 
@@ -73,15 +71,6 @@ def get_blogger_service():
     return build("blogger", "v3", credentials=creds)
 
 blog_handler = get_blogger_service()
-
-# ================================
-# 썸네일 로깅 함수
-# ================================
-import glob
-
-# ================================
-# 배경 이미지 랜덤 선택
-# ================================
 
 # ================================
 # 썸네일 로깅 함수 (H열 사용)
@@ -160,6 +149,7 @@ def upload_to_drive(file_path, file_name):
         drive_service = get_drive_service()
         folder_id = DRIVE_FOLDER_ID
 
+        # 기본 폴더 설정 (없으면 "blogger" 폴더 자동 생성)
         if not folder_id or folder_id == "YOUR_DRIVE_FOLDER_ID":
             query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
             results = drive_service.files().list(q=query, fields="files(id, name)").execute()
@@ -171,10 +161,16 @@ def upload_to_drive(file_path, file_name):
                 folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
                 folder_id = folder.get("id")
 
+        # 파일 업로드
         file_metadata = {"name": file_name, "parents": [folder_id]}
         media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
-        file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+        file = drive_service.files().create(
+            body=file_metadata,
+            media_body=media,
+            fields="id"
+        ).execute()
 
+        # 공개 권한 부여
         drive_service.permissions().create(
             fileId=file["id"],
             body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
@@ -208,7 +204,6 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
         log_thumb_step(ws, row_idx, f"에러:{e}")
         return ""
 
-
 # ================================
 # OpenAI GPT 처리
 # ================================
@@ -223,14 +218,20 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
         "출력은 반드시 <p data-ke-size='size18'> 단락으로 나눠서."
     )
     user_msg = f"[앱명] {app_name}\n[키워드] {keyword_str}\n\n{compact}"
-    resp = client.chat.completions.create(
-        model="gpt-4.1-mini",
-        messages=[{"role": "system", "content": system_msg},{"role": "user", "content": user_msg}],
-        temperature=0.7,
-        max_tokens=600
-    )
-    return resp.choices[0].message.content.strip()
-
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg}
+            ],
+            temperature=0.7,
+            max_tokens=600
+        )
+        return resp.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"에러: GPT 처리 실패: {e}")
+        return original_html
 
 # ================================
 # 서론·마무리 랜덤 (SEO 최적화 + 문장 확장)
@@ -277,9 +278,9 @@ def make_intro(title, keyword):
 <div id="jm">&nbsp;</div>
 <p data-ke-size="size18">
 {intro}
-이번 글에서는 특히 "{title}" 관련 앱들을 집중적으로 소개합니다. 
-구글플레이스토어에서 "{keyword}" 검색 시 상위에 노출되는 인기 앱들을 기준으로 꼼꼼히 선정했습니다. 
-스마트폰 사용자라면 꼭 알아야 할 필수 어플들을 함께 확인해 보시고, 필요할 때 바로 활용해 보시길 바랍니다.
+이번 글에서는 "{keyword}" 관련 앱들을 중심으로 살펴봅니다. 
+구글플레이스토어에서 "{keyword}" 검색 시 상위에 노출되는 인기 앱들을 기준으로 엄선했습니다. 
+스마트폰 사용자라면 꼭 설치해볼 만한 필수 어플들을 함께 확인해 보시고, 필요할 때 바로 활용해 보시길 바랍니다.
 </p>
 <span><!--more--></span>
 <p data-ke-size="size18">&nbsp;</p>
@@ -340,12 +341,11 @@ def make_last(title):
 </div>
 """
 
-
 # ================================
-# 앱 크롤링
+# 앱 크롤링 (국가/언어 지정 가능)
 # ================================
-def crawl_apps(keyword):
-    url = f"https://play.google.com/store/search?q={keyword}&c=apps"
+def crawl_apps(keyword, lang="ko", country="KR"):
+    url = f"https://play.google.com/store/search?q={keyword}&c=apps&hl={lang}&gl={country}"
     resp = requests.get(url, headers={"User-Agent":"Mozilla/5.0"})
     soup = BeautifulSoup(resp.text, "html.parser")
     source = soup.find_all(class_="ULeU3b")
@@ -357,57 +357,29 @@ def crawl_apps(keyword):
     return app_links[3:]
 
 # ================================
-# 메인 실행 (마지막 완 행 기반 순차 로테이션)
+# 메인 실행 (시트3 기반, 특정 블로그 고정)
 # ================================
-A_CANDIDATES = ["스마트폰", "핸드폰", "휴대폰", "안드로이드"]
-C_CANDIDATES = ["어플 추천 앱", "앱 추천 어플"]
-
-def get_last_completed(ws):
-    rows = ws.get_all_values()
-    last_a, last_c = None, None
-    for i in range(len(rows)-1, 0, -1):  # 마지막 행부터 위로 탐색
-        if len(rows[i]) > 3 and rows[i][3].strip() == "완":  # D열=완
-            last_a = rows[i][0].strip() if len(rows[i]) > 0 else ""
-            last_c = rows[i][2].strip() if len(rows[i]) > 2 else ""
-            break
-    return last_a, last_c
-
 try:
-    # ✅ 마지막 "완" 행의 A, C 값 읽기
-    prev_a, prev_c = get_last_completed(ws)
-
-    # A 후보 순차 선택
-    if prev_a in A_CANDIDATES:
-        a_idx = (A_CANDIDATES.index(prev_a) + 1) % len(A_CANDIDATES)
-    else:
-        a_idx = 0
-    chosen_a = A_CANDIDATES[a_idx]
-
-    # C 후보 순차 선택
-    if prev_c in C_CANDIDATES:
-        c_idx = (C_CANDIDATES.index(prev_c) + 1) % len(C_CANDIDATES)
-    else:
-        c_idx = 0
-    chosen_c = C_CANDIDATES[c_idx]
-
-    # ✅ 이번 대상 행 찾기
     rows = ws.get_all_values()
-    target_row, keyword, title = None, None, None
-    for i, row in enumerate(rows[1:], start=2):
-        if row[1] and (not row[3] or row[3].strip() != "완"):  # B열 값 있고, 아직 '완' 아님
-            target_row = i
-            b_val = row[1].strip()
-            keyword = b_val
-            title = f"{chosen_a} {b_val} {chosen_c}".strip()
+    target_row, keyword, label, title = None, None, None, None
+
+    # ✅ 대상 행 찾기 (A열=키워드, F열 != "완")
+    for i, row in enumerate(rows[1:], start=2):  # 2행부터 시작
+        kw = row[0].strip() if len(row) > 0 else ""   # A열: 키워드
+        lb = row[1].strip() if len(row) > 1 else ""   # B열: 라벨
+        done = row[5].strip() if len(row) > 5 else "" # F열: 완료 여부
+        if kw and done != "완":
+            target_row, keyword, label = i, kw, lb
+            title = f"{kw} 어플 추천 앱"
             break
 
-    if not keyword or not title:
+    if not keyword:
         print("처리할 키워드 없음")
         exit()
 
-    print(f"이번 실행: {title}")
+    print(f"👉 이번 실행: {title} (라벨={label})")
 
-    # 썸네일 생성
+    # ✅ 썸네일 생성
     thumb_dir = "thumbnails"
     os.makedirs(thumb_dir, exist_ok=True)
     thumb_path = os.path.join(thumb_dir, f"{keyword}.png")
@@ -422,16 +394,16 @@ try:
         <br /><br />
         """
 
-    # 앱 크롤링
+    # ✅ 앱 크롤링
     app_links = crawl_apps(keyword)
     print(f"수집된 앱 링크: {len(app_links)}개")
 
-    # 해시태그 문자열 생성
-    tag_list = title.split()
-    tag_str = " ".join([f"#{t}" for t in tag_list])
+    # ✅ 본문 작성
+    tag_str = " ".join([f"#{t}" for t in title.split()])
     for j, app_url in enumerate(app_links, 1):
-        if j > 7: break
-        resp = requests.get(app_url, headers={"User-Agent":"Mozilla/5.0"})
+        if j > 7:
+            break
+        resp = requests.get(app_url, headers={"User-Agent": "Mozilla/5.0"})
         soup = BeautifulSoup(resp.text, "html.parser")
         h1 = soup.find("h1").text if soup.find("h1") else f"앱 {j}"
         raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
@@ -447,40 +419,18 @@ try:
         """
     html += make_last(title)
 
-    # 현재 블로그 인덱스 읽기 (G1 셀)
-    try:
-        blog_idx_val = ws.cell(1, 7).value  # G1
-        blog_idx = int(blog_idx_val) if blog_idx_val else 0
-    except:
-        blog_idx = 0
-
-    blog_idx = blog_idx % len(BLOG_IDS)
-    BLOG_ID = BLOG_IDS[blog_idx]
-
-    # Blogger 업로드
-    post_body = {"content": html, "title": title, "labels": ["앱","추천"]}
+    # ✅ Blogger 업로드 (고정 BLOG_ID + 라벨=B열 값)
+    post_body = {"content": html, "title": title, "labels": [label]}
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False).execute()
     url = res.get("url", "")
     print(f"✅ 업로드 성공: {url}")
 
-    # ✅ 시트 업데이트 (선택된 A, C 값 기록)
-    ws.update_cell(target_row, 1, chosen_a)  # A열 갱신
-    ws.update_cell(target_row, 3, chosen_c)  # C열 갱신
-    ws.update_cell(target_row, 4, "완")      # D열 완료 표시
-    ws.update_cell(target_row, 7, url)       # G열 포스팅 URL
-    ws.update_cell(1, 7, (blog_idx + 1) % len(BLOG_IDS))  # 다음 블로그 인덱스 기록
-
-
+    # ✅ 시트 업데이트
+    ws.update_cell(target_row, 6, "완")  # F열: 완료 기록
+    ws.update_cell(target_row, 10, url)  # J열: 포스팅 URL 기록
 
 except Exception as e:
     tb = traceback.format_exc()
-    print("실패:", e, tb)
-
-
-
-
-
-
-
-
-
+    print("실패:", e)
+    if target_row:
+        ws.update_cell(target_row, 11, str(e))  # K열: 오류 메시지 기록
