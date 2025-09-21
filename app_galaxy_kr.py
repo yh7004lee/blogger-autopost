@@ -10,7 +10,7 @@ from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials as UserCredentials
 from google.auth.transport.requests import Request
 from PIL import Image, ImageDraw, ImageFont
-
+import urllib.parse
 # ================================
 # 환경 변수 및 기본 설정
 # ================================
@@ -465,36 +465,37 @@ try:
     for j, app_url in enumerate(app_links, 1):
         if j > 7:
             break
-    resp = requests.get(app_url, headers={"User-Agent": "Mozilla/5.0"})
-    soup = BeautifulSoup(resp.text, "html.parser")
-    h1 = soup.find("h1").text if soup.find("h1") else f"앱 {j}"
-    raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
-    desc = rewrite_app_description(raw_desc, h1, keyword)
-
-    # ✅ 라벨 링크 추가 (1번째, 3번째 소제목 위)
-    if j in (1, 3) and label:
-        encoded_label = urllib.parse.quote(label)
-        link_block = f"""
-        <div class="ottistMultiRelated">
-          <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
-            <span style="font-size: medium;"><strong>추천 {label} 어플 보러가기</strong></span>
-            <i class="fas fa-link 2xs"></i>
-          </a>
-        </div>
+        resp = requests.get(app_url, headers={"User-Agent": "Mozilla/5.0"})
+        soup = BeautifulSoup(resp.text, "html.parser")
+        h1 = soup.find("h1").text if soup.find("h1") else f"앱 {j}"
+        raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
+        desc = rewrite_app_description(raw_desc, h1, keyword)
+    
+        # ✅ 라벨 링크 추가 (1번째, 3번째 소제목 위)
+        if j in (1, 3) and label:
+            encoded_label = urllib.parse.quote(label)
+            link_block = f"""
+            <div class="ottistMultiRelated">
+              <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
+                <span style="font-size: medium;"><strong>추천 {label} 어플 보러가기</strong></span>
+                <i class="fas fa-link 2xs"></i>
+              </a>
+            </div>
+            <br /><br /><br />
+            """
+            html += link_block
+    
+        # ✅ 기본 소제목+내용
+        html += f"""
+        <h2 data-ke-size="size26">{j}. {h1} 어플 소개</h2>
+        {desc}
+        <p style="text-align: center;" data-ke-size="size18">
+          <a class="myButton" href="{app_url}">{h1} 앱 다운로드</a>
+        </p>
+        <p data-ke-size="size18">{tag_str}</p>
         <br /><br /><br />
         """
-        html += link_block
 
-    # ✅ 기본 소제목+내용
-    html += f"""
-    <h2 data-ke-size="size26">{j}. {h1} 어플 소개</h2>
-    {desc}
-    <p style="text-align: center;" data-ke-size="size18">
-      <a class="myButton" href="{app_url}">{h1} 앱 다운로드</a>
-    </p>
-    <p data-ke-size="size18">{tag_str}</p>
-    <br /><br /><br />
-    """
 
     html += make_last(title)
     # ✅ 추천글 박스 삽입 (여기!)
@@ -519,5 +520,6 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 오류 메시지 기록
+
 
 
