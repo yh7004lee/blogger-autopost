@@ -380,7 +380,7 @@ end_greet = [
 
 def make_last(title):
     return f"""
-<p data-ke-size="size18">&nbsp;</p>
+
 <div style="margin:40px 0px 20px 0px;">
 <p data-ke-size="size18">
 {random.choice(end_start)}  
@@ -520,6 +520,7 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 오류 메시지 기록
+
 
 
 
