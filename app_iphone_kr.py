@@ -587,6 +587,10 @@ if __name__ == "__main__":
         apps = search_app_store_ids(keyword, limit=10)
         if not apps:
             sheet_append_log(ws3, target_row, "앱 ID 없음 → 종료")
+            # 👉 완료 처리 후 종료
+            ws3.update_cell(target_row, 4, "완")      # D열 완료
+            ws3.update_cell(target_row, 7, "")        # G열 = URL 비움
+            sheet_append_log(ws3, target_row, "시트 기록 완료: D='완', G='' (검색결과 없음)")
             raise SystemExit(0)
         sheet_append_log(ws3, target_row, f"앱 ID={[(a['id'], a['name']) for a in apps]}")
 
@@ -620,7 +624,7 @@ if __name__ == "__main__":
 
         # 8) 앱 상세 수집 → 본문 조립
         for j, app in enumerate(apps, 1):
-            if j > 5:
+            if j > 7:
                 break
             try:
                 sheet_append_log(ws3, target_row, f"[{j}] 앱 수집 시작 id={app['id']}")
@@ -709,6 +713,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
