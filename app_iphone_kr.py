@@ -304,15 +304,17 @@ def search_app_store_ids(keyword, limit=20, country="kr", ws=None, row_idx=None)
         all_apps.extend(fetch(f"{keyword} 어플"))
 
     # ✅ 4차: 그래도 부족하면 시트 E열(영문 번역 키워드) 사용
+    # ✅ E열(5번째)에서 영문 키워드 읽기
     if len(all_apps) < 7 and ws is not None and row_idx is not None:
         try:
-            eng_keyword = ws.cell(row_idx, 4).value or ""   # D열 = 4번째
+            eng_keyword = ws.cell(row_idx, 5).value or ""   # E열 = 5번째
             eng_keyword = eng_keyword.strip()
             if eng_keyword:
                 print(f"[Fallback: E열 영문 키워드 사용 → {eng_keyword}]")
                 all_apps.extend(fetch(eng_keyword))
         except Exception as e:
             print("[WARN] E열 영문 키워드 가져오기 실패:", e)
+
 
     # ✅ trackId 기준으로 중복 제거
     seen = set()
@@ -739,6 +741,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
