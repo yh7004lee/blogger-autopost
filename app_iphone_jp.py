@@ -691,9 +691,10 @@ if __name__ == "__main__":
                 <br /><br />
                 """
                 # ✅ 3번째 섹션이면 라벨 기반 추천 박스 삽입
-                if j == 2 and label_val:
+                # ✅ 2번째 소제목 위 → j==1
+                if j == 1 and label_val:
                     encoded_label = urllib.parse.quote(label_val)
-                    section_html += f"""
+                    section_html = f"""
                 <div class="ottistMultiRelated">
                   <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
                     <span style="font-size: medium;"><strong>おすすめ {label_val} アプリを見る</strong></span>
@@ -701,7 +702,21 @@ if __name__ == "__main__":
                   </a>
                 </div>
                 <br /><br /><br />
-                """
+                """ + section_html
+
+                # ✅ 4번째 소제목 위 → j==3
+                if j == 3 and label_val:
+                    encoded_label = urllib.parse.quote(label_val)
+                    section_html = f"""
+                <div class="ottistMultiRelated">
+                  <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
+                    <span style="font-size: medium;"><strong>関連する {label_val} アプリもチェック</strong></span>
+                    <i class="fas fa-link 2xs"></i>
+                  </a>
+                </div>
+                <br /><br /><br />
+                """ + section_html
+
                 
                 html_full += section_html
                 sheet_append_log(ws4, target_row, f"[{j}] {app_name} セクション完了")
@@ -743,6 +758,7 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
+
 
 
 
