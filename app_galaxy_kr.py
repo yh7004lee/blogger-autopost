@@ -463,8 +463,8 @@ try:
     # ✅ 본문 작성
     tag_str = " ".join([f"#{t}" for t in title.split()])
     for j, app_url in enumerate(app_links, 1):
-    if j > 7:
-        break
+        if j > 7:
+            break
     resp = requests.get(app_url, headers={"User-Agent": "Mozilla/5.0"})
     soup = BeautifulSoup(resp.text, "html.parser")
     h1 = soup.find("h1").text if soup.find("h1") else f"앱 {j}"
@@ -519,4 +519,5 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 오류 메시지 기록
+
 
