@@ -265,41 +265,66 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
         return f"<p data-ke-size='size18'>{app_name} 소개</p>"
 
 # =============== 앱스토어 앱 ID 추출 (iTunes Search API) ===============
-def search_app_store_ids(keyword, limit=10, country="kr"):
+# =============== 앱스토어 앱 ID 추출 (한국) ===============
+def search_app_store_ids(keyword, limit=20, country="kr", ws=None, row_idx=None):
     import urllib.parse
-    encoded = urllib.parse.quote(keyword)
-    url = f"https://itunes.apple.com/search?term={encoded}&country={country}&entity=software&limit={limit}"
-    print("[iTunes API 요청]", url)
 
-    try:
-        res = requests.get(url, timeout=10)
-        if res.status_code != 200:
-            print(f"[iTunes API 실패] HTTP {res.status_code}")
+    def fetch(term):
+        encoded = urllib.parse.quote(term)
+        url = f"https://itunes.apple.com/search?term={encoded}&country={country}&entity=software&limit={limit}"
+        print("[iTunes API 요청]", url)
+        try:
+            res = requests.get(url, timeout=10)
+            if res.status_code != 200:
+                print(f"[iTunes API 실패] HTTP {res.status_code}")
+                return []
+            data = res.json()
+            results = data.get("results", [])
+            apps = []
+            for app in results:
+                if "trackId" in app and "trackName" in app:
+                    apps.append({"id": str(app["trackId"]), "name": app["trackName"]})
+            return apps
+        except Exception as e:
+            print("[iTunes API 예외]", e)
+            print(traceback.format_exc())
             return []
 
-        data = res.json()
-        results = data.get("results", [])
+    all_apps = []
 
-        apps = []
-        for app in results:
-            if "trackId" in app and "trackName" in app:
-                apps.append({"id": str(app["trackId"]), "name": app["trackName"]})
+    # ✅ 1차: 원 키워드
+    all_apps.extend(fetch(keyword))
 
-        # 중복 제거 (trackId 기준)
-        seen = set()
-        unique_apps = []
-        for app in apps:
-            if app["id"] not in seen:
-                seen.add(app["id"])
-                unique_apps.append(app)
+    # ✅ 2차: 부족하면 "app" 붙여서
+    if len(all_apps) < 7:
+        all_apps.extend(fetch(f"{keyword} app"))
 
-        print(f"[iTunes API 결과] {[(a['id'], a['name']) for a in unique_apps]}")
-        return unique_apps
+    # ✅ 3차: 그래도 부족하면 "어플" 붙여서
+    if len(all_apps) < 7:
+        all_apps.extend(fetch(f"{keyword} 어플"))
 
-    except Exception as e:
-        print("[iTunes API 예외]", e)
-        print(traceback.format_exc())
-        return []
+    # ✅ 4차: 그래도 부족하면 시트 E열(영문 번역 키워드) 사용
+    if len(all_apps) < 7 and ws is not None and row_idx is not None:
+        try:
+            eng_keyword = ws.cell(row_idx, 5).value or ""   # E열 = 5번째
+            eng_keyword = eng_keyword.strip()
+            if eng_keyword:
+                print(f"[Fallback: E열 영문 키워드 사용 → {eng_keyword}]")
+                all_apps.extend(fetch(eng_keyword))
+        except Exception as e:
+            print("[WARN] E열 영문 키워드 가져오기 실패:", e)
+
+    # ✅ trackId 기준으로 중복 제거
+    seen = set()
+    unique_apps = []
+    for app in all_apps:
+        if app["id"] not in seen:
+            seen.add(app["id"])
+            unique_apps.append(app)
+
+    print(f"[iTunes API 최종 결과] {[(a['id'], a['name']) for a in unique_apps]}")
+    return unique_apps
+
 
 # =============== 앱 상세 페이지 수집 (이름/설명/스크린샷) ===============
 def fetch_app_detail(app_id: str, country="kr"):
@@ -584,7 +609,8 @@ if __name__ == "__main__":
 
         # 4) 앱 ID 목록 검색
         sheet_append_log(ws3, target_row, "앱 ID 검색 시작")
-        apps = search_app_store_ids(keyword, limit=10)
+        apps = search_app_store_ids(keyword, limit=20, ws=ws3, row_idx=target_row)
+
         if not apps:
             sheet_append_log(ws3, target_row, "앱 ID 없음 → 종료")
             # 👉 완료 처리 후 종료
@@ -713,6 +739,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
