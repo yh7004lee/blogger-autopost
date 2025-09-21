@@ -724,7 +724,7 @@ if __name__ == "__main__":
         # 9) 마무리
         html_full += build_ending_block(title, keyword)
         sheet_append_log(ws3, target_row, "마무리 블록 생성 완료")
-        related_box = get_related_posts(BLOG_ID, count=4)
+        related_box = get_related_posts(BLOG_ID, count=6
         html_full += related_box
         # ✅ 자동 목차 스크립트 호출
         html_full += "<script>mbtTOC();</script><br /><br />"
@@ -757,6 +757,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
