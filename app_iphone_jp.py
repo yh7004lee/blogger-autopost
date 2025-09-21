@@ -598,7 +598,12 @@ if __name__ == "__main__":
         apps = search_app_store_ids(keyword, limit=10)
         if not apps:
             sheet_append_log(ws4, target_row, "アプリIDなし → 終了")
+            # 👉 완료 표시 후 종료
+            ws4.update_cell(target_row, 4, "完")      # D열 완료
+            ws4.update_cell(target_row, 7, "")        # G열 = URL 비움
+            sheet_append_log(ws4, target_row, "シート記録完了: D='完', G='' (検索結果なし)")
             raise SystemExit(0)
+
         sheet_append_log(ws4, target_row, f"アプリID={[(a['id'], a['name']) for a in apps]}")
 
         # 5) 서론
@@ -717,6 +722,7 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
+
 
 
 
