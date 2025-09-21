@@ -272,7 +272,7 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
 
 # =============== 앱스토어 앱 ID 추출 (iTunes Search API, 일본) ===============
 # =============== 앱스토어 앱 ID 추출 (일본) ===============
-def search_app_store_ids(keyword, limit=20, country="jp"):
+def search_app_store_ids(keyword, limit=20, country="jp", eng_keyword=""):
     import urllib.parse
 
     def fetch(term):
@@ -299,17 +299,22 @@ def search_app_store_ids(keyword, limit=20, country="jp"):
     # ✅ 1차: 원 키워드
     apps = fetch(keyword)
 
-    # ✅ 2차: 부족하면 "app" 붙여서
+    # ✅ 2차: 부족하면 "app"
     if len(apps) < 7:
         more = fetch(f"{keyword} app")
         apps.extend(more)
 
-    # ✅ 3차: 그래도 부족하면 "アプリ" 붙여서
+    # ✅ 3차: 부족하면 "アプリ"
     if len(apps) < 7:
         more = fetch(f"{keyword} アプリ")
         apps.extend(more)
 
-    # ✅ trackId 기준으로 중복 제거
+    # ✅ 4차: 부족하면 E열(영문 키워드) 활용
+    if len(apps) < 7 and eng_keyword:
+        more = fetch(eng_keyword)
+        apps.extend(more)
+
+    # ✅ trackId 기준 중복 제거
     seen = set()
     unique_apps = []
     for app in apps:
@@ -319,6 +324,7 @@ def search_app_store_ids(keyword, limit=20, country="jp"):
 
     print(f"[iTunes API 최종 결과] {[(a['id'], a['name']) for a in unique_apps]}")
     return unique_apps
+
 
 
 
@@ -609,7 +615,8 @@ if __name__ == "__main__":
 
         # 4) 앱 ID 목록 검색
         sheet_append_log(ws4, target_row, "アプリID検索開始")
-        apps = search_app_store_ids(keyword, limit=10)
+        eng_keyword = row[4].strip() if len(row) > 4 else ""  # E열 = 영문 키워드
+        apps = search_app_store_ids(keyword, limit=20, eng_keyword=eng_keyword)
         if not apps:
             sheet_append_log(ws4, target_row, "アプリIDなし → 終了")
             # 👉 완료 표시 후 종료
@@ -736,6 +743,7 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
+
 
 
 
