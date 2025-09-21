@@ -623,7 +623,7 @@ if __name__ == "__main__":
             # 👉 완료 표시 후 종료
             ws4.update_cell(target_row, 4, "完")      # D열 완료
             ws4.update_cell(target_row, 7, "")        # G열 = URL 비움
-            sheet_append_log(ws4, target_row, "シート記録完了: D='完', G='' (検索結果なし)")
+            sheet_append_log(ws4, target_row, "シート記録完了: E='完', G='' (検索結果なし)")
             raise SystemExit(0)
 
         sheet_append_log(ws4, target_row, f"アプリID={[(a['id'], a['name']) for a in apps]}")
@@ -731,8 +731,7 @@ if __name__ == "__main__":
         # 11) 시트 기록
         ws4.update_cell(target_row, 5, "完")      # E열 완료
         ws4.update_cell(target_row, 7, post_url)  # G열 = URL
-        sheet_append_log(ws4, target_row, f"シート記録完了: D='完', G='{post_url}'")
-
+        sheet_append_log(ws4, target_row, f"シート記録完了: E='完', G='{post_url}'")
         # 12) 완료
         sheet_append_log(ws4, target_row, "正常終了")
 
@@ -744,6 +743,7 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
+
 
 
 
