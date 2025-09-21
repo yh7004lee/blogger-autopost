@@ -727,7 +727,7 @@ if __name__ == "__main__":
         related_box = get_related_posts(BLOG_ID, count=4)
         html_full += related_box
         # ✅ 자동 목차 스크립트 호출
-        html_full += "<script>mbtTOC();</script>"
+        html_full += "<script>mbtTOC();</script><br /><br />"
 
         # 10) 업로드
         try:
@@ -757,6 +757,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
