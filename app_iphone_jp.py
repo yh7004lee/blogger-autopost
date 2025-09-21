@@ -223,9 +223,13 @@ def make_post_title(keyword: str) -> str:
     return f"{random.choice(front_choices)} {keyword} {random.choice(back_choices)}"
 
 def make_post_labels(sheet_row: list) -> list:
-    # 항상 "アプリ" + 시트 B열 라벨
+    # 항상 "アプリ" + "iPhone" + 시트 B열 라벨
     label_val = sheet_row[1].strip() if len(sheet_row) > 1 and sheet_row[1] else ""
-    return ["アプリ", label_val] if label_val else ["アプリ"]
+    labels = ["アプリ", "iPhone"]
+    if label_val:
+        labels.append(label_val)
+    return labels
+
 
 
 # =============== OpenAI GPT 재작성 (앱 설명) ===============
@@ -758,6 +762,7 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
+
 
 
 
