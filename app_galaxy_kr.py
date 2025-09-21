@@ -486,14 +486,16 @@ try:
             html += link_block
     
         # ✅ 기본 소제목+내용
-        html += f"""<br />
+        html += f"""
         <h2 data-ke-size="size26">{j}. {h1} 어플 소개</h2>
+        <br />
         {desc}
+        <br />
         <p style="text-align: center;" data-ke-size="size18">
           <a class="myButton" href="{app_url}">{h1} 앱 다운로드</a>
         </p><br /><br />
         <p data-ke-size="size18">{tag_str}</p>
-        <br /><br />
+        <br /><br /><br />
         """
 
 
@@ -520,6 +522,7 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 오류 메시지 기록
+
 
 
 
