@@ -218,9 +218,13 @@ def make_post_title(keyword: str) -> str:
     return f"{random.choice(front_choices)} {keyword} {random.choice(back_choices)}"
 
 def make_post_labels(sheet_row: list) -> list:
-    # 항상 "어플" + 시트 B열 라벨
+    # 항상 "어플" + "아이폰" + 시트 B열 라벨
     label_val = sheet_row[1].strip() if len(sheet_row) > 1 and sheet_row[1] else ""
-    return ["어플", label_val] if label_val else ["어플"]
+    labels = ["어플", "아이폰"]
+    if label_val:
+        labels.append(label_val)
+    return labels
+
 
 # =============== OpenAI GPT 재작성 (앱 설명) ===============
 def rewrite_app_description(original_html: str, app_name: str, keyword_str: str) -> str:
@@ -757,6 +761,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
