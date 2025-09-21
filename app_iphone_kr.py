@@ -310,7 +310,7 @@ def search_app_store_ids(keyword, limit=20, country="kr", ws=None, row_idx=None)
             eng_keyword = ws.cell(row_idx, 5).value or ""   # E열 = 5번째
             eng_keyword = eng_keyword.strip()
             if eng_keyword:
-                print(f"[Fallback: E열 영문 키워드 사용 → {eng_keyword}]")
+                print(f"[Fallback: D열 영문 키워드 사용 → {eng_keyword}]")
                 all_apps.extend(fetch(eng_keyword))
         except Exception as e:
             print("[WARN] E열 영문 키워드 가져오기 실패:", e)
@@ -741,6 +741,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
