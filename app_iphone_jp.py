@@ -271,41 +271,55 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
 
 
 # =============== 앱스토어 앱 ID 추출 (iTunes Search API, 일본) ===============
-def search_app_store_ids(keyword, limit=10, country="jp"):
+# =============== 앱스토어 앱 ID 추출 (일본) ===============
+def search_app_store_ids(keyword, limit=20, country="jp"):
     import urllib.parse
-    encoded = urllib.parse.quote(keyword)
-    url = f"https://itunes.apple.com/search?term={encoded}&country={country}&entity=software&limit={limit}"
-    print("[iTunes API 요청]", url)
 
-    try:
-        res = requests.get(url, timeout=10)
-        if res.status_code != 200:
-            print(f"[iTunes API 실패] HTTP {res.status_code}")
+    def fetch(term):
+        encoded = urllib.parse.quote(term)
+        url = f"https://itunes.apple.com/search?term={encoded}&country={country}&entity=software&limit={limit}"
+        print("[iTunes API 요청]", url)
+        try:
+            res = requests.get(url, timeout=10)
+            if res.status_code != 200:
+                print(f"[iTunes API 실패] HTTP {res.status_code}")
+                return []
+            data = res.json()
+            results = data.get("results", [])
+            apps = []
+            for app in results:
+                if "trackId" in app and "trackName" in app:
+                    apps.append({"id": str(app["trackId"]), "name": app["trackName"]})
+            return apps
+        except Exception as e:
+            print("[iTunes API 예외]", e)
+            print(traceback.format_exc())
             return []
 
-        data = res.json()
-        results = data.get("results", [])
+    # ✅ 1차: 원 키워드
+    apps = fetch(keyword)
 
-        apps = []
-        for app in results:
-            if "trackId" in app and "trackName" in app:
-                apps.append({"id": str(app["trackId"]), "name": app["trackName"]})
+    # ✅ 2차: 부족하면 "app" 붙여서
+    if len(apps) < 7:
+        more = fetch(f"{keyword} app")
+        apps.extend(more)
 
-        # 중복 제거 (trackId 기준)
-        seen = set()
-        unique_apps = []
-        for app in apps:
-            if app["id"] not in seen:
-                seen.add(app["id"])
-                unique_apps.append(app)
+    # ✅ 3차: 그래도 부족하면 "アプリ" 붙여서
+    if len(apps) < 7:
+        more = fetch(f"{keyword} アプリ")
+        apps.extend(more)
 
-        print(f"[iTunes API 결과] {[(a['id'], a['name']) for a in unique_apps]}")
-        return unique_apps
+    # ✅ trackId 기준으로 중복 제거
+    seen = set()
+    unique_apps = []
+    for app in apps:
+        if app["id"] not in seen:
+            seen.add(app["id"])
+            unique_apps.append(app)
 
-    except Exception as e:
-        print("[iTunes API 예외]", e)
-        print(traceback.format_exc())
-        return []
+    print(f"[iTunes API 최종 결과] {[(a['id'], a['name']) for a in unique_apps]}")
+    return unique_apps
+
 
 
 # =============== 앱 상세 페이지 수집 (이름/설명/스크린샷, 일본) ===============
@@ -722,6 +736,7 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
+
 
 
 
