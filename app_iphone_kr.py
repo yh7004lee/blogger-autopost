@@ -730,7 +730,7 @@ if __name__ == "__main__":
         # 11) 시트 기록
         ws3.update_cell(target_row, 5, "완")      # ✅ E열 완료
         ws3.update_cell(target_row, 7, post_url)  # G열 = URL
-        sheet_append_log(ws3, target_row, f"시트 기록 완료: D='완', G='{post_url}'")
+        sheet_append_log(ws3, target_row, f"시트 기록 완료: E='완', G='{post_url}'")
 
         # 12) 완료
         sheet_append_log(ws3, target_row, "작업 정상 종료")
@@ -743,6 +743,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
