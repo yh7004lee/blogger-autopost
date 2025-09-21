@@ -562,8 +562,8 @@ def pick_target_row(ws):
     rows = ws.get_all_values()
     for i, row in enumerate(rows[1:], start=2):  # 2행부터
         a = row[0].strip() if len(row) > 0 and row[0] else ""  # A열 = 키워드
-        d = row[3].strip() if len(row) > 3 and row[3] else ""  # D열 = 완료
-        if a and d != "完":  # 일본 버전에서는 완료 표시를 '完'으로 기록
+        d = row[4].strip() if len(row) > 4 and row[4] else ""  # E열 = 완료
+        if a and d != "完":
             return i, row
     return None, None
 
@@ -615,8 +615,9 @@ if __name__ == "__main__":
 
         # 4) 앱 ID 목록 검색
         sheet_append_log(ws4, target_row, "アプリID検索開始")
-        eng_keyword = row[4].strip() if len(row) > 4 else ""  # E열 = 영문 키워드
+        eng_keyword = row[3].strip() if len(row) > 3 else ""  # D열 = 영문 키워드
         apps = search_app_store_ids(keyword, limit=20, eng_keyword=eng_keyword)
+
         if not apps:
             sheet_append_log(ws4, target_row, "アプリIDなし → 終了")
             # 👉 완료 표시 후 종료
@@ -728,7 +729,7 @@ if __name__ == "__main__":
             raise
 
         # 11) 시트 기록
-        ws4.update_cell(target_row, 4, "完")      # D열 완료
+        ws4.update_cell(target_row, 5, "完")      # E열 완료
         ws4.update_cell(target_row, 7, post_url)  # G열 = URL
         sheet_append_log(ws4, target_row, f"シート記録完了: D='完', G='{post_url}'")
 
@@ -743,6 +744,7 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
+
 
 
 
