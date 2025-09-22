@@ -164,7 +164,7 @@ def make_thumb(save_path: str, var_title: str):
 
         # ✅ 일본어 폰트 적용
         try:
-            font = ImageFont.truetype("NotoSansJP-VariableFont_wght.ttf", 48)
+            font = ImageFont.truetype("assets/fonts/NotoSansJP-VariableFont_wght.ttf", 48)
         except:
             font = ImageFont.load_default()
 
@@ -510,7 +510,7 @@ try:
     html += "<script>mbtTOC();</script><br /><br />"
 
     # ✅ Blogger アップロード (固定 BLOG_ID + ラベル=B列)
-    labels = [label, "スマホ"] if label else ["スマホ"]
+    labels = [label, "Android"] if label else ["Android"]
     
     post_body = {
         "content": html,
@@ -530,6 +530,7 @@ except Exception as e:
     print("失敗:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K列: エラーメッセージ記録
+
 
 
 
