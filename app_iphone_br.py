@@ -608,7 +608,7 @@ def sheet_append_log(ws, row_idx, message, tries=3, delay=2):
     return False
 
 
-# =============== 메인 실행 ===============
+# =============== メイン実行 ===============
 if __name__ == "__main__":
     try:
         # 1) sheet4에서 대상 행/데이터
@@ -617,16 +617,16 @@ if __name__ == "__main__":
             sheet_append_log(ws4, 2, "処理するキーワードがありません(A列)")
             raise SystemExit(0)
 
-        keyword = row[0].strip()  # A열 = 키워드
-        label_val = row[1].strip() if len(row) > 1 else ""  # B열 = 라벨
+        keyword = row[0].strip()  # A열 = キーワード
+        label_val = row[1].strip() if len(row) > 1 else ""  # B열 = ラベル
 
         sheet_append_log(ws4, target_row, f"対象行={target_row}, キーワード='{keyword}', ラベル='{label_val}'")
 
-        # 2) 제목 생성
+        # 2) タイトル生成
         title = make_post_title(keyword)
         sheet_append_log(ws4, target_row, f"タイトル='{title}'")
 
-        # 3) 썸네일 생성 & 업로드
+        # 3) サムネイル生成 & アップロード
         thumb_dir = "thumbnails"
         os.makedirs(thumb_dir, exist_ok=True)
         thumb_path = os.path.join(thumb_dir, f"{keyword}.png")
@@ -634,20 +634,31 @@ if __name__ == "__main__":
         thumb_url = make_thumb_with_logging(ws4, target_row, thumb_path, title)
         sheet_append_log(ws4, target_row, f"サムネイル結果: {thumb_url or '失敗'}")
 
-        # 4) 앱 ID 목록 검색
+        # 4) アプリID検索
         sheet_append_log(ws4, target_row, "アプリID検索開始")
-        eng_keyword = row[3].strip() if len(row) > 3 else ""  # D열 = 영문 키워드
+        eng_keyword = row[3].strip() if len(row) > 3 else ""  # D열 = 英語キーワード
         apps = search_app_store_ids(keyword, limit=20, eng_keyword=eng_keyword)
 
+        # ✅ 앱이 하나도 없을 경우
         if not apps:
             sheet_append_log(ws4, target_row, "アプリIDなし → 終了")
-            # 👉 완료 표시 후 종료
-            ws4.update_cell(target_row, 4, "完")      # D열 완료
+            ws4.update_cell(target_row, 5, "完")      # E열 완료
             ws4.update_cell(target_row, 7, "")        # G열 = URL 비움
             sheet_append_log(ws4, target_row, "シート記録完了: E='完', G='' (検索結果なし)")
             raise SystemExit(0)
 
+        # ✅ 앱이 3개 미만일 경우
+        if len(apps) < 3:
+            sheet_append_log(ws4, target_row, "アプリ数が3未満 → 完了処理")
+            ws4.update_cell(target_row, 5, "完")      # E열 완료
+            ws4.update_cell(target_row, 7, "")        # G열 = URL 비움
+            sheet_append_log(ws4, target_row, "シート記録完了: E='完', G='' (アプリ数不足)")
+            raise SystemExit(0)
+
+        # ✅ 앱이 충분히 있을 경우 → 로그에 기록
         sheet_append_log(ws4, target_row, f"アプリID={[(a['id'], a['name']) for a in apps]}")
+
+        
 
         # 5) 서론
         html_full = build_css_block()
@@ -779,23 +790,4 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
