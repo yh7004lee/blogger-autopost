@@ -150,7 +150,7 @@ def pick_random_background() -> str:
     return random.choice(files) if files else ""
 
 # ================================
-# 썸네일 생성 (일본어 폰트 적용)
+# 썸네일 생성 (일본어 폰트 적용, 안전한 줄바꿈)
 # ================================
 def make_thumb(save_path: str, var_title: str):
     try:
@@ -177,9 +177,26 @@ def make_thumb(save_path: str, var_title: str):
 
         draw = ImageDraw.Draw(canvas)
 
-        # 텍스트 줄바꿈 처리 (일본어 기준)
-        var_title_wrap = textwrap.wrap(var_title, width=12)
-        bbox = font.getbbox("あ")  # 일본어 기준문자
+        # ✅ 실제 픽셀 기반 줄바꿈 함수
+        def wrap_text(text, font, max_width):
+            lines = []
+            line = ""
+            for ch in text:
+                test_line = line + ch
+                text_width = draw.textlength(test_line, font=font)
+                if text_width <= max_width:
+                    line = test_line
+                else:
+                    lines.append(line)
+                    line = ch
+            if line:
+                lines.append(line)
+            return lines
+
+        # 🔹 텍스트를 460픽셀 기준으로 줄바꿈 (500 여백 고려)
+        var_title_wrap = wrap_text(var_title, font, max_width=460)
+
+        bbox = font.getbbox("あ")
         line_height = (bbox[3] - bbox[1]) + 12
         total_text_height = len(var_title_wrap) * line_height
         y = 500 / 2 - total_text_height / 2
@@ -530,6 +547,7 @@ except Exception as e:
     print("失敗:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K列: エラーメッセージ記録
+
 
 
 
