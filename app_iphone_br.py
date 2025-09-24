@@ -28,9 +28,9 @@ from PIL import Image, ImageDraw, ImageFont
 SHEET_ID = os.getenv("SHEET_ID", "1SeQogbinIrDTMKjWhGgWPEQq8xv6ARv5n3I-2BsMrSc")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
-# 블로그 ID / URL (일본 버전으로 고정)
-BLOG_ID = "7573892357971022707"
-BLOG_URL = "https://jpapp.appsos.kr/"
+# 블로그 ID / URL (브라질 버전으로 고정)
+BLOG_ID = "2435612110610421419"
+BLOG_URL = "https://appbr.appsos.kr/"
 
 # Google Custom Search (선택 사항: 미사용 시 앱스토어 직접 파싱)
 GCS_API_KEY = os.getenv("GCS_API_KEY", "").strip()
@@ -49,8 +49,8 @@ if not OPENAI_API_KEY:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 
-# =============== Google Sheets 인증 (sheet4 사용) ===============
-def get_sheet4():
+# =============== Google Sheets 인증 (sheet5 사용) ===============
+def get_sheet5():
     # 서비스 계정 인증
     service_account_file = "sheetapi.json"
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -58,16 +58,15 @@ def get_sheet4():
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
     try:
-        ws4 = sh.worksheet("sheet4")   # 시트 이름이 'sheet4'인 경우
+        ws5 = sh.worksheet("sheet5")   # 시트 이름이 'sheet5'인 경우
     except Exception:
-        ws4 = sh.get_worksheet(3)      # 0부터 시작 → 네 번째 탭
-    return ws4
+        ws5 = sh.get_worksheet(4)      # 0부터 시작 → 다섯 번째 탭
+    return ws5
 
-ws4 = get_sheet4()
+ws5 = get_sheet5()
 
 # =============== Google Drive 인증 ===============
 def get_drive_service():
-    # GitHub Actions 등에서 사용자 토큰을 pickle 로 저장해서 사용하는 경우를 가정
     token_path = "drive_token_2nd.pickle"
     if not os.path.exists(token_path):
         raise RuntimeError("drive_token_2nd.pickle 없음 — Drive API 사용자 토큰이 필요합니다.")
@@ -120,9 +119,9 @@ def make_thumb(save_path: str, var_title: str):
         else:
             bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
 
-        # 폰트 설정 (일본어 지원 폰트로 교체 필요할 수 있음)
+        # 폰트 설정 (브라질 전용 폰트)
         try:
-            font = ImageFont.truetype(os.path.join("assets", "fonts", "NotoSansJP-VariableFont_wght.ttf"), 48)
+            font = ImageFont.truetype(os.path.join("assets", "fonts", "Gabarito-SemiBold.ttf"), 48)
         except Exception:
             font = ImageFont.load_default()
 
@@ -137,7 +136,6 @@ def make_thumb(save_path: str, var_title: str):
         # 텍스트 그리기
         draw = ImageDraw.Draw(canvas)
 
-        # ✅ 픽셀 단위 줄바꿈 함수
         def wrap_text(text, font, max_width):
             lines, line = [], ""
             for ch in text:
@@ -152,7 +150,6 @@ def make_thumb(save_path: str, var_title: str):
                 lines.append(line)
             return lines
 
-        # 🔹 최대 폭 460px 기준으로 줄바꿈
         var_title_wrap = wrap_text(var_title, font, max_width=460)
 
         bbox = font.getbbox("가")  # 기준 글자
@@ -167,7 +164,6 @@ def make_thumb(save_path: str, var_title: str):
             draw.text((x, y), line, "#FFEECB", font=font)
             y += line_height
 
-        # 크기 조정 후 저장
         canvas = canvas.resize((400, 400))
         canvas.save(save_path, "PNG")
         return True
@@ -182,7 +178,6 @@ def upload_to_drive(file_path, file_name):
         folder_id = DRIVE_FOLDER_ID
 
         if not folder_id or folder_id == "YOUR_DRIVE_FOLDER_ID":
-            # 기본 blogger 폴더 사용
             query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
             results = drive_service.files().list(q=query, fields="files(id, name)").execute()
             items = results.get("files", [])
@@ -197,18 +192,15 @@ def upload_to_drive(file_path, file_name):
         media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
         file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-        # 공개 권한 부여
         drive_service.permissions().create(
             fileId=file["id"],
             body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
         ).execute()
 
-        # ✅ Google CDN(lh3) 주소 반환
         return f"https://lh3.googleusercontent.com/d/{file['id']}"
     except Exception as e:
         print(f"에러: 구글드라이브 업로드 실패: {e}")
         return ""
-
 
 # =============== 썸네일 생성 + 로그 + 업로드 ===============
 def make_thumb_with_logging(ws, row_idx, save_path, title):
@@ -234,19 +226,18 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
 
 # =============== 제목/라벨 생성 ===============
 def make_post_title(keyword: str) -> str:
-    # 일본어 버전 제목 구성
-    front_choices = ["iPhone iPad", "iPad iPhone"]
-    back_choices = ["アプリ おすすめ", "おすすめ アプリ", "アプリ AppStore", "AppStore アプリ"]
+    # 브라질 버전 제목 구성 (순서만 바뀌도록 고정)
+    front_choices = ["iPhone iPad", "iPhone iPad"]
+    back_choices = ["Aplicativo recomendado", "Melhores aplicativos", "AppStore Aplicativo", "Aplicativos AppStore"]
     return f"{random.choice(front_choices)} {keyword} {random.choice(back_choices)}"
 
 def make_post_labels(sheet_row: list) -> list:
-    # 항상 "アプリ" + "iPhone" + 시트 B열 라벨
+    # 항상 "Aplicativo" + "iPhone" + 시트 B열 라벨
     label_val = sheet_row[1].strip() if len(sheet_row) > 1 and sheet_row[1] else ""
-    labels = ["アプリ", "iPhone"]
+    labels = ["Aplicativo", "iPhone"]
     if label_val:
         labels.append(label_val)
     return labels
-
 
 
 # =============== OpenAI GPT 재작성 (앱 설명) ===============
@@ -254,20 +245,20 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
     compact = BeautifulSoup(original_html or "", 'html.parser').get_text(separator=' ', strip=True)
     if not client:
         if compact:
-            return "".join([f"<p data-ke-size='size18'>{line.strip()}</p>" for line in compact.splitlines() if line.strip()]) or f"<p data-ke-size='size18'>{app_name} 紹介</p>"
-        return f"<p data-ke-size='size18'>{app_name} 紹介</p>"
+            return "".join([f"<p data-ke-size='size18'>{line.strip()}</p>" for line in compact.splitlines() if line.strip()]) or f"<p data-ke-size='size18'>{app_name} Introdução</p>"
+        return f"<p data-ke-size='size18'>{app_name} Introdução</p>"
 
     system_msg = (
-        "あなたは日本語のブログ記事を書くコピーライターです。"
-        "内容の事実は保持しつつ、文章や構成を完全にリライトしてください。"
-        "人間が書いたように自然で温かいトーンでお願いします。"
-        "Markdownは禁止、<p data-ke-size='size18'> タグのみ使用してください。"
-        "必ず3〜4つの段落に分けて、各段落は <p data-ke-size='size18'> タグを使用してください。"
+        "Você é um redator que escreve artigos de blog em português do Brasil. "
+        "Mantenha os fatos, mas reescreva completamente o texto de forma natural e envolvente. "
+        "Use um tom humano e amigável. "
+        "Não utilize Markdown, apenas tags <p data-ke-size='size18'>. "
+        "Divida o texto em 3 a 4 parágrafos, cada um com <p data-ke-size='size18'>."
     )
     user_msg = (
-        f"[アプリ名] {app_name}\n"
-        f"[キーワード] {keyword_str}\n"
-        "以下の原文を参考に、ブログ用の紹介文を新しく日本語で書いてください。\n\n"
+        f"[Aplicativo] {app_name}\n"
+        f"[Palavra-chave] {keyword_str}\n"
+        "Reescreva a descrição abaixo em português do Brasil para um blog:\n\n"
         f"{compact}"
     )
     try:
@@ -288,12 +279,11 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
         print("[OpenAI 오류]", e)
         if compact:
             return f"<p data-ke-size='size18'>{compact}</p>"
-        return f"<p data-ke-size='size18'>{app_name} 紹介</p>"
+        return f"<p data-ke-size='size18'>{app_name} Introdução</p>"
 
 
-# =============== 앱스토어 앱 ID 추출 (iTunes Search API, 일본) ===============
-# =============== 앱스토어 앱 ID 추출 (일본) ===============
-def search_app_store_ids(keyword, limit=20, country="jp", eng_keyword=""):
+# =============== 앱스토어 앱 ID 추출 (iTunes Search API, 브라질) ===============
+def search_app_store_ids(keyword, limit=20, country="br", eng_keyword=""):
     import urllib.parse
 
     def fetch(term):
@@ -325,9 +315,9 @@ def search_app_store_ids(keyword, limit=20, country="jp", eng_keyword=""):
         more = fetch(f"{keyword} app")
         apps.extend(more)
 
-    # ✅ 3차: 부족하면 "アプリ"
+    # ✅ 3차: 부족하면 "Aplicativo"
     if len(apps) < 7:
-        more = fetch(f"{keyword} アプリ")
+        more = fetch(f"{keyword} Aplicativo")
         apps.extend(more)
 
     # ✅ 4차: 부족하면 E열(영문 키워드) 활용
@@ -347,19 +337,16 @@ def search_app_store_ids(keyword, limit=20, country="jp", eng_keyword=""):
     return unique_apps
 
 
-
-
-# =============== 앱 상세 페이지 수집 (이름/설명/스크린샷, 일본) ===============
-def fetch_app_detail(app_id: str, country="jp"):
+# =============== 앱 상세 페이지 수집 (브라질) ===============
+def fetch_app_detail(app_id: str, country="br"):
     import html
     url = f"https://apps.apple.com/{country}/app/id{app_id}"
-    name = f"アプリ {app_id}"
+    name = f"Aplicativo {app_id}"
     desc_html, images = "", []
 
     try:
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
         resp.encoding = "utf-8"
-        # lxml 미설치 환경 대비
         try:
             soup = BeautifulSoup(resp.text, "lxml")
         except Exception:
@@ -403,7 +390,6 @@ def fetch_app_detail(app_id: str, country="jp"):
                 if "mzstatic.com" in src:
                     images.append(src)
 
-        # 중복 제거 + 최대 4개
         images = list(dict.fromkeys(images))[:4]
 
         return {
@@ -447,36 +433,36 @@ def build_css_block() -> str:
 def build_intro_block(title: str, keyword: str) -> str:
     intro_groups = [
         [
-            f"スマートフォンは今や単なる通信手段を超え、私たちの生活全般を支える必需品となっています。",
-            f"手のひらサイズのデバイス一つで『{keyword}』のような多彩な機能を楽しめる時代になりました。",
-            f"現代社会において『{keyword}』アプリは欠かせない便利ツールとして定着しています。",
-            f"特に『{title}』のようなテーマは、多くの方が気になる話題の一つです。",
-            f"スマートフォン技術の進化に伴い『{keyword}』関連アプリの活用度もますます高まっています。",
-            f"誰もが利用するスマートフォンを通じて『{keyword}』をより便利に楽しめます。"
+            f"Hoje em dia, o smartphone já não é apenas um meio de comunicação, mas uma ferramenta essencial para a vida moderna.",
+            f"Com um dispositivo na palma da mão é possível aproveitar recursos como 『{keyword}』 de forma prática e rápida.",
+            f"No cotidiano, aplicativos de 『{keyword}』 se tornaram indispensáveis para trazer mais conveniência.",
+            f"Tópicos como 『{title}』 despertam o interesse de muitos usuários de tecnologia.",
+            f"Com a evolução dos smartphones, o uso de aplicativos relacionados a 『{keyword}』 cresce cada vez mais.",
+            f"Qualquer pessoa pode aproveitar 『{keyword}』 com facilidade através de aplicativos dedicados."
         ],
         [
-            f"多様なアプリが登場し『{keyword}』アプリの選択肢も広がっています。",
-            f"『{title}』を探す方が増えるほど注目度も高まっています。",
-            f"生活、学習、趣味、そして『{keyword}』までもアプリで簡単に楽しめます。",
-            f"スマホアプリは時間を節約し、効率的なライフスタイルを可能にします。",
-            f"『{keyword}』アプリはユーザーに新しい体験と利便性を同時に提供します。",
-            f"毎日のように新しい『{keyword}』アプリが登場し、選ぶ楽しさも増えています。"
+            f"Há uma grande variedade de apps disponíveis e as opções de 『{keyword}』 aumentam a cada dia.",
+            f"A busca por 『{title}』 mostra como esse tema está em alta.",
+            f"Trabalho, estudos, lazer e até 『{keyword}』 podem ser otimizados por aplicativos.",
+            f"Os apps ajudam a economizar tempo e tornam a vida mais eficiente.",
+            f"Aplicativos de 『{keyword}』 oferecem novas experiências e praticidade aos usuários.",
+            f"Novos apps de 『{keyword}』 surgem diariamente, aumentando as possibilidades de escolha."
         ],
         [
-            f"例えば仕事効率を高めるアプリから『{keyword}』を楽しめるエンタメ系まで種類は豊富です。",
-            f"『{title}』は多くの人に人気のカテゴリの一つです。",
-            f"ゲームやエンターテインメントと並び『{keyword}』アプリは余暇を豊かにしてくれます。",
-            f"ショッピング、金融、交通と同じく『{keyword}』アプリも生活に欠かせない存在です。",
-            f"写真や動画と一緒に『{keyword}』コンテンツを管理できるアプリも多くあります。",
-            f"コミュニケーションアプリに負けないくらい『{keyword}』アプリも注目を集めています。"
+            f"Existem desde aplicativos para produtividade até opções de entretenimento ligados a 『{keyword}』.",
+            f"『{title}』 é uma das categorias mais populares entre os usuários.",
+            f"Assim como jogos e streaming, os apps de 『{keyword}』 tornam o tempo livre mais agradável.",
+            f"Compras, finanças e transporte já dependem de apps — e 『{keyword}』 segue a mesma linha.",
+            f"Muitos aplicativos permitem gerenciar conteúdos como fotos, vídeos e 『{keyword}』 de forma simples.",
+            f"Os apps de 『{keyword}』 conquistam cada vez mais destaque junto aos de comunicação."
         ],
         [
-            f"このように『{keyword}』アプリは単なる機能を超え、生活全般を変える力を持っています。",
-            f"『{title}』を活用することで、暮らしの質がさらに向上するでしょう。",
-            f"必要なときに『{keyword}』アプリで欲しい機能をすぐに利用できます。",
-            f"便利さだけでなく『{keyword}』アプリは新しい体験も提供してくれます。",
-            f"多くの人が『{keyword}』アプリのおかげでよりスマートな生活を楽しんでいます。",
-            f"『{keyword}』アプリ一つが生活スタイル全体を変えることもあります。"
+            f"Dessa forma, aplicativos de 『{keyword}』 vão além da função básica e transformam a vida do usuário.",
+            f"Com 『{title}』 é possível elevar ainda mais a qualidade do dia a dia.",
+            f"Quando necessário, basta abrir o app de 『{keyword}』 para ter o recurso desejado.",
+            f"Mais do que praticidade, os apps de 『{keyword}』 também trazem novas experiências.",
+            f"Muitos já aproveitam aplicativos de 『{keyword}』 para levar uma rotina mais inteligente.",
+            f"Um único app de 『{keyword}』 pode mudar totalmente o estilo de vida."
         ]
     ]
 
@@ -498,36 +484,36 @@ def build_intro_block(title: str, keyword: str) -> str:
 def build_ending_block(title: str, keyword: str) -> str:
     end_groups = [
         [
-            f"今回ご紹介した『{title}』関連アプリが皆さんのスマホライフに役立てば幸いです。",
-            f"本記事でまとめた『{title}』アプリが日常生活で便利に活用されることを願っています。",
-            f"今回取り上げた『{title}』関連アプリがスマートな選択に役立つことを期待しています。",
-            f"本記事で紹介した『{title}』アプリが皆様の生活に欠かせないツールとなれば嬉しいです。",
-            f"『{title}』に関心のある方にとって今回のまとめが有意義な時間となれば幸いです。",
-            f"さまざまな『{keyword}』アプリを見てきたことで、スマホ活用がさらに豊かになるでしょう。"
+            f"Esperamos que os aplicativos relacionados a 『{title}』 apresentados aqui deixem sua vida digital ainda melhor.",
+            f"Este artigo reuniu apps de 『{title}』 que certamente serão úteis no dia a dia.",
+            f"As opções de 『{title}』 mostradas podem ajudar você a fazer escolhas mais inteligentes.",
+            f"Se os aplicativos de 『{title}』 se tornarem ferramentas indispensáveis para você, ficaremos muito felizes.",
+            f"Para quem se interessa por 『{title}』, este resumo pode ser uma leitura valiosa.",
+            f"Ao conhecer diversos aplicativos de 『{keyword}』, seu uso do smartphone ficará ainda mais completo."
         ],
         [
-            f"各アプリの機能や特徴をしっかり解説しましたので『{keyword}』アプリ選びの参考にしてください。",
-            f"アプリの特徴や長所・短所を比較しましたので『{title}』選びにきっと役立つはずです。",
-            f"今回のまとめをもとに、自分に合った『{keyword}』アプリを見つけていただければと思います。",
-            f"必要なときにすぐ使えるよう、重要な情報を整理しましたのでぜひ参考にしてください。",
-            f"これから『{keyword}』アプリを選ぶ際に本記事が心強いガイドになるでしょう。",
-            f"複数のアプリを比較したことで、より賢い選択に近づけたのではないでしょうか。"
+            f"Apresentamos os recursos e vantagens de cada app para ajudar na escolha de 『{keyword}』.",
+            f"Ao comparar pontos fortes e fracos, fica mais fácil decidir qual 『{title}』 baixar.",
+            f"Com base neste resumo, você poderá encontrar o aplicativo de 『{keyword}』 ideal.",
+            f"As informações reunidas aqui são práticas e podem ser usadas como guia de referência.",
+            f"Na hora de escolher um app de 『{keyword}』, este artigo será um aliado confiável.",
+            f"A comparação de vários apps certamente ajuda a tomar decisões mais conscientes."
         ],
         [
-            "今後もさまざまなアプリ情報を準備してお届けします。",
-            f"これからも『{keyword}』に関する役立つ情報やおすすめアプリを紹介していきます。",
-            "読者の皆様のご意見を反映し、より有益な記事をお届けできるよう努めます。",
-            "引き続き新しいアプリや注目の機能を紹介していく予定です。",
-            "これからも必要とされる実用的な情報を継続的に発信していきます。",
-            f"『{title}』のように注目されるテーマをこれからも積極的に扱っていきます。"
+            "Continuaremos trazendo novidades e informações úteis sobre aplicativos.",
+            f"No futuro, mais conteúdos sobre 『{keyword}』 e apps recomendados serão publicados aqui.",
+            "As opiniões dos leitores são importantes para oferecer artigos ainda mais completos.",
+            "Em breve, apresentaremos novos aplicativos e funcionalidades em destaque.",
+            "Seguiremos atualizando com informações práticas que possam ajudar no dia a dia.",
+            f"Tópicos populares como 『{title}』 continuarão a ser explorados em nosso blog."
         ],
         [
-            "コメントやいいねは大きな励みになります。気軽に参加していただけると嬉しいです。",
-            "ご質問やご意見があればぜひコメントでお知らせください。積極的に反映していきます。",
-            "皆様のフィードバックはより良い記事作りに欠かせない力となります。",
-            "いいねやコメントで応援していただければ、さらに充実した情報をお届けします。",
-            "気になるアプリや機能があればぜひコメントで教えてください。参考にして取り上げます。",
-            f"『{keyword}』アプリに関する皆様の考えも、ぜひコメントで自由に共有してください。"
+            "Comentários e curtidas são um grande incentivo — participe à vontade!",
+            "Se tiver dúvidas ou sugestões, compartilhe nos comentários para que possamos melhorar.",
+            "O feedback de vocês é essencial para criarmos conteúdos cada vez mais úteis.",
+            "Apoie com um like ou comentário para continuarmos trazendo informações de qualidade.",
+            "Se houver algum aplicativo de interesse, deixe sua sugestão nos comentários.",
+            f"Sua opinião sobre 『{keyword}』 é muito bem-vinda — compartilhe nos comentários!"
         ]
     ]
 
@@ -545,6 +531,7 @@ def build_ending_block(title: str, keyword: str) -> str:
 </div>
 """
     return last
+
 # ================================
 # 관련 추천글 박스 (RSS 랜덤 4개)
 # ================================
@@ -556,17 +543,15 @@ def get_related_posts(blog_id, count=4):
     if not feed.entries:
         return ""
 
-    # 랜덤으로 count개 추출
     entries = random.sample(feed.entries, min(count, len(feed.entries)))
 
-    # HTML 박스 생성
     html_box = """
 <div style="background: rgb(239, 237, 233); border-radius: 8px; border: 2px dashed rgb(167, 162, 151); 
             box-shadow: rgb(239, 237, 233) 0px 0px 0px 10px; color: #565656; font-weight: bold; 
             margin: 2em 10px; padding: 2em;">
   <p data-ke-size="size16" 
      style="border-bottom: 1px solid rgb(85, 85, 85); color: #555555; font-size: 16px; 
-            margin-bottom: 15px; padding-bottom: 5px;">♡♥ 関連おすすめ記事</p>
+            margin-bottom: 15px; padding-bottom: 5px;">♡♥ Artigos Recomendados</p>
 """
 
     for entry in entries:
@@ -576,15 +561,13 @@ def get_related_posts(blog_id, count=4):
 
     html_box += "</div>\n"
     return html_box
-
-
 # =============== 대상 행/키워드/라벨 선택 ===============
 def pick_target_row(ws):
     rows = ws.get_all_values()
     for i, row in enumerate(rows[1:], start=2):  # 2행부터
         a = row[0].strip() if len(row) > 0 and row[0] else ""  # A열 = 키워드
-        d = row[4].strip() if len(row) > 4 and row[4] else ""  # E열 = 완료
-        if a and d != "完":
+        d = row[4].strip() if len(row) > 4 and row[4] else ""  # E열 = 완료 플래그
+        if a and d != "OK":
             return i, row
     return None, None
 
@@ -602,106 +585,104 @@ def sheet_append_log(ws, row_idx, message, tries=3, delay=2):
             print(f"[LOG:H{row_idx}] {line}")
             return True
         except Exception as e:
-            print(f"[WARN] 로그기록 재시도 {t}/{tries}: {e}")
+            print(f"[WARN] 로그 기록 재시도 {t}/{tries}: {e}")
             time.sleep(delay * t)
-    print(f"[FAIL] 로그기록 실패: {line}")
+    print(f"[FAIL] 로그 기록 실패: {line}")
     return False
 
 
-# =============== メイン実行 ===============
+# =============== 메인 실행 ===============
 if __name__ == "__main__":
     try:
-        # 1) sheet4에서 대상 행/데이터
-        target_row, row = pick_target_row(ws4)
+        # 1) 시트5에서 대상 행/데이터
+        target_row, row = pick_target_row(ws5)
         if not target_row or not row:
-            sheet_append_log(ws4, 2, "処理するキーワードがありません(A列)")
+            sheet_append_log(ws5, 2, "처리할 키워드가 없습니다(A열)")
             raise SystemExit(0)
 
-        keyword = row[0].strip()  # A열 = キーワード
-        label_val = row[1].strip() if len(row) > 1 else ""  # B열 = ラベル
+        keyword = row[0].strip()   # A열 = 키워드
+        label_val = row[1].strip() if len(row) > 1 else ""  # B열 = 라벨
 
-        sheet_append_log(ws4, target_row, f"対象行={target_row}, キーワード='{keyword}', ラベル='{label_val}'")
+        sheet_append_log(ws5, target_row, f"대상 행={target_row}, 키워드='{keyword}', 라벨='{label_val}'")
 
-        # 2) タイトル生成
+        # 2) 제목 생성
         title = make_post_title(keyword)
-        sheet_append_log(ws4, target_row, f"タイトル='{title}'")
+        sheet_append_log(ws5, target_row, f"제목='{title}'")
 
-        # 3) サムネイル生成 & アップロード
+        # 3) 썸네일 생성 & 업로드
         thumb_dir = "thumbnails"
         os.makedirs(thumb_dir, exist_ok=True)
         thumb_path = os.path.join(thumb_dir, f"{keyword}.png")
-        sheet_append_log(ws4, target_row, "サムネイル生成開始")
-        thumb_url = make_thumb_with_logging(ws4, target_row, thumb_path, title)
-        sheet_append_log(ws4, target_row, f"サムネイル結果: {thumb_url or '失敗'}")
+        sheet_append_log(ws5, target_row, "썸네일 생성 시작")
+        thumb_url = make_thumb_with_logging(ws5, target_row, thumb_path, title)
+        sheet_append_log(ws5, target_row, f"썸네일 결과: {thumb_url or '실패'}")
 
-        # 4) アプリID検索
-        sheet_append_log(ws4, target_row, "アプリID検索開始")
-        eng_keyword = row[3].strip() if len(row) > 3 else ""  # D열 = 英語キーワード
+        # 4) 앱 ID 검색
+        sheet_append_log(ws5, target_row, "앱 ID 검색 시작")
+        eng_keyword = row[3].strip() if len(row) > 3 else ""  # D열 = 영어 키워드
         apps = search_app_store_ids(keyword, limit=20, eng_keyword=eng_keyword)
 
         # ✅ 앱이 하나도 없을 경우
         if not apps:
-            sheet_append_log(ws4, target_row, "アプリIDなし → 終了")
-            ws4.update_cell(target_row, 5, "完")      # E열 완료
-            ws4.update_cell(target_row, 7, "")        # G열 = URL 비움
-            sheet_append_log(ws4, target_row, "シート記録完了: E='完', G='' (検索結果なし)")
+            sheet_append_log(ws5, target_row, "앱 ID 없음 → 종료")
+            ws5.update_cell(target_row, 5, "OK")      # E열 완료
+            ws5.update_cell(target_row, 7, "")        # G열 = URL 비움
+            sheet_append_log(ws5, target_row, "시트 기록 완료: E='OK', G='' (검색 결과 없음)")
             raise SystemExit(0)
 
         # ✅ 앱이 3개 미만일 경우
         if len(apps) < 3:
-            sheet_append_log(ws4, target_row, "アプリ数が3未満 → 完了処理")
-            ws4.update_cell(target_row, 5, "完")      # E열 완료
-            ws4.update_cell(target_row, 7, "")        # G열 = URL 비움
-            sheet_append_log(ws4, target_row, "シート記録完了: E='完', G='' (アプリ数不足)")
+            sheet_append_log(ws5, target_row, "앱 개수가 3개 미만 → 완료 처리")
+            ws5.update_cell(target_row, 5, "OK")      # E열 완료
+            ws5.update_cell(target_row, 7, "")        # G열 = URL 비움
+            sheet_append_log(ws5, target_row, "시트 기록 완료: E='OK', G='' (앱 수 부족)")
             raise SystemExit(0)
 
-        # ✅ 앱이 충분히 있을 경우 → 로그에 기록
-        sheet_append_log(ws4, target_row, f"アプリID={[(a['id'], a['name']) for a in apps]}")
-
-        
+        # ✅ 앱이 충분히 있을 경우 → 로그 기록
+        sheet_append_log(ws5, target_row, f"앱 ID={[(a['id'], a['name']) for a in apps]}")
 
         # 5) 서론
         html_full = build_css_block()
         html_full += build_intro_block(title, keyword)
         # ✅ 목차 블록 추가
         html_full += """
-        <div class="mbtTOC"><button> 目次 </button>
+        <div class="mbtTOC"><button>Índice</button>
         <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
         </div>
         <p>&nbsp;</p>
         """
-        sheet_append_log(ws4, target_row, "イントロ生成完了")
+        sheet_append_log(ws5, target_row, "인트로 생성 완료")
 
         # 6) 썸네일 본문 삽입
         if thumb_url:
             html_full += f"""
 <p style="text-align:center;">
-  <img src="{thumb_url}" alt="{keyword} サムネイル" style="max-width:100%; height:auto; border-radius:10px;">
+  <img src="{thumb_url}" alt="{keyword} miniatura" style="max-width:100%; height:auto; border-radius:10px;">
 </p><br /><br />
 """
-            sheet_append_log(ws4, target_row, "本文にサムネイル挿入")
+            sheet_append_log(ws5, target_row, "본문에 썸네일 삽입")
         else:
-            sheet_append_log(ws4, target_row, "サムネイルなし")
+            sheet_append_log(ws5, target_row, "썸네일 없음")
 
         # 7) 해시태그
         tag_items = title.split()
         tag_str = " ".join([f"#{t}" for t in tag_items]) + " #AppStore"
-        sheet_append_log(ws4, target_row, f"ハッシュタグ='{tag_str}'")
+        sheet_append_log(ws5, target_row, f"해시태그='{tag_str}'")
 
         # 8) 앱 상세 수집 → 본문 조립
         for j, app in enumerate(apps, 1):
-            if j > 7:  # 일본 버전은 7개까지
+            if j > 7:  # 브라질도 7개까지만
                 break
             try:
-                sheet_append_log(ws4, target_row, f"[{j}] アプリ収集開始 id={app['id']}")
-                detail = fetch_app_detail(app["id"])
+                sheet_append_log(ws5, target_row, f"[{j}] 앱 수집 시작 id={app['id']}")
+                detail = fetch_app_detail(app["id"], country="br")
                 app_url = detail["url"]
                 app_name = detail["name"]
                 src_html = detail["desc_html"]
                 images = detail["images"]
 
                 desc_html = rewrite_app_description(src_html, app_name, keyword)
-                sheet_append_log(ws4, target_row, f"[{j}] {app_name} 説明リライト成功")
+                sheet_append_log(ws5, target_row, f"[{j}] {app_name} 설명 리라이트 완료")
 
                 img_group_html = "".join(
                     f'<div class="img-wrap"><img src="{img_url}" alt="{app_name}_{cc}"></div>'
@@ -709,55 +690,53 @@ if __name__ == "__main__":
                 )
 
                 section_html = f"""
-                <h2 data-ke-size="size26">{j}. {app_name} アプリ紹介</h2>
+                <h2 data-ke-size="size26">{j}. {app_name} — Apresentação do aplicativo</h2>
                 <br />
                 {desc_html}
-                <p data-ke-size="size18"><b>2) {app_name} スクリーンショット</b></p>
+                <p data-ke-size="size18"><b>2) {app_name} Capturas de tela</b></p>
                 <div class="img-group">{img_group_html}</div>
                 <br />
                 <p data-ke-size="size18" style="text-align:center;">
-                  <a href="{app_url}" class="myButton">{app_name} ダウンロード</a>
+                  <a href="{app_url}" class="myButton">Baixar {app_name}</a>
                 </p>
                 <br />
                 <p data-ke-size="size18">{tag_str}</p>
                 <br /><br />
                 """
-                # ✅ 3번째 섹션이면 라벨 기반 추천 박스 삽입
-                # ✅ 2번째 소제목 위 → j==1
+                # ✅ 1번째 앱 위 → 라벨 기반 추천 박스 삽입
                 if j == 1 and label_val:
                     encoded_label = urllib.parse.quote(label_val)
                     section_html = f"""
                 <div class="ottistMultiRelated">
                   <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
-                    <span style="font-size: medium;"><strong>おすすめ {label_val} アプリを見る</strong></span>
+                    <span style="font-size: medium;"><strong>Ver mais aplicativos de {label_val}</strong></span>
                     <i class="fas fa-link 2xs"></i>
                   </a>
                 </div>
                 <br /><br /><br />
                 """ + section_html
 
-                # ✅ 4번째 소제목 위 → j==3
+                # ✅ 3번째 앱 위 → 추가 추천 박스
                 if j == 3 and label_val:
                     encoded_label = urllib.parse.quote(label_val)
                     section_html = f"""
                 <div class="ottistMultiRelated">
                   <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
-                    <span style="font-size: medium;"><strong>関連する {label_val} アプリもチェック</strong></span>
+                    <span style="font-size: medium;"><strong>Confira também apps relacionados a {label_val}</strong></span>
                     <i class="fas fa-link 2xs"></i>
                   </a>
                 </div>
                 <br /><br /><br />
                 """ + section_html
 
-                
                 html_full += section_html
-                sheet_append_log(ws4, target_row, f"[{j}] {app_name} セクション完了")
+                sheet_append_log(ws5, target_row, f"[{j}] {app_name} 섹션 완료")
             except Exception as e_each:
-                sheet_append_log(ws4, target_row, f"[{j}] アプリ処理失敗: {e_each}")
+                sheet_append_log(ws5, target_row, f"[{j}] 앱 처리 실패: {e_each}")
 
         # 9) 마무리
         html_full += build_ending_block(title, keyword)
-        sheet_append_log(ws4, target_row, "エンディング生成完了")
+        sheet_append_log(ws5, target_row, "엔딩 생성 완료")
         related_box = get_related_posts(BLOG_ID, count=6)
         html_full += related_box
         # ✅ 자동 목차 스크립트 호출
@@ -765,29 +744,32 @@ if __name__ == "__main__":
 
         # 10) 업로드
         try:
-            labels = make_post_labels(row)  # ["アプリ", B열 값]
+            labels = make_post_labels(row)  # ["Aplicativos", "iPhone", B열 값]
             post_body = {"content": html_full, "title": title, "labels": labels}
             res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body,
                                               isDraft=False, fetchImages=True).execute()
             post_url = res.get("url", "")
-            sheet_append_log(ws4, target_row, f"アップロード成功: {post_url}")
+            sheet_append_log(ws5, target_row, f"업로드 성공: {post_url}")
         except Exception as up_e:
-            sheet_append_log(ws4, target_row, f"アップロード失敗: {up_e}")
+            sheet_append_log(ws5, target_row, f"업로드 실패: {up_e}")
             raise
 
         # 11) 시트 기록
-        ws4.update_cell(target_row, 5, "完")      # E열 완료
-        ws4.update_cell(target_row, 7, post_url)  # G열 = URL
-        sheet_append_log(ws4, target_row, f"シート記録完了: E='完', G='{post_url}'")
+        ws5.update_cell(target_row, 5, "OK")      # E열 완료
+        ws5.update_cell(target_row, 7, post_url)  # G열 = URL
+        sheet_append_log(ws5, target_row, f"시트 기록 완료: E='OK', G='{post_url}'")
+
         # 12) 완료
-        sheet_append_log(ws4, target_row, "正常終了")
+        sheet_append_log(ws5, target_row, "정상 종료")
 
     except SystemExit:
         pass
     except Exception as e:
         tb = traceback.format_exc()
         row_for_err = target_row if 'target_row' in locals() and target_row else 2
-        sheet_append_log(ws4, row_for_err, f"失敗: {e}")
-        sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
-        print("失敗:", e, tb)
+        sheet_append_log(ws5, row_for_err, f"실패: {e}")
+        sheet_append_log(ws5, row_for_err, f"Trace: {tb.splitlines()[-1]}")
+        print("실패:", e, tb)
+
+
 
