@@ -626,6 +626,15 @@ if __name__ == "__main__":
             ws3.update_cell(target_row, 7, "")        # G열 = URL 비움
             sheet_append_log(ws3, target_row, "시트 기록 완료: E='완', G='' (검색결과 없음)")
             raise SystemExit(0)
+
+        # ✅ 앱이 3개 미만일 때
+        if len(apps) < 3:
+            sheet_append_log(ws3, target_row, "앱 수가 3개 미만 → 자동 완료 처리")
+            ws3.update_cell(target_row, 5, "완")      # E열 완료
+            ws3.update_cell(target_row, 7, "")        # G열 = URL 비움
+            sheet_append_log(ws3, target_row, "시트 기록 완료: E='완', G='' (앱 수 부족)")
+            raise SystemExit(0)
+            
         sheet_append_log(ws3, target_row, f"앱 ID={[(a['id'], a['name']) for a in apps]}")
 
         # 5) 서론
@@ -761,6 +770,7 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
