@@ -227,7 +227,7 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
 # =============== 제목/라벨 생성 ===============
 def make_post_title(keyword: str) -> str:
     # 브라질 버전 제목 구성 (순서만 바뀌도록 고정)
-    front_choices = ["iPhone iPad", "iPhone iPad"]
+    front_choices = ["iPhone iPad", "iPad iPhone"]
     back_choices = ["Aplicativo recomendado", "Melhores aplicativos", "AppStore Aplicativo", "Aplicativos AppStore"]
     return f"{random.choice(front_choices)} {keyword} {random.choice(back_choices)}"
 
@@ -770,6 +770,7 @@ if __name__ == "__main__":
         sheet_append_log(ws5, row_for_err, f"실패: {e}")
         sheet_append_log(ws5, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
