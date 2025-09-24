@@ -108,7 +108,7 @@ def pick_random_background() -> str:
         files.extend(glob.glob(os.path.join("assets", "backgrounds", ext)))
     return random.choice(files) if files else ""
 
-# =============== 썸네일 생성 ===============
+# =============== 썸네일 생성 (픽셀 기준 줄바꿈 적용) ===============
 def make_thumb(save_path: str, var_title: str):
     try:
         os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
@@ -137,7 +137,24 @@ def make_thumb(save_path: str, var_title: str):
         # 텍스트 그리기
         draw = ImageDraw.Draw(canvas)
 
-        var_title_wrap = textwrap.wrap(var_title, width=12)
+        # ✅ 픽셀 단위 줄바꿈 함수
+        def wrap_text(text, font, max_width):
+            lines, line = [], ""
+            for ch in text:
+                test_line = line + ch
+                text_width = draw.textlength(test_line, font=font)
+                if text_width <= max_width:
+                    line = test_line
+                else:
+                    lines.append(line)
+                    line = ch
+            if line:
+                lines.append(line)
+            return lines
+
+        # 🔹 최대 폭 460px 기준으로 줄바꿈
+        var_title_wrap = wrap_text(var_title, font, max_width=460)
+
         bbox = font.getbbox("가")  # 기준 글자
         line_height = (bbox[3] - bbox[1]) + 12
         total_text_height = len(var_title_wrap) * line_height
@@ -762,6 +779,7 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
+
 
 
 
