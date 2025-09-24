@@ -480,6 +480,12 @@ try:
     app_links = crawl_apps(keyword)
     print(f"収集したアプリリンク: {len(app_links)}件")
 
+    # 🔹 앱 개수 확인 (3개 미만이면 즉시 종료)
+    if len(app_links) < 3:
+        print("⚠️ アプリ数が3未満 → 自動的に完了処理")
+        ws.update_cell(target_row, 6, "完")  # F列: 完了フラグ
+        exit()
+
     # ✅ 本文作成
     tag_str = " ".join([f"#{t}" for t in title.split()])
     for j, app_url in enumerate(app_links, 1):
@@ -547,6 +553,7 @@ except Exception as e:
     print("失敗:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K列: エラーメッセージ記録
+
 
 
 
