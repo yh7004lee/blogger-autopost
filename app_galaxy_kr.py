@@ -125,6 +125,36 @@ def get_blogger_service():
 blog_handler = get_blogger_service()
 
 # ================================
+# 앱 이미지 추출 함수 (최대 4장)
+# ================================
+def get_app_images(soup, app_name: str, limit: int = 4) -> str:
+    try:
+        images = []
+        # 구글플레이 앱 상세페이지 스크린샷 찾기
+        for img in soup.find_all("img"):
+            src = img.get("src") or ""
+            alt = img.get("alt") or ""
+            # 스크린샷 후보 (앱 아이콘 제외)
+            if "play-lh" in src and "w480-h960" in src:
+                images.append((src, alt))
+            if len(images) >= limit:
+                break
+
+        # HTML 조합
+        html_imgs = ""
+        for src, alt in images:
+            html_imgs += f"""
+            <div class="img-wrap">
+              <img src="{src}" alt="{app_name} 스크린샷" loading="lazy">
+            </div>
+            """
+        return html_imgs if html_imgs else "<!-- 스크린샷 없음 -->"
+    except Exception as e:
+        print(f"⚠️ 이미지 추출 실패: {e}")
+        return "<!-- 이미지 추출 오류 -->"
+
+
+# ================================
 # 썸네일 로깅 함수 (H열 사용)
 # ================================
 def log_thumb_step(ws, row_idx, message):
@@ -409,14 +439,14 @@ def crawl_apps(keyword, lang="ko", country="KR"):
     return app_links[3:]
 
 # ================================
-# 메인 실행 (시트3 기반, 특정 블로그 고정)
+# 메인 실행 (시트3 기반, 한국어 블로그 고정)
 # ================================
 try:
     rows = ws.get_all_values()
     target_row, keyword, label, title = None, None, None, None
 
     # ✅ 대상 행 찾기 (A열=키워드, F열 != "완")
-    for i, row in enumerate(rows[1:], start=2):  # 2행부터 시작
+    for i, row in enumerate(rows[1:], start=2):
         kw = row[0].strip() if len(row) > 0 else ""   # A열: 키워드
         lb = row[1].strip() if len(row) > 1 else ""   # B열: 라벨
         done = row[5].strip() if len(row) > 5 else "" # F열: 완료 여부
@@ -439,6 +469,32 @@ try:
 
     html = make_intro(title, keyword)
 
+    # ✅ 스크린샷용 스타일
+    html += """
+    <style>
+    .img-group {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .img-wrap {
+      flex: 0 0 48%;
+      margin: 1%;
+    }
+    .img-wrap img {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+    }
+    @media (max-width: 768px) {
+      .img-wrap {
+        flex: 0 0 100%;
+        margin: 5px 0;
+      }
+    }
+    </style>
+    """
+
     # ✅ 자동 목차 (서론 바로 뒤)
     html += """
     <div class="mbtTOC"><button> 목차 </button>
@@ -446,7 +502,6 @@ try:
     </div>
     <p>&nbsp;</p>
     """
-
 
     if img_url:
         html += f"""
@@ -460,42 +515,46 @@ try:
     app_links = crawl_apps(keyword)
     print(f"수집된 앱 링크: {len(app_links)}개")
 
-    # 🔹 앱 개수 확인 (3개 미만이면 즉시 종료)
     if len(app_links) < 3:
-        print("⚠️ 앱이 3개 미만 → 자동으로 완료 처리")
-        ws.update_cell(target_row, 6, "완")  # F열: 완료 플래그
+        print("⚠️ 앱이 3개 미만 → 자동 완료 처리")
+        ws.update_cell(target_row, 6, "완")
         exit()
 
     # ✅ 본문 작성
     tag_str = " ".join([f"#{t}" for t in title.split()])
     for j, app_url in enumerate(app_links, 1):
-        if j > 7:
-            break
+        if j > 7: break
         resp = requests.get(app_url, headers={"User-Agent": "Mozilla/5.0"})
         soup = BeautifulSoup(resp.text, "html.parser")
         h1 = soup.find("h1").text if soup.find("h1") else f"앱 {j}"
         raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
         desc = rewrite_app_description(raw_desc, h1, keyword)
-    
-        # ✅ 라벨 링크 추가 (1번째, 3번째 소제목 위)
+
+        # ✅ 앱 이미지 4장
+        images_html = get_app_images(soup, h1)
+
+        # ✅ 라벨 링크 추가 (1번째, 3번째 제목 위)
         if j in (1, 3) and label:
             encoded_label = urllib.parse.quote(label)
             link_block = f"""
             <div class="ottistMultiRelated">
               <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
-                <span style="font-size: medium;"><strong>추천 {label} 어플 보러가기</strong></span>
+                <span style="font-size: medium;"><strong>추천 {label} 어플 더 보기</strong></span>
                 <i class="fas fa-link 2xs"></i>
               </a>
             </div>
             <br /><br /><br />
             """
             html += link_block
-    
-        # ✅ 기본 소제목+내용
+
+        # ✅ 제목+본문+스크린샷
         html += f"""
         <h2 data-ke-size="size26">{j}. {h1} 어플 소개</h2>
         <br />
         {desc}
+        <br />
+        <p data-ke-size="size18"><b>{h1} 스크린샷</b></p>
+        <div class="img-group">{images_html}</div>
         <br />
         <p style="text-align: center;" data-ke-size="size18">
           <a class="myButton" href="{app_url}">{h1} 앱 다운로드</a>
@@ -504,38 +563,32 @@ try:
         <br /><br /><br />
         """
 
-
     html += make_last(title)
-    # ✅ 추천글 박스 삽입 (여기!)
+
+    # ✅ 추천글 박스
     related_box = get_related_posts(BLOG_ID, count=6)
     html += related_box
 
-    # ✅ 자동 목차 스크립트 (맨 끝에)
+    # ✅ 자동 목차 스크립트
     html += "<script>mbtTOC();</script><br /><br />"
 
-    # ✅ Blogger 업로드 (고정 BLOG_ID + 라벨=B열 값)
-  
+    # ✅ Blogger 업로드
     labels = [label, "갤럭시"] if label else ["갤럭시"]
-    
-    post_body = {
-        "content": html,
-        "title": title,
-        "labels": labels
-    }
+
+    post_body = {"content": html, "title": title, "labels": labels}
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False).execute()
     url = res.get("url", "")
     print(f"✅ 업로드 성공: {url}")
 
     # ✅ 시트 업데이트
-    ws.update_cell(target_row, 6, "완")  # F열: 완료 기록
-    ws.update_cell(target_row, 10, url)  # J열: 포스팅 URL 기록
+    ws.update_cell(target_row, 6, "완")
+    ws.update_cell(target_row, 10, url)
 
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e)
     if target_row:
-        ws.update_cell(target_row, 11, str(e))  # K열: 오류 메시지 기록
-
+        ws.update_cell(target_row, 11, str(e))
 
 
 
