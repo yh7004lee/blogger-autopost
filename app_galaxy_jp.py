@@ -130,6 +130,36 @@ def get_blogger_service():
 blog_handler = get_blogger_service()
 
 # ================================
+# アプリ画像 4枚を抽出 (Google Play 詳細ページ)
+# ================================
+def get_app_images(soup, app_name: str):
+    images_html = ""
+    try:
+        img_div = soup.find("div", attrs={"role": "list"})
+        imgs = img_div.find_all("img") if img_div else []
+        for cc, img in enumerate(imgs[:4], 1):   # 最大4枚
+            img_url = img.get("srcset") or img.get("src")
+            if not img_url:
+                continue
+            # srcset の場合は一番大きな解像度を選択
+            if "," in img_url:
+                img_url = img_url.split(",")[-1].strip()
+            img_url = img_url.split()[0]
+
+            # 解像度をアップスケール (wXXX-hYYY-rw を大きなサイズに置換)
+            img_url = re.sub(r"w\d+-h\d+-rw", "w2048-h1100-rw", img_url)
+
+            images_html += f"""
+            <div class="img-wrap">
+              <img src="{img_url}" alt="{app_name}_{cc}" style="border-radius:10px;">
+            </div>
+            """
+    except Exception as e:
+        print(f"[画像収集エラー] {e}")
+    return images_html
+
+
+# ================================
 # 썸네일 로깅 함수 (H열 사용)
 # ================================
 def log_thumb_step(ws, row_idx, message):
@@ -460,6 +490,32 @@ try:
 
     html = make_intro(title, keyword)
 
+    # ✅ スクリーンショット用スタイル
+    html += """
+    <style>
+    .img-group {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .img-wrap {
+      flex: 0 0 48%;
+      margin: 1%;
+    }
+    .img-wrap img {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+    }
+    @media (max-width: 768px) {
+      .img-wrap {
+        flex: 0 0 100%;
+        margin: 5px 0;
+      }
+    }
+    </style>
+    """
+
     # ✅ 自動目次 (序文の直後)
     html += """
     <div class="mbtTOC"><button>目次</button>
@@ -480,7 +536,7 @@ try:
     app_links = crawl_apps(keyword)
     print(f"収集したアプリリンク: {len(app_links)}件")
 
-    # 🔹 앱 개수 확인 (3개 미만이면 즉시 종료)
+    # 🔹 アプリ数チェック (3未満なら終了)
     if len(app_links) < 3:
         print("⚠️ アプリ数が3未満 → 自動的に完了処理")
         ws.update_cell(target_row, 6, "完")  # F列: 完了フラグ
@@ -496,26 +552,32 @@ try:
         h1 = soup.find("h1").text if soup.find("h1") else f"アプリ {j}"
         raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
         desc = rewrite_app_description(raw_desc, h1, keyword)
-    
+
+        # ✅ アプリ画像4枚
+        images_html = get_app_images(soup, h1)
+
         # ✅ ラベルリンク追加 (1番目, 3番目の見出し上)
         if j in (1, 3) and label:
             encoded_label = urllib.parse.quote(label)
             link_block = f"""
             <div class="ottistMultiRelated">
               <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
-                <span style="font-size: medium;"><strong>{label} アプリおすすめ記事を見る</strong></span>
+                <span style="font-size: medium;"><strong>{label} 関連アプリ記事を見る</strong></span>
                 <i class="fas fa-link 2xs"></i>
               </a>
             </div>
             <br /><br /><br />
             """
             html += link_block
-    
-        # ✅ 見出し+本文
+
+        # ✅ 見出し+本文+画像
         html += f"""
         <h2 data-ke-size="size26">{j}. {h1} アプリ紹介</h2>
         <br />
         {desc}
+        <br />
+        <p data-ke-size="size18"><b>{h1} のスクリーンショット</b></p>
+        <div class="img-group">{images_html}</div>
         <br />
         <p style="text-align: center;" data-ke-size="size18">
           <a class="myButton" href="{app_url}">{h1} ダウンロード</a>
@@ -534,7 +596,7 @@ try:
 
     # ✅ Blogger アップロード (固定 BLOG_ID + ラベル=B列)
     labels = [label, "Android"] if label else ["Android"]
-    
+
     post_body = {
         "content": html,
         "title": title,
@@ -553,6 +615,8 @@ except Exception as e:
     print("失敗:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K列: エラーメッセージ記録
+
+
 
 
 
