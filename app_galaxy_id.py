@@ -18,9 +18,9 @@ import urllib.parse
 SHEET_ID = os.getenv("SHEET_ID", "1SeQogbinIrDTMKjWhGgWPEQq8xv6ARv5n3I-2BsMrSc")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
-# ✅ 블로그 고정 (브라질 버전)
-BLOG_ID = "2435612110610421419"
-BLOG_URL = "https://appbr.appsos.kr/"
+# ✅ 블로그 고정 (인도네시아 버전)
+BLOG_ID = "4744872325722562703"
+BLOG_URL = "https://appid.appsos.kr/"
 
 # ================================
 # OpenAI API Key 로드
@@ -35,20 +35,20 @@ if not OPENAI_API_KEY:
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # ================================
-# Google Sheets 인증 (시트5 사용)
-# A열: 포르투갈어 키워드 / B열: 카테고리 / D열: 영어 키워드
+# Google Sheets 인증 (시트6 사용)
+# A열: 키워드 / B열: 카테고리 / D열: 영어 키워드  (셀 구조 동일)
 # ================================
 def get_sheet():
     SERVICE_ACCOUNT_FILE = "sheetapi.json"
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    return gc.open_by_key(SHEET_ID).get_worksheet(4)  # index=4 → 5번째 시트
+    return gc.open_by_key(SHEET_ID).get_worksheet(5)  # index=5 → 6번째 시트
 
 ws = get_sheet()
 
 # ================================
-# 추천글 박스 (브라질 버전)
+# 추천글 박스 (인도네시아 버전)
 # ================================
 def get_related_posts(blog_id, count=6):
     import feedparser, random
@@ -61,14 +61,14 @@ def get_related_posts(blog_id, count=6):
     # 랜덤으로 count개 추출
     entries = random.sample(feed.entries, min(count, len(feed.entries)))
 
-    # HTML 박스 생성 (포르투갈어 문구 적용)
+    # HTML 박스 생성 (인도네시아어 문구 적용)
     html_box = """
 <div style="background: rgb(239, 237, 233); border-radius: 8px; border: 2px dashed rgb(167, 162, 151);
             box-shadow: rgb(239, 237, 233) 0px 0px 0px 10px; color: #565656; font-weight: bold;
             margin: 2em 10px; padding: 2em;">
   <p data-ke-size="size16"
      style="border-bottom: 1px solid rgb(85, 85, 85); color: #555555; font-size: 16px;
-            margin-bottom: 15px; padding-bottom: 5px;">♡♥ Leia também estes artigos úteis</p>
+            margin-bottom: 15px; padding-bottom: 5px;">♡♥ Baca juga artikel bermanfaat lainnya</p>
 """
     for entry in entries:
         title = entry.title
@@ -93,11 +93,11 @@ def get_drive_service():
     return build("drive", "v3", credentials=creds)
 
 # ================================
-# 제목 생성 (G1 인덱스 활용, 브라질 포르투갈어 패턴)
+# 제목 생성 (인도네시아 버전 패턴)
 # ================================
 def make_rotating_title(ws, keyword: str) -> str:
-    front_choices = ["Celular", "Smartphone", "Android"]
-    back_choices = ["Aplicativos recomendados", "Melhores apps"]
+    front_choices = ["Aplikasi", "Smartphone", "Android"]
+    back_choices = ["Terbaik", "Rekomendasi Populer"]
 
     # G1 셀에서 인덱스 불러오기 (없으면 0)
     try:
@@ -113,7 +113,7 @@ def make_rotating_title(ws, keyword: str) -> str:
     # 다음 인덱스 저장
     ws.update_cell(1, 7, str(idx + 1))
 
-    # 예: Celular {keyword} Aplicativos recomendados
+    # 예: Aplikasi {keyword} Terbaik
     return f"{front} {keyword} {back}"
 
 # ================================
@@ -150,7 +150,7 @@ def pick_random_background() -> str:
     return random.choice(files) if files else ""
 
 # ================================
-# 썸네일 생성 (브라질 전용 폰트 적용, 안전한 줄바꿈)
+# 썸네일 생성 (인도네시아 전용 폰트 적용, 안전한 줄바꿈)
 # ================================
 def make_thumb(save_path: str, var_title: str):
     try:
@@ -162,9 +162,9 @@ def make_thumb(save_path: str, var_title: str):
         else:
             bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
 
-        # ✅ 브라질 전용 폰트 적용
+        # ✅ 인도네시아 전용 폰트 적용
         try:
-            font = ImageFont.truetype("assets/fonts/Gabarito-SemiBold.ttf", 48)
+            font = ImageFont.truetype("assets/fonts/PlusJakartaSans-SemiBoldItalic.ttf", 48)
         except:
             font = ImageFont.load_default()
 
@@ -280,19 +280,18 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
         return ""
 
 # ================================
-# OpenAI GPT 처리 (브라질 블로그 글용)
+# OpenAI GPT 처리 (인도네시아 블로그 글용)
 # ================================
 def rewrite_app_description(original_html: str, app_name: str, keyword_str: str) -> str:
     if not client:
         return original_html
     compact = BeautifulSoup(original_html, 'html.parser').get_text(separator=' ', strip=True)
     system_msg = (
-        "Você é um redator profissional que escreve artigos de blog em português do Brasil. "
-        "Reescreva o conteúdo mantendo os fatos, mas com estilo natural, acolhedor e envolvente. "
-        "O tom deve ser amigável e fácil de ler. "
-        "A saída deve ser sempre estruturada em parágrafos com <p data-ke-size='size18'>."
+        "Anda adalah penulis profesional yang menulis artikel blog dalam bahasa Indonesia. "
+        "Tulis ulang konten agar tetap faktual, tetapi dengan gaya yang alami, ramah, dan menarik. "
+        "Hasilnya harus dalam paragraf dengan <p data-ke-size='size18'>."
     )
-    user_msg = f"[Nome do aplicativo] {app_name}\n[Palavra-chave] {keyword_str}\n\n{compact}"
+    user_msg = f"[Nama aplikasi] {app_name}\n[Kata kunci] {keyword_str}\n\n{compact}"
     try:
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
@@ -307,43 +306,42 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
     except Exception as e:
         print(f"[에러] GPT 처리 실패: {e}")
         return original_html
-
 # ================================
-# 서론 · 결론 랜덤 (SEO 최적화 + 문장 확장, 포르투갈어 버전)
+# 서론 · 결론 랜덤 (SEO 최적화 + 문장 확장, 인도네시아 버전)
 # ================================
 intro_start = [
-    "Hoje em dia, com apenas um smartphone é possível realizar diversas tarefas de forma prática. ",
-    "Atualmente, basta combinar celular e aplicativos para facilitar a vida em muitos aspectos. ",
-    "O smartphone se tornou um item essencial, indo muito além da comunicação. ",
-    "Com a evolução do ambiente móvel, os aplicativos tornaram nossa rotina muito mais conveniente. ",
-    "De pesquisas a trabalho, estudos e entretenimento, tudo pode ser feito pelo celular. ",
-    "Com um aparelho na palma da mão, é possível elevar a qualidade de vida. ",
-    "Graças a aplicativos acessíveis, o dia a dia se tornou mais simples e dinâmico. ",
-    "Escolhendo os apps certos, o celular vira um verdadeiro parceiro. ",
-    "A grande vantagem dos aplicativos é ter informação e diversão em qualquer hora e lugar. "
+    "Saat ini, hanya dengan sebuah smartphone kita bisa melakukan banyak hal secara praktis. ",
+    "Sekarang, cukup menggabungkan ponsel dan aplikasi untuk mempermudah berbagai aktivitas. ",
+    "Smartphone telah menjadi perangkat penting yang fungsinya jauh melampaui komunikasi. ",
+    "Dengan perkembangan teknologi mobile, aplikasi membuat rutinitas kita lebih nyaman. ",
+    "Mulai dari mencari informasi, bekerja, belajar hingga hiburan, semua bisa dilakukan lewat ponsel. ",
+    "Dengan perangkat di genggaman, kualitas hidup dapat meningkat dengan mudah. ",
+    "Berkat aplikasi yang mudah diakses, kehidupan sehari-hari menjadi lebih sederhana dan dinamis. ",
+    "Dengan memilih aplikasi yang tepat, ponsel menjadi sahabat yang dapat diandalkan. ",
+    "Kelebihan besar dari aplikasi adalah memberikan informasi dan hiburan kapan saja dan di mana saja. "
 ]
 
 intro_middle = [
-    "Eles oferecem funções úteis no dia a dia e aumentam consideravelmente a praticidade.",
-    "Economizam tempo e ajudam a tomar melhores decisões em diferentes situações.",
-    "São usados em trabalho, estudo e lazer, tornando-se indispensáveis para várias gerações.",
-    "Além da praticidade, trazem novas experiências e expandem as possibilidades do celular.",
-    "Com a diversidade de aplicativos intuitivos, a satisfação dos usuários só cresce.",
-    "Criam um ambiente em que informação e entretenimento estão sempre à mão.",
-    "Acompanhando as últimas tendências, os aplicativos evoluem rapidamente.",
-    "Muitos aplicativos gratuitos oferecem qualidade surpreendente, sendo fáceis de testar.",
-    "Usando-os corretamente, pequenos problemas do dia a dia podem ser resolvidos. "
+    "Aplikasi ini menawarkan fungsi bermanfaat dan meningkatkan kenyamanan dalam kehidupan sehari-hari.",
+    "Mereka menghemat waktu dan membantu membuat keputusan yang lebih baik dalam berbagai situasi.",
+    "Banyak digunakan untuk bekerja, belajar, maupun hiburan, sehingga menjadi bagian penting bagi banyak orang.",
+    "Selain praktis, aplikasi membawa pengalaman baru dan memperluas kemungkinan penggunaan ponsel.",
+    "Dengan ragam aplikasi yang intuitif, kepuasan pengguna semakin meningkat.",
+    "Menciptakan lingkungan di mana informasi dan hiburan selalu tersedia di ujung jari.",
+    "Mengikuti tren terbaru, aplikasi terus berkembang dengan cepat.",
+    "Banyak aplikasi gratis yang menawarkan kualitas tinggi dan mudah untuk dicoba.",
+    "Dengan penggunaan yang tepat, masalah kecil sehari-hari dapat terselesaikan. "
 ]
 
 intro_end = [
-    "Neste artigo, reunimos os aplicativos mais populares e úteis que você precisa conhecer.",
-    "Aqui vamos destacar os apps mais bem avaliados e práticos para o seu dia a dia.",
-    "Selecionamos aplicativos de uso frequente e explicamos como aproveitá-los ao máximo.",
-    "Apresentamos apps essenciais de forma organizada para facilitar sua escolha.",
-    "Você verá aplicativos confiáveis e úteis que podem melhorar sua rotina.",
-    "Vamos focar em apps de confiança e explicar suas principais características.",
-    "Mostramos os aplicativos mais buscados, incluindo impressões reais de uso.",
-    "Selecionamos apps indispensáveis que vale a pena instalar no seu celular. "
+    "Dalam artikel ini, kami mengumpulkan aplikasi paling populer dan bermanfaat yang perlu Anda coba.",
+    "Di sini kami menyoroti aplikasi dengan rating tinggi yang praktis untuk digunakan sehari-hari.",
+    "Kami memilih aplikasi yang sering dipakai dan menjelaskan cara memaksimalkannya.",
+    "Kami menghadirkan aplikasi penting secara terorganisir untuk mempermudah pilihan Anda.",
+    "Anda akan menemukan aplikasi terpercaya dan berguna yang bisa meningkatkan rutinitas Anda.",
+    "Kami fokus pada aplikasi yang layak diandalkan dan menjelaskan fitur utamanya.",
+    "Kami menunjukkan aplikasi yang paling dicari lengkap dengan pengalaman pengguna nyata.",
+    "Kami memilih aplikasi wajib yang patut Anda pasang di smartphone. "
 ]
 
 def make_intro(title, keyword):
@@ -352,52 +350,52 @@ def make_intro(title, keyword):
 <div id="jm">&nbsp;</div>
 <p data-ke-size="size18">
 {intro}
-Neste artigo, vamos focar em aplicativos relacionados a “{keyword}”.
-Foram escolhidos com base nos apps mais bem posicionados no Google Play ao pesquisar por “{keyword}”.
-Se você é usuário de smartphone, confira estas opções práticas e aproveite-as no momento certo.
+Dalam artikel ini, kami akan membahas aplikasi yang berhubungan dengan “{keyword}”.
+Aplikasi dipilih berdasarkan hasil pencarian populer di Google Play untuk kata kunci “{keyword}”.
+Jika Anda pengguna smartphone, simak pilihan praktis ini dan gunakan pada waktu yang tepat.
 </p>
 <span><!--more--></span>
 <p data-ke-size="size18">&nbsp;</p>
 """
 
 end_start = [
-    "Esperamos que os aplicativos apresentados deixem seu dia a dia mais prático e agradável.",
-    "Tomara que esta seleção de apps seja útil em diferentes situações da sua rotina.",
-    "Não ficamos apenas na função: pensamos também no uso real de cada aplicativo.",
-    "Use bem os apps recomendados e torne sua rotina muito mais eficiente.",
-    "Comece testando o app que mais chamou sua atenção e encontre o que mais combina com você."
+    "Kami berharap aplikasi yang disajikan dapat membuat hari-hari Anda lebih mudah dan menyenangkan.",
+    "Semoga pilihan aplikasi ini bermanfaat dalam berbagai situasi kehidupan sehari-hari.",
+    "Kami tidak hanya melihat fitur, tetapi juga pengalaman nyata dari penggunaan aplikasi.",
+    "Gunakan aplikasi yang direkomendasikan ini agar rutinitas Anda lebih efisien.",
+    "Mulailah mencoba aplikasi yang paling menarik bagi Anda dan temukan yang paling sesuai."
 ]
 
 end_summary = [
-    "Organizamos os pontos fortes e vantagens de cada app para facilitar sua escolha.",
-    "Apresentamos os destaques de cada aplicativo de forma comparativa e clara.",
-    "Consideramos as avaliações reais dos usuários para garantir segurança na escolha.",
-    "Selecionamos apenas apps confiáveis e populares para indicar com confiança.",
-    "Incluímos opções gratuitas e pagas para atender a diferentes necessidades."
+    "Kami menyusun kelebihan dan manfaat utama setiap aplikasi untuk memudahkan pilihan Anda.",
+    "Kami menyoroti poin penting dari setiap aplikasi secara jelas dan terstruktur.",
+    "Kami mempertimbangkan ulasan pengguna nyata untuk memastikan keamanan pilihan Anda.",
+    "Kami hanya memilih aplikasi populer dan terpercaya untuk direkomendasikan.",
+    "Kami menyertakan opsi gratis maupun berbayar agar sesuai dengan berbagai kebutuhan."
 ]
 
 end_next = [
-    "Continuaremos trazendo as últimas tendências e novidades em aplicativos.",
-    "Acompanhe nossas próximas recomendações de apps úteis e interessantes.",
-    "Novas funções e aplicativos em destaque serão apresentados aqui em breve.",
-    "Seguiremos indicando diferentes aplicativos que podem facilitar sua rotina.",
-    "Vamos atualizar sempre com dicas e informações práticas sobre o uso de apps."
+    "Kami akan terus menghadirkan tren dan pembaruan terbaru seputar aplikasi.",
+    "Ikuti rekomendasi aplikasi bermanfaat berikutnya di artikel kami selanjutnya.",
+    "Fitur baru dan aplikasi populer lainnya akan segera kami ulas di sini.",
+    "Kami akan terus merekomendasikan berbagai aplikasi yang bisa mempermudah rutinitas Anda.",
+    "Kami akan selalu memperbarui konten dengan tips dan informasi praktis seputar aplikasi."
 ]
 
 end_action = [
-    "Se gostou do conteúdo, deixe seu comentário e curta o artigo.",
-    "Sua opinião é muito importante, compartilhe suas ideias nos comentários.",
-    "Se achou útil, compartilhe com seus amigos e familiares.",
-    "Seu feedback é essencial para melhorarmos ainda mais o conteúdo.",
-    "Siga-nos para acompanhar novos artigos assim que forem publicados."
+    "Jika Anda menyukai konten ini, tinggalkan komentar dan bagikan artikel ini.",
+    "Pendapat Anda sangat penting, silakan berbagi ide di kolom komentar.",
+    "Jika bermanfaat, jangan ragu membagikannya kepada teman dan keluarga.",
+    "Masukan Anda membantu kami untuk terus meningkatkan kualitas konten.",
+    "Ikuti kami untuk mendapatkan artikel baru segera setelah diterbitkan."
 ]
 
 end_greet = [
-    "Obrigado por ler até o final! Tenha um excelente dia!",
-    "Agradecemos sua leitura e desejamos que seu cotidiano seja mais prático e feliz!",
-    "Em breve traremos mais conteúdos úteis, fique de olho!",
-    "Obrigado por acompanhar nosso blog, até a próxima!",
-    "Desejamos a você um ótimo dia cheio de conquistas!"
+    "Terima kasih telah membaca hingga akhir! Semoga hari Anda menyenangkan!",
+    "Kami berterima kasih atas waktu Anda dan berharap hidup Anda semakin praktis dan bahagia!",
+    "Segera akan ada lebih banyak konten bermanfaat, tetap pantau terus!",
+    "Terima kasih telah mengikuti blog kami, sampai jumpa di artikel berikutnya!",
+    "Kami doakan hari Anda penuh kesuksesan dan kebahagiaan!"
 ]
 
 def make_last(title):
@@ -415,9 +413,9 @@ def make_last(title):
 """
 
 # ================================
-# 앱 크롤링 (브라질/포르투갈어)
+# 앱 크롤링 (인도네시아어/지역 설정)
 # ================================
-def crawl_apps(keyword, lang="pt-BR", country="BR"):
+def crawl_apps(keyword, lang="id", country="ID"):
     url = f"https://play.google.com/store/search?q={keyword}&c=apps&hl={lang}&gl={country}"
     resp = requests.get(url, headers={"User-Agent":"Mozilla/5.0"})
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -430,7 +428,7 @@ def crawl_apps(keyword, lang="pt-BR", country="BR"):
     return app_links[3:]
 
 # ================================
-# 메인 실행 (시트5 기반, 브라질 블로그 고정)
+# 메인 실행 (시트6 기반, 인도네시아 블로그 고정)
 # ================================
 try:
     rows = ws.get_all_values()
@@ -462,7 +460,7 @@ try:
 
     # ✅ 자동 목차 (서론 직후)
     html += """
-    <div class="mbtTOC"><button>Índice</button>
+    <div class="mbtTOC"><button>Daftar Isi</button>
     <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
     </div>
     <p>&nbsp;</p>
@@ -471,7 +469,7 @@ try:
     if img_url:
         html += f"""
         <p style="text-align:center;">
-          <img src="{img_url}" alt="{keyword} miniatura" style="max-width:100%; height:auto; border-radius:10px;">
+          <img src="{img_url}" alt="{keyword} thumbnail" style="max-width:100%; height:auto; border-radius:10px;">
         </p>
         <br /><br />
         """
@@ -493,7 +491,7 @@ try:
             break
         resp = requests.get(app_url, headers={"User-Agent": "Mozilla/5.0"})
         soup = BeautifulSoup(resp.text, "html.parser")
-        h1 = soup.find("h1").text if soup.find("h1") else f"Aplicativo {j}"
+        h1 = soup.find("h1").text if soup.find("h1") else f"Aplikasi {j}"
         raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
         desc = rewrite_app_description(raw_desc, h1, keyword)
     
@@ -503,7 +501,7 @@ try:
             link_block = f"""
             <div class="ottistMultiRelated">
               <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
-                <span style="font-size: medium;"><strong>Ver mais artigos sobre {label}</strong></span>
+                <span style="font-size: medium;"><strong>Lihat artikel lainnya tentang {label}</strong></span>
                 <i class="fas fa-link 2xs"></i>
               </a>
             </div>
@@ -513,12 +511,12 @@ try:
     
         # ✅ 제목+본문
         html += f"""
-        <h2 data-ke-size="size26">{j}. {h1} — Apresentação do aplicativo</h2>
+        <h2 data-ke-size="size26">{j}. {h1} — Deskripsi Aplikasi</h2>
         <br />
         {desc}
         <br />
         <p style="text-align: center;" data-ke-size="size18">
-          <a class="myButton" href="{app_url}">Baixar {h1}</a>
+          <a class="myButton" href="{app_url}">Unduh {h1}</a>
         </p><br /><br />
         <p data-ke-size="size18">{tag_str}</p>
         <br /><br /><br />
@@ -553,6 +551,8 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 에러 메시지 기록
+
+
 
 
 
