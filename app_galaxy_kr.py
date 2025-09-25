@@ -125,31 +125,38 @@ def get_blogger_service():
 blog_handler = get_blogger_service()
 
 # ================================
-# 앱 이미지 추출 함수 (최대 4장)
+# 앱 이미지 추출 함수 (Google Play 상세 페이지, 최대 4장)
 # ================================
-def get_app_images(soup, app_name: str, limit: int = 4) -> str:
+def get_app_images(soup, app_name: str):
+    images_html = ""
     try:
-        images = []
-        for img in soup.find_all("img"):
-            src = img.get("src") or img.get("data-src") or ""
-            alt = img.get("alt") or ""
-            # 구글플레이 스크린샷 필터 (아이콘 제외, play-lh 도메인만 허용)
-            if "play-lh" in src and src.startswith("https"):
-                images.append((src, alt))
-            if len(images) >= limit:
-                break
+        # 🔹 스크린샷 영역 (role="list"인 div)
+        img_div = soup.find("div", attrs={"role": "list"})
+        imgs = img_div.find_all("img") if img_div else []
 
-        html_imgs = ""
-        for src, alt in images:
-            html_imgs += f"""
+        for cc, img in enumerate(imgs[:4], 1):  # 최대 4장만
+            img_url = img.get("srcset") or img.get("src")
+            if not img_url:
+                continue
+
+            # srcset일 경우 → 가장 큰 해상도 선택
+            if "," in img_url:
+                img_url = img_url.split(",")[-1].strip()
+            img_url = img_url.split()[0]
+
+            # 🔹 해상도 업스케일 (저화질 방지)
+            img_url = re.sub(r"w\d+-h\d+-rw", "w2048-h1100-rw", img_url)
+
+            images_html += f"""
             <div class="img-wrap">
-              <img src="{src}" alt="{app_name} 스크린샷" loading="lazy">
+              <img src="{img_url}" alt="{app_name}_{cc}" style="border-radius:10px;" loading="lazy">
             </div>
             """
-        return html_imgs if html_imgs else "<!-- 스크린샷 없음 -->"
+
     except Exception as e:
-        print(f"⚠️ 이미지 추출 실패: {e}")
-        return "<!-- 이미지 추출 오류 -->"
+        print(f"[이미지 수집 에러] {e}")
+    return images_html if images_html else "<!-- 스크린샷 없음 -->"
+
 
 
 
@@ -588,6 +595,7 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))
+
 
 
 
