@@ -288,8 +288,11 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
     compact = BeautifulSoup(original_html, 'html.parser').get_text(separator=' ', strip=True)
     system_msg = (
         "Anda adalah penulis profesional yang menulis artikel blog dalam bahasa Indonesia. "
-        "Tulis ulang konten agar tetap faktual, tetapi dengan gaya yang alami, ramah, dan menarik. "
-        "Hasilnya harus dalam paragraf dengan <p data-ke-size='size18'>."
+        "Tulis ulang konten aplikasi dengan detail dan gaya yang alami, ramah, dan menarik. "
+        "Hasil akhir harus dibagi menjadi 4 paragraf, "
+        "dan setiap paragraf harus berisi 3–4 kalimat yang saling terhubung. "
+        "Gunakan <p data-ke-size='size18'> di awal dan akhir setiap paragraf. "
+        "Tulisan harus mudah dipahami, informatif, dan mengalir seperti ulasan asli."
     )
     user_msg = f"[Nama aplikasi] {app_name}\n[Kata kunci] {keyword_str}\n\n{compact}"
     try:
@@ -300,12 +303,13 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
                 {"role": "user", "content": user_msg}
             ],
             temperature=0.7,
-            max_tokens=700
+            max_tokens=1000  # 토큰 수 조금 늘려줌
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
         print(f"[에러] GPT 처리 실패: {e}")
         return original_html
+
 # ================================
 # 서론 · 결론 랜덤 (SEO 최적화 + 문장 확장, 인도네시아 버전)
 # ================================
@@ -551,6 +555,7 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 에러 메시지 기록
+
 
 
 
