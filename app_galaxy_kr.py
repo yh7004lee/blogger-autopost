@@ -130,17 +130,15 @@ blog_handler = get_blogger_service()
 def get_app_images(soup, app_name: str, limit: int = 4) -> str:
     try:
         images = []
-        # 구글플레이 앱 상세페이지 스크린샷 찾기
         for img in soup.find_all("img"):
-            src = img.get("src") or ""
+            src = img.get("src") or img.get("data-src") or ""
             alt = img.get("alt") or ""
-            # 스크린샷 후보 (앱 아이콘 제외)
-            if "play-lh" in src and "w480-h960" in src:
+            # 구글플레이 스크린샷 필터 (아이콘 제외, play-lh 도메인만 허용)
+            if "play-lh" in src and src.startswith("https"):
                 images.append((src, alt))
             if len(images) >= limit:
                 break
 
-        # HTML 조합
         html_imgs = ""
         for src, alt in images:
             html_imgs += f"""
@@ -152,6 +150,7 @@ def get_app_images(soup, app_name: str, limit: int = 4) -> str:
     except Exception as e:
         print(f"⚠️ 이미지 추출 실패: {e}")
         return "<!-- 이미지 추출 오류 -->"
+
 
 
 # ================================
@@ -589,6 +588,7 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))
+
 
 
 
