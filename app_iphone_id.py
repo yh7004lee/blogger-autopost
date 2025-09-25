@@ -338,6 +338,32 @@ def search_app_store_ids(keyword, limit=20, country="id", eng_keyword=""):
 
 
 # =============== 앱 상세 페이지 수집 (인도네시아) ===============
+def _parse_srcset_urls(srcset: str):
+    """srcset 문자열에서 URL들만 깔끔히 분리"""
+    urls = []
+    for part in (srcset or "").split(","):
+        part = part.strip()
+        if not part:
+            continue
+        # "URL 2x" 또는 "URL 1000w" 형태 → 첫 토큰이 URL
+        url = part.split()[0]
+        if url.startswith("http"):
+            urls.append(url)
+    return urls
+
+def _normalize_mzstatic(url: str) -> str:
+    """
+    App Store 스크린샷의 시각적 중복 제거용 정규화 키 생성.
+    - 해상도 세그먼트(예: /392x696bb., /1290x2796., /scale-to-fit-down/…) 제거
+    - 확장자/쿼리 제거
+    """
+    u = url.split("?")[0]
+    # 대표적인 패턴 정리
+    u = re.sub(r"/(?:source|scale-to-fit(?:-down)?)/\d+x\d+/?", "/", u)
+    u = re.sub(r"/\d{2,4}x\d{2,4}(?:bb)?\.(?:jpg|jpeg|png|webp)$", "", u, flags=re.IGNORECASE)
+    u = re.sub(r"\.(?:jpg|jpeg|png|webp)$", "", u, flags=re.IGNORECASE)
+    return u
+
 def fetch_app_detail(app_id: str, country="id"):
     import html
     url = f"https://apps.apple.com/{country}/app/id{app_id}"
@@ -370,27 +396,30 @@ def fetch_app_detail(app_id: str, country="id"):
                     f"<p data-ke-size='size18'>{html.unescape(p.get_text(strip=True))}</p>"
                     for p in ps if p.get_text(strip=True)
                 )
-
         if not desc_html:
             meta_desc = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", property="og:description")
             if meta_desc and meta_desc.get("content"):
                 desc_html = f"<p data-ke-size='size18'>{html.unescape(meta_desc['content'].strip())}</p>"
 
         # 스크린샷 수집
+        raw_urls = []
         for s in soup.find_all("source"):
-            srcset = s.get("srcset", "")
+            srcset = s.get("srcset")
             if srcset:
-                img_url = srcset.split(" ")[0]
-                if img_url and img_url.startswith("https"):
-                    images.append(img_url)
+                raw_urls.extend(_parse_srcset_urls(srcset))
+        for img in soup.find_all("img"):
+            src = (img.get("src") or "").strip()
+            if src and src.startswith("http"):
+                raw_urls.append(src)
 
-        if not images:
-            for img in soup.find_all("img"):
-                src = img.get("src") or ""
-                if "mzstatic.com" in src:
-                    images.append(src)
+        # 중복 제거 (해상도/확장자 차이 제거)
+        uniq = {}
+        for u in raw_urls:
+            key = _normalize_mzstatic(u) if "mzstatic.com" in u else u
+            if key not in uniq:
+                uniq[key] = u
 
-        images = list(dict.fromkeys(images))[:4]
+        images = list(uniq.values())[:4]
 
         return {
             "url": url,
@@ -771,6 +800,7 @@ if __name__ == "__main__":
         sheet_append_log(ws6, row_for_err, f"실패: {e}")
         sheet_append_log(ws6, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
