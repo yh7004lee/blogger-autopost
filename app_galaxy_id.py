@@ -129,6 +129,40 @@ def get_blogger_service():
 
 blog_handler = get_blogger_service()
 
+
+# ================================
+# 앱 이미지 4개 추출 (구글플레이 상세 페이지)
+# ================================
+def get_app_images(soup, app_name: str):
+    images_html = ""
+    try:
+        # 스크린샷 영역 (role=list)
+        img_div = soup.find("div", attrs={"role": "list"})
+        imgs = img_div.find_all("img") if img_div else []
+        for cc, img in enumerate(imgs[:4], 1):   # 최대 4개
+            img_url = img.get("srcset") or img.get("src")
+            if not img_url:
+                continue
+            # srcset 형태일 경우 가장 큰 해상도 선택
+            if "," in img_url:
+                img_url = img_url.split(",")[-1].strip()
+            img_url = img_url.split()[0]
+            # 해상도 업스케일 (w2048-h1100-rw)
+            import re
+            img_url = re.sub(r"w\d+-h\d+-rw", "w2048-h1100-rw", img_url)
+
+            # HTML 구성
+            images_html += f"""
+            <div class="img-wrap">
+              <img src="{img_url}" alt="{app_name}_{cc}" style="border-radius:10px;">
+            </div>
+            """
+    except Exception as e:
+        print(f"[이미지 수집 오류] {e}")
+    return images_html
+
+
+
 # ================================
 # 썸네일 로깅 함수 (H열 사용)
 # ================================
@@ -462,6 +496,32 @@ try:
 
     html = make_intro(title, keyword)
 
+    # ✅ 스크린샷 레이아웃 스타일 추가
+    html += """
+    <style>
+    .img-group {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .img-wrap {
+      flex: 0 0 48%;
+      margin: 1%;
+    }
+    .img-wrap img {
+      width: 100%;
+      height: auto;
+      border-radius: 10px;
+    }
+    @media (max-width: 768px) {
+      .img-wrap {
+        flex: 0 0 100%;
+        margin: 5px 0;
+      }
+    }
+    </style>
+    """
+
     # ✅ 자동 목차 (서론 직후)
     html += """
     <div class="mbtTOC"><button>Daftar Isi</button>
@@ -495,10 +555,17 @@ try:
             break
         resp = requests.get(app_url, headers={"User-Agent": "Mozilla/5.0"})
         soup = BeautifulSoup(resp.text, "html.parser")
+
+        # 앱 제목
         h1 = soup.find("h1").text if soup.find("h1") else f"Aplikasi {j}"
+
+        # 앱 설명
         raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
         desc = rewrite_app_description(raw_desc, h1, keyword)
-    
+
+        # ✅ 앱 스크린샷 이미지 (최대 4장)
+        images_html = get_app_images(soup, h1)
+
         # ✅ 라벨 링크 추가 (1번째, 3번째 제목 위)
         if j in (1, 3) and label:
             encoded_label = urllib.parse.quote(label)
@@ -512,12 +579,15 @@ try:
             <br /><br /><br />
             """
             html += link_block
-    
-        # ✅ 제목+본문
+
+        # ✅ 제목+본문+스크린샷
         html += f"""
         <h2 data-ke-size="size26">{j}. {h1} — Deskripsi Aplikasi</h2>
         <br />
         {desc}
+        <br />
+        <p data-ke-size="size18"><b>Screenshot {h1}</b></p>
+        <div class="img-group">{images_html}</div>
         <br />
         <p style="text-align: center;" data-ke-size="size18">
           <a class="myButton" href="{app_url}">Unduh {h1}</a>
@@ -555,6 +625,7 @@ except Exception as e:
     print("실패:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 에러 메시지 기록
+
 
 
 
