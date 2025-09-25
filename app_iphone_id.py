@@ -397,7 +397,10 @@ def fetch_app_detail(app_id: str, country="id"):
                     for p in ps if p.get_text(strip=True)
                 )
         if not desc_html:
-            meta_desc = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", property="og:description")
+            meta_desc = (
+                soup.find("meta", attrs={"name": "description"})
+                or soup.find("meta", property="og:description")
+            )
             if meta_desc and meta_desc.get("content"):
                 desc_html = f"<p data-ke-size='size18'>{html.unescape(meta_desc['content'].strip())}</p>"
 
@@ -409,27 +412,32 @@ def fetch_app_detail(app_id: str, country="id"):
                 raw_urls.extend(_parse_srcset_urls(srcset))
         for img in soup.find_all("img"):
             src = (img.get("src") or "").strip()
-            if src and src.startswith("http"):
+            if src and src.startswith("http") and "mzstatic.com" in src:
                 raw_urls.append(src)
 
-        # 중복 제거 (해상도/확장자 차이 제거)
-        uniq = {}
+        # 중복 제거 (같은 스크린샷의 여러 해상도 중 가장 큰 해상도만 선택)
+        grouped = {}
         for u in raw_urls:
-            key = _normalize_mzstatic(u) if "mzstatic.com" in u else u
-            if key not in uniq:
-                uniq[key] = u
+            key = _normalize_mzstatic(u)
+            # 해상도 숫자 추출 (예: /1290x2796/)
+            m = re.search(r"/(\d{2,4})x(\d{2,4})", u)
+            area = int(m.group(1)) * int(m.group(2)) if m else 0
+            if key not in grouped or area > grouped[key][0]:
+                grouped[key] = (area, u)
 
-        images = list(uniq.values())[:4]
+        # 최종 이미지: 해상도 큰 것만 남김
+        images = [v[1] for v in grouped.values()][:4]
 
         return {
             "url": url,
             "name": name,
             "desc_html": desc_html,
-            "images": images
+            "images": images,
         }
     except Exception as e:
         print(f"[앱 상세 수집 실패] id={app_id}, error={e}")
         return {"url": url, "name": name, "desc_html": "", "images": []}
+
 
 # =============== CSS 블록 (한 번만 출력) ===============
 def build_css_block() -> str:
@@ -800,6 +808,7 @@ if __name__ == "__main__":
         sheet_append_log(ws6, row_for_err, f"실패: {e}")
         sheet_append_log(ws6, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
