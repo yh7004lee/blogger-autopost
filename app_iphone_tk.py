@@ -158,32 +158,76 @@ def search_app_store_ids(keyword, limit=20, country="tr", eng_keyword=""):
 
 # =============== 앱 상세 크롤링 ===============
 def fetch_app_detail(app_id: str, country="tr"):
-    import requests, re, html
-    from bs4 import BeautifulSoup
+    import html
     url = f"https://apps.apple.com/{country}/app/id{app_id}"
-    try:
-        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-        soup = BeautifulSoup(r.text, "html.parser")
-        name = soup.find("h1").get_text(strip=True) if soup.find("h1") else f"Uygulama {app_id}"
+    name = f"Aplicativo {app_id}"
+    desc_html, images = "", []
 
-        desc = ""
+    try:
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+        resp.encoding = "utf-8"
+        try:
+            soup = BeautifulSoup(resp.text, "lxml")
+        except Exception:
+            soup = BeautifulSoup(resp.text, "html.parser")
+
+        # 앱 이름
+        h1 = soup.find("h1")
+        if h1:
+            name = html.unescape(h1.get_text(strip=True))
+        else:
+            og_title = soup.find("meta", property="og:title")
+            if og_title and og_title.get("content"):
+                name = html.unescape(og_title["content"])
+
+        # 앱 설명
         desc_div = soup.find("div", class_=re.compile(r"(section__description|description)"))
         if desc_div:
             ps = desc_div.find_all("p")
-            desc = "".join(f"<p data-ke-size='size18'>{html.unescape(p.get_text(strip=True))}</p>"
-                           for p in ps if p.get_text(strip=True))
+            if ps:
+                desc_html = "".join(
+                    f"<p data-ke-size='size18'>{html.unescape(p.get_text(strip=True))}</p>"
+                    for p in ps if p.get_text(strip=True)
+                )
 
+        if not desc_html:
+            meta_desc = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", property="og:description")
+            if meta_desc and meta_desc.get("content"):
+                desc_html = f"<p data-ke-size='size18'>{html.unescape(meta_desc['content'].strip())}</p>"
+
+        # ✅ 스크린샷 수집 (홀수 인덱스만)
         images = []
-        for img in soup.find_all("img"):
-            src = img.get("src", "")
-            if "mzstatic.com" in src:
-                images.append(src)
-        images = images[:4]
+        screenshot_div = soup.find("div", class_="we-screenshot-viewer__screenshots")
+        if screenshot_div:
+            sources = screenshot_div.find_all("source")
+            for idx, src in enumerate(sources, start=1):
+                if len(images) >= 4:  # 최대 4장
+                    break
+                if idx % 2 == 1:  # 1, 3, 5, ...
+                    srcset = src.get("srcset", "")
+                    if srcset:
+                        img_url = srcset.split(" ")[0]
+                        if img_url.startswith("http"):
+                            images.append(img_url)
 
-        return {"url": url, "name": name, "desc_html": desc, "images": images}
+        # fallback
+        if not images:
+            for img in soup.find_all("img"):
+                src = img.get("src") or ""
+                if "mzstatic.com" in src and src.startswith("http"):
+                    images.append(src)
+            images = images[:4]
+
+        return {
+            "url": url,
+            "name": name,
+            "desc_html": desc_html,
+            "images": images
+        }
     except Exception as e:
-        print("[앱 상세 오류]", e)
-        return {"url": url, "name": f"Uygulama {app_id}", "desc_html": "", "images": []}
+        print(f"[앱 상세 수집 실패] id={app_id}, error={e}")
+        return {"url": url, "name": name, "desc_html": "", "images": []}
+
 
 
 # =============== 설명 리라이트 (OpenAI, fallback 있음) ===============
@@ -689,6 +733,7 @@ if __name__ == "__main__":
         sheet_append_log(ws7, row_for_err, f"실패: {e}")
         sheet_append_log(ws7, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
