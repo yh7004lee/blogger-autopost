@@ -104,6 +104,113 @@ def get_blogger_service():
 
 blog_handler = get_blogger_service()
 
+# =============== 제목 생성 ===============
+def make_post_title(keyword: str) -> str:
+    patterns = [
+        f"iPhone için {keyword} uygulamaları — en iyi seçimler",
+        f"{keyword} iOS uygulamaları: indirmeniz gerekenler",
+        f"iPhone kullanıcıları için {keyword} uygulamaları",
+        f"{keyword} hakkında en popüler iPhone uygulamaları",
+        f"{keyword} — iPhone’da işinize yarayacak uygulamalar"
+    ]
+    return random.choice(patterns)
+
+
+# =============== 라벨 생성 ===============
+def make_post_labels(sheet_row: list) -> list:
+    label_val = sheet_row[1].strip() if len(sheet_row) > 1 and sheet_row[1] else ""
+    labels = ["Uygulamalar", "iPhone"]
+    if label_val:
+        labels.append(label_val)
+    return labels
+
+
+# =============== 앱스토어 검색 (iTunes Search API) ===============
+def search_app_store_ids(keyword, limit=20, country="tr", eng_keyword=""):
+    import requests, urllib.parse
+    def fetch(term):
+        url = f"https://itunes.apple.com/search?term={urllib.parse.quote(term)}&country={country}&entity=software&limit={limit}"
+        try:
+            res = requests.get(url, timeout=12)
+            res.raise_for_status()
+            data = res.json()
+            return [{"id": str(app["trackId"]), "name": app["trackName"]}
+                    for app in data.get("results", []) if "trackId" in app]
+        except Exception as e:
+            print("[iTunes API 오류]", e)
+            return []
+
+    apps = fetch(keyword)
+    if len(apps) < 7:
+        apps += fetch(f"{keyword} app")
+    if len(apps) < 7:
+        apps += fetch(f"{keyword} uygulama")
+    if len(apps) < 7 and eng_keyword:
+        apps += fetch(eng_keyword)
+
+    seen, uniq = set(), []
+    for a in apps:
+        if a["id"] not in seen:
+            seen.add(a["id"])
+            uniq.append(a)
+    return uniq
+
+
+# =============== 앱 상세 크롤링 ===============
+def fetch_app_detail(app_id: str, country="tr"):
+    import requests, re, html
+    from bs4 import BeautifulSoup
+    url = f"https://apps.apple.com/{country}/app/id{app_id}"
+    try:
+        r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
+        soup = BeautifulSoup(r.text, "html.parser")
+        name = soup.find("h1").get_text(strip=True) if soup.find("h1") else f"Uygulama {app_id}"
+
+        desc = ""
+        desc_div = soup.find("div", class_=re.compile(r"(section__description|description)"))
+        if desc_div:
+            ps = desc_div.find_all("p")
+            desc = "".join(f"<p data-ke-size='size18'>{html.unescape(p.get_text(strip=True))}</p>"
+                           for p in ps if p.get_text(strip=True))
+
+        images = []
+        for img in soup.find_all("img"):
+            src = img.get("src", "")
+            if "mzstatic.com" in src:
+                images.append(src)
+        images = images[:4]
+
+        return {"url": url, "name": name, "desc_html": desc, "images": images}
+    except Exception as e:
+        print("[앱 상세 오류]", e)
+        return {"url": url, "name": f"Uygulama {app_id}", "desc_html": "", "images": []}
+
+
+# =============== 설명 리라이트 (OpenAI, fallback 있음) ===============
+def rewrite_app_description(original_html: str, app_name: str, keyword: str) -> str:
+    from bs4 import BeautifulSoup
+    plain = BeautifulSoup(original_html or "", "html.parser").get_text(" ", strip=True)
+    if not client:
+        return f"<p data-ke-size='size18'>{plain or (app_name + ' Tanıtım')}</p>"
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4.1-mini",
+            messages=[
+                {"role": "system", "content": "Türkçe blog yazarı gibi doğal bir tanıtım metni üret. Paragrafları <p data-ke-size='size18'> 안에 넣."},
+                {"role": "user", "content": plain}
+            ],
+            temperature=0.7,
+            max_tokens=600,
+        )
+        text = resp.choices[0].message.content.strip()
+        if "<p" not in text:
+            text = f"<p data-ke-size='size18'>{text}</p>"
+        return text
+    except Exception as e:
+        print("[OpenAI 실패]", e)
+        return f"<p data-ke-size='size18'>{plain or (app_name + ' Tanıtım')}</p>"
+
+
 # =============== 썸네일 로그 기록 (H열 사용) ===============
 def log_thumb_step(ws, row_idx, message):
     try:
@@ -582,6 +689,7 @@ if __name__ == "__main__":
         sheet_append_log(ws7, row_for_err, f"실패: {e}")
         sheet_append_log(ws7, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
