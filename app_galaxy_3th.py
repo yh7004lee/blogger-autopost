@@ -152,6 +152,39 @@ def make_thumb(save_path: str, var_title: str):
         print(f"에러: 썸네일 생성 실패: {e}")
         return False
 
+
+# ================================
+# 앱 이미지 추출 함수 (Google Play 상세 페이지, 최대 4장)
+# ================================
+def get_app_images(soup, app_name: str):
+    images_html = ""
+    try:
+        img_div = soup.find("div", attrs={"role": "list"})
+        imgs = img_div.find_all("img") if img_div else []
+
+        for cc, img in enumerate(imgs[:4], 1):  # 최대 4장
+            img_url = img.get("srcset") or img.get("src")
+            if not img_url:
+                continue
+
+            if "," in img_url:  # srcset → 가장 큰 해상도
+                img_url = img_url.split(",")[-1].strip()
+            img_url = img_url.split()[0]
+
+            # 🔹 해상도 업스케일
+            img_url = re.sub(r"w\d+-h\d+-rw", "w2048-h1100-rw", img_url)
+
+            images_html += f"""
+            <div class="img-wrap">
+              <img src="{img_url}" alt="{app_name}_{cc}" style="border-radius:10px;" loading="lazy">
+            </div>
+            """
+    except Exception as e:
+        print(f"[이미지 수집 에러] {e}")
+    return images_html if images_html else "<!-- 스크린샷 없음 -->"
+
+
+
 # ================================
 # Google Drive 업로드
 # ================================
@@ -436,9 +469,15 @@ try:
         h1 = soup.find("h1").text if soup.find("h1") else f"앱 {j}"
         raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
         desc = rewrite_app_description(raw_desc, h1, keyword)
+       # 앱 이미지 4장 추출
+        images_html = get_app_images(soup, h1)
+        
         html += f"""
         <h2 data-ke-size="size26">{j}. {h1} 어플 소개</h2>
         {desc}
+        <p data-ke-size="size18"><b>{h1} 스크린샷</b></p>
+        <div class="img-group">{images_html}</div>
+        <br />
         <p style="text-align: center;" data-ke-size="size18">
           <a class="myButton" href="{app_url}">{h1} 앱 다운로드</a>
         </p>
@@ -475,6 +514,7 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
 
