@@ -338,6 +338,7 @@ def search_app_store_ids(keyword, limit=20, country="br", eng_keyword=""):
 
 
 # =============== 앱 상세 페이지 수집 (브라질) ===============
+# =============== 앱 상세 페이지 수집 (브라질) ===============
 def fetch_app_detail(app_id: str, country="br"):
     import html
     url = f"https://apps.apple.com/{country}/app/id{app_id}"
@@ -376,21 +377,28 @@ def fetch_app_detail(app_id: str, country="br"):
             if meta_desc and meta_desc.get("content"):
                 desc_html = f"<p data-ke-size='size18'>{html.unescape(meta_desc['content'].strip())}</p>"
 
-        # 스크린샷 수집
-        for s in soup.find_all("source"):
-            srcset = s.get("srcset", "")
-            if srcset:
-                img_url = srcset.split(" ")[0]
-                if img_url and img_url.startswith("https"):
-                    images.append(img_url)
+        # ✅ 스크린샷 수집 (홀수 인덱스만)
+        images = []
+        screenshot_div = soup.find("div", class_="we-screenshot-viewer__screenshots")
+        if screenshot_div:
+            sources = screenshot_div.find_all("source")
+            for idx, src in enumerate(sources, start=1):
+                if len(images) >= 4:  # 최대 4장
+                    break
+                if idx % 2 == 1:  # 1, 3, 5, 7... 홀수 번째만
+                    srcset = src.get("srcset", "")
+                    if srcset:
+                        img_url = srcset.split(" ")[0]
+                        if img_url.startswith("http"):
+                            images.append(img_url)
 
+        # ✅ 예외적으로 이미지가 전혀 안 뽑혔을 경우 fallback
         if not images:
             for img in soup.find_all("img"):
                 src = img.get("src") or ""
-                if "mzstatic.com" in src:
+                if "mzstatic.com" in src and src.startswith("http"):
                     images.append(src)
-
-        images = list(dict.fromkeys(images))[:4]
+            images = images[:4]
 
         return {
             "url": url,
@@ -401,6 +409,7 @@ def fetch_app_detail(app_id: str, country="br"):
     except Exception as e:
         print(f"[앱 상세 수집 실패] id={app_id}, error={e}")
         return {"url": url, "name": name, "desc_html": "", "images": []}
+
 
 # =============== CSS 블록 (한 번만 출력) ===============
 def build_css_block() -> str:
@@ -770,6 +779,7 @@ if __name__ == "__main__":
         sheet_append_log(ws5, row_for_err, f"실패: {e}")
         sheet_append_log(ws5, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
