@@ -404,19 +404,20 @@ def fetch_app_detail(app_id: str, country="id"):
             if meta_desc and meta_desc.get("content"):
                 desc_html = f"<p data-ke-size='size18'>{html.unescape(meta_desc['content'].strip())}</p>"
 
-        # ✅ 스크린샷 수집 (로컬 코드와 동일한 방식)
+        # ✅ 스크린샷 수집 (홀수 인덱스만 추출)
         images = []
         screenshot_div = soup.find("div", class_="we-screenshot-viewer__screenshots")
         if screenshot_div:
             sources = screenshot_div.find_all("source")
-            for cc, src in enumerate(sources, 1):
-                if cc > 4:  # 최대 4장
+            for idx, src in enumerate(sources, start=1):
+                if len(images) >= 4:  # 최대 4장
                     break
-                srcset = src.get("srcset", "")
-                if srcset:
-                    img_url = srcset.split(" ")[0]  # 첫 번째 URL
-                    if img_url.startswith("http"):
-                        images.append(img_url)
+                if idx % 2 == 1:  # 1, 3, 5, 7 ... 홀수번째만 선택
+                    srcset = src.get("srcset", "")
+                    if srcset:
+                        img_url = srcset.split(" ")[0]
+                        if img_url.startswith("http"):
+                            images.append(img_url)
 
         return {
             "url": url,
@@ -427,6 +428,7 @@ def fetch_app_detail(app_id: str, country="id"):
     except Exception as e:
         print(f"[앱 상세 수집 실패] id={app_id}, error={e}")
         return {"url": url, "name": name, "desc_html": "", "images": []}
+
 
 
 
@@ -799,6 +801,7 @@ if __name__ == "__main__":
         sheet_append_log(ws6, row_for_err, f"실패: {e}")
         sheet_append_log(ws6, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
