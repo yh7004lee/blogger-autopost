@@ -365,7 +365,7 @@ def fetch_app_detail(app_id: str, country="jp"):
         except Exception:
             soup = BeautifulSoup(resp.text, "html.parser")
 
-        # アプリ名
+        # ✅ アプリ名
         h1 = soup.find("h1")
         if h1:
             name = html.unescape(h1.get_text(strip=True))
@@ -374,7 +374,7 @@ def fetch_app_detail(app_id: str, country="jp"):
             if og_title and og_title.get("content"):
                 name = html.unescape(og_title["content"])
 
-        # アプリ説明
+        # ✅ アプリ説明
         desc_div = soup.find("div", class_=re.compile(r"(section__description|description)"))
         if desc_div:
             ps = desc_div.find_all("p")
@@ -389,22 +389,22 @@ def fetch_app_detail(app_id: str, country="jp"):
             if meta_desc and meta_desc.get("content"):
                 desc_html = f"<p data-ke-size='size18'>{html.unescape(meta_desc['content'].strip())}</p>"
 
-        # ✅ スクリーンショット収集（奇数インデックスのみ）
+        # ✅ スクリーンショット (奇数インデックスのみ → 1, 3, 5, 7…)
         images = []
         screenshot_div = soup.find("div", class_="we-screenshot-viewer__screenshots")
         if screenshot_div:
             sources = screenshot_div.find_all("source")
             for idx, src in enumerate(sources, start=1):
-                if len(images) >= 4:  # 最大4枚
+                if len(images) >= 4:  # 最大4枚まで
                     break
-                if idx % 2 == 1:  # 1, 3, 5, 7... 奇数番目だけ
+                if idx % 2 == 1:  # 奇数番目だけ
                     srcset = src.get("srcset", "")
                     if srcset:
                         img_url = srcset.split(" ")[0]
                         if img_url.startswith("http"):
                             images.append(img_url)
 
-        # ✅ fallback: もし画像が取れなかったら <img> タグから取得
+        # ✅ fallback: <img> タグから取得 (最大4枚)
         if not images:
             for img in soup.find_all("img"):
                 src = img.get("src") or ""
@@ -797,6 +797,7 @@ if __name__ == "__main__":
         sheet_append_log(ws4, row_for_err, f"失敗: {e}")
         sheet_append_log(ws4, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("失敗:", e, tb)
+
 
 
 
