@@ -404,39 +404,30 @@ def fetch_app_detail(app_id: str, country="id"):
             if meta_desc and meta_desc.get("content"):
                 desc_html = f"<p data-ke-size='size18'>{html.unescape(meta_desc['content'].strip())}</p>"
 
-        # 스크린샷 수집
-        raw_urls = []
-        for s in soup.find_all("source"):
-            srcset = s.get("srcset")
-            if srcset:
-                raw_urls.extend(_parse_srcset_urls(srcset))
-        for img in soup.find_all("img"):
-            src = (img.get("src") or "").strip()
-            if src and src.startswith("http") and "mzstatic.com" in src:
-                raw_urls.append(src)
-
-        # 중복 제거 (같은 스크린샷의 여러 해상도 중 가장 큰 해상도만 선택)
-        grouped = {}
-        for u in raw_urls:
-            key = _normalize_mzstatic(u)
-            # 해상도 숫자 추출 (예: /1290x2796/)
-            m = re.search(r"/(\d{2,4})x(\d{2,4})", u)
-            area = int(m.group(1)) * int(m.group(2)) if m else 0
-            if key not in grouped or area > grouped[key][0]:
-                grouped[key] = (area, u)
-
-        # 최종 이미지: 해상도 큰 것만 남김
-        images = [v[1] for v in grouped.values()][:4]
+        # ✅ 스크린샷 수집 (로컬 코드와 동일한 방식)
+        images = []
+        screenshot_div = soup.find("div", class_="we-screenshot-viewer__screenshots")
+        if screenshot_div:
+            sources = screenshot_div.find_all("source")
+            for cc, src in enumerate(sources, 1):
+                if cc > 4:  # 최대 4장
+                    break
+                srcset = src.get("srcset", "")
+                if srcset:
+                    img_url = srcset.split(" ")[0]  # 첫 번째 URL
+                    if img_url.startswith("http"):
+                        images.append(img_url)
 
         return {
             "url": url,
             "name": name,
             "desc_html": desc_html,
-            "images": images,
+            "images": images
         }
     except Exception as e:
         print(f"[앱 상세 수집 실패] id={app_id}, error={e}")
         return {"url": url, "name": name, "desc_html": "", "images": []}
+
 
 
 # =============== CSS 블록 (한 번만 출력) ===============
@@ -808,6 +799,7 @@ if __name__ == "__main__":
         sheet_append_log(ws6, row_for_err, f"실패: {e}")
         sheet_append_log(ws6, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
