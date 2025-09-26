@@ -1,9 +1,8 @@
-name: Blogger Autopost iphone id
+name: Blogger Autopost iphone tk
 
 on:
   workflow_dispatch:        # ✅ 여전히 수동 실행도 가능
-  schedule:
-    - cron: '0 19 * * *'    # 매일 KST 04:00 (UTC 19:00) 실행
+
 
 
 
@@ -61,9 +60,10 @@ jobs:
 
       # ✅ 실행할 파이썬 파일 (아이폰 버전)
       - name: Run autopost script
-        run: python app_iphone_id.py
+        run: python app_iphone_tk.py
 
  
+
 
 
 
