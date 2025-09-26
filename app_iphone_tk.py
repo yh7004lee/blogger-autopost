@@ -65,6 +65,19 @@ def get_sheet7():
 
 ws7 = get_sheet7()
 
+# =============== 제목 생성 함수 ===============
+def make_post_title(keyword: str) -> str:
+    # 원하는 제목 패턴을 여기에 추가
+    patterns = [
+        f"{keyword} uygulaması — iPhone için en iyi seçenekler",
+        f"iPhone kullanıcıları için {keyword} uygulamaları önerisi",
+        f"{keyword} ile ilgili en popüler iPhone uygulamaları",
+        f"{keyword} iOS uygulamaları — indirmeniz gereken en iyi seçimler",
+        f"{keyword} hakkında iPhone için önerilen uygulamalar"
+    ]
+    return random.choice(patterns)
+
+
 # =============== Google Drive 인증 ===============
 def get_drive_service():
     token_path = "drive_token_2nd.pickle"
@@ -569,6 +582,7 @@ if __name__ == "__main__":
         sheet_append_log(ws7, row_for_err, f"실패: {e}")
         sheet_append_log(ws7, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
