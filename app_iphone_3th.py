@@ -310,24 +310,32 @@ def search_app_store_ids(keyword, limit=10, country="kr"):
 # ================================
 # 앱 상세 페이지 수집 (이름/설명/스크린샷)
 # ================================
+# ================================
+# 앱 상세 페이지 수집 (이름/설명/스크린샷, 한국, 중복 제거 버전)
+# ================================
 def fetch_app_detail(app_id: str):
     import html
     url = f"https://apps.apple.com/kr/app/id{app_id}"
-    html_content = ""
     name = f"앱 {app_id}"
-    images = []
+    desc_html, images = "", []
     try:
         resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=20)
-        resp.encoding = "utf-8"   # ✅ 추가 (인코딩 강제)
-        soup = BeautifulSoup(resp.text, "lxml")
+        resp.encoding = "utf-8"
+        try:
+            soup = BeautifulSoup(resp.text, "lxml")
+        except Exception:
+            soup = BeautifulSoup(resp.text, "html.parser")
 
-        # 앱 이름
+        # ✅ 앱 이름
         h1 = soup.find("h1")
         if h1:
             name = html.unescape(h1.get_text(strip=True))
+        else:
+            og_title = soup.find("meta", property="og:title")
+            if og_title and og_title.get("content"):
+                name = html.unescape(og_title["content"])
 
-        # 앱 설명
-        desc_html = ""
+        # ✅ 앱 설명
         desc_div = soup.find("div", class_=re.compile(r"(section__description|description)"))
         if desc_div:
             ps = desc_div.find_all("p")
@@ -338,25 +346,33 @@ def fetch_app_detail(app_id: str):
                 )
 
         if not desc_html:
-            meta_desc = soup.find("meta", attrs={"name": "description"})
+            meta_desc = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", property="og:description")
             if meta_desc and meta_desc.get("content"):
-                desc_html = f"<p data-ke-size='size18'>{html.unescape(meta_desc.get('content').strip())}</p>"
+                desc_html = f"<p data-ke-size='size18'>{html.unescape(meta_desc['content'].strip())}</p>"
 
-        # 스크린샷
-        sc_wraps = soup.find_all("source")
-        for s in sc_wraps:
-            srcset = s.get("srcset", "")
-            if srcset:
-                img_url = srcset.split(" ")[0]
-                if img_url and img_url.startswith("https"):
-                    images.append(img_url)
+        # ✅ 스크린샷 (홀수 인덱스만 추출: 1, 3, 5, 7…)
+        images = []
+        screenshot_div = soup.find("div", class_="we-screenshot-viewer__screenshots")
+        if screenshot_div:
+            sources = screenshot_div.find_all("source")
+            for idx, src in enumerate(sources, start=1):
+                if len(images) >= 4:  # 최대 4장
+                    break
+                if idx % 2 == 1:  # 홀수번째만 선택
+                    srcset = src.get("srcset", "")
+                    if srcset:
+                        img_url = srcset.split(" ")[0]
+                        if img_url.startswith("http"):
+                            images.append(img_url)
+
+        # ✅ fallback: <img> 태그에서 가져오기
         if not images:
             for img in soup.find_all("img"):
                 src = img.get("src") or ""
-                if "mzstatic.com" in src:
+                if "mzstatic.com" in src and src.startswith("http"):
                     images.append(src)
+            images = images[:4]
 
-        images = images[:4]
         return {
             "url": url,
             "name": name,
@@ -366,6 +382,7 @@ def fetch_app_detail(app_id: str):
     except Exception as e:
         print("[앱 상세 수집 실패]", app_id, e)
         return {"url": url, "name": name, "desc_html": "", "images": []}
+
 
 
 
@@ -724,6 +741,7 @@ except Exception as e:
     sheet_append_log(ws2, row_for_err, f"실패: {e}")
     sheet_append_log(ws2, row_for_err, f"Trace: {tb.splitlines()[-1]}")
     print("실패:", e, tb)
+
 
 
 
