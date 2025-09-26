@@ -469,6 +469,9 @@ try:
       display:block;
     }
     </style>
+    """
+
+    # ✅ 여기부터는 문자열 밖이므로 파이썬 코드
     if img_url:
         html += f"""
         <p style="text-align:center;">
@@ -536,6 +539,7 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
 
