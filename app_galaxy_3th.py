@@ -447,6 +447,28 @@ try:
     img_url = make_thumb_with_logging(ws, target_row, thumb_path, title)
 
     html = make_intro(title, keyword)
+    # ✅ 스크린샷 2열 고정 CSS (반응형 끔)
+    html += """
+    <style>
+    .img-group{
+      display:flex;
+      flex-wrap:wrap;
+      justify-content:center;
+      gap:2%;
+    }
+    .img-wrap{
+      flex:0 0 48% !important;   /* 두 칸 고정 */
+      max-width:48% !important;
+      margin:0 0 12px 0;
+      box-sizing:border-box;
+    }
+    .img-wrap img{
+      width:100%;
+      height:auto;
+      border-radius:10px;
+      display:block;
+    }
+    </style>
     if img_url:
         html += f"""
         <p style="text-align:center;">
@@ -514,6 +536,7 @@ try:
 except Exception as e:
     tb = traceback.format_exc()
     print("실패:", e, tb)
+
 
 
 
