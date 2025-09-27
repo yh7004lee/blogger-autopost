@@ -1,7 +1,7 @@
 name: Google Indexing
 
 on:
-  workflow_dispatch:   # 수동 실행 가능
+  workflow_dispatch:   # ✅ 수동 실행만 가능
 
 jobs:
   run-indexing:
