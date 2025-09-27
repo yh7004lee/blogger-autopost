@@ -11,16 +11,16 @@ import os
 SITE_URLS = [
     "https://bokji.appsos.kr/",
     "https://info.alltopx.com/",
-    "https://movie.appsos.kr/sitemap.xml",
-    "https://jpapp.appsos.kr/sitemap.xml",
-    "https://apk.appsos.kr/sitemap.xml",
-    "https://appbr.appsos.kr/sitemap.xml",
-    "https://appid.appsos.kr/sitemap.xml",
-    "https://apptk.appsos.kr/sitemap.xml",
-    "https://japan.appsos.kr/sitemap.xml",
-    "https://cinebr.appsos.kr/sitemap.xml",
-    "https://cineindo.appsos.kr/sitemap.xml",
-    "https://cinetrk.appsos.kr/sitemap.xml",
+    "https://movie.appsos.kr/",
+    "https://jpapp.appsos.kr/",
+    "https://apk.appsos.kr/",
+    "https://appbr.appsos.kr/",
+    "https://appid.appsos.kr/",
+    "https://apptk.appsos.kr/",
+    "https://japan.appsos.kr/",
+    "https://cinebr.appsos.kr/",
+    "https://cineindo.appsos.kr/",
+    "https://cinetrk.appsos.kr/",
     # 필요하면 추가
 ]
 
@@ -111,4 +111,5 @@ if fail_list:
     for u in fail_list:
         print("-", u)
 print("================================================")
+
 
