@@ -1,32 +1,49 @@
-from oauth2client.service_account import ServiceAccountCredentials
-import httplib2
+import advertools as adv
+import requests
 import json
 import time
-import advertools as adv
+import os
 
-# ✅ 여러 개 블로그 sitemap 리스트
-sitemaps = [
-    "https://movie.appsos.kr/sitemap.xml",
-    "https://jpapp.appsos.kr/sitemap.xml",
-    "https://apk.appsos.kr/sitemap.xml",
-    "https://appbr.appsos.kr/sitemap.xml",
-    "https://appid.appsos.kr/sitemap.xml",
-    "https://apptk.appsos.kr/sitemap.xml",
-    "https://japan.appsos.kr/sitemap.xml",
-    "https://cinebr.appsos.kr/sitemap.xml",
-    "https://cineindo.appsos.kr/sitemap.xml",
-    "https://cinetrk.appsos.kr/sitemap.xml",
-
-    # 필요한 만큼 추가
+# ==========================================
+# ✅ 사용자 설정 영역
+# ==========================================
+# 여러 사이트 입력 (sitemap.xml 자동 인식)
+SITE_URLS = [
+    "https://bokji.appsos.kr/",
+    "https://info.alltopx.com/",
+    # 필요하면 추가
 ]
 
-JSON_KEY_FILE = "D:/py/geometric-shift-369100-21ba5abf1bac.json"  # 서비스계정 키
-SCOPES = ["https://www.googleapis.com/auth/indexing"]
-ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifications:publish"
+# 각 사이트별 제출할 개수
+POST_COUNT_PER_SITE = 5
 
-# ✅ 구글 인증
-credentials = ServiceAccountCredentials.from_json_keyfile_name(JSON_KEY_FILE, scopes=SCOPES)
-http = credentials.authorize(httplib2.Http())
+# OFFSET: 0=최신부터, 5=6번째부터, 10=11번째부터 …
+OFFSET = 0
+
+# 요청 간격(초)
+REQUEST_DELAY = 0.2
+# ==========================================
+
+# ✅ GitHub Actions에서 디코딩된 JSON 파일에서 Bing 키 불러오기
+with open("bing_key.json", "r") as f:
+    bing_key_data = json.load(f)
+BING_API_KEY = bing_key_data["bing_api_key"]
+
+# ✅ Bing Submit URL
+BING_ENDPOINT = f"https://ssl.bing.com/webmaster/api.svc/json/SubmitUrl?apikey={BING_API_KEY}"
+
+# ✅ 함수 정의
+def submit_url(data):
+    headers = {
+        "User-Agent": "curl/7.12.1",
+        "Content-Type": "application/json"
+    }
+    try:
+        r = requests.post(url=BING_ENDPOINT, json=data, headers=headers)
+        return r.status_code, r.text
+    except Exception as e:
+        return 500, str(e)
+
 
 # ✅ 통계 변수
 total_urls = 0
@@ -34,53 +51,46 @@ success_count = 0
 fail_count = 0
 fail_list = []
 
-for sitemap in sitemaps:
+# ==========================================
+# 각 사이트맵 실행
+# ==========================================
+for site in SITE_URLS:
+    sitemap_url = f"{site}sitemap.xml"
+    print(f"\n📌 {site} 사이트맵 요청 중: {sitemap_url}")
+
     try:
-        # 사이트맵 불러오기
-        sitemap_urls = adv.sitemap_to_df(sitemap)
-        url_lists = sitemap_urls["loc"].to_list()
-
-        # 최신 5개만
-        latest_urls = url_lists[:5]
-
-        print(f"\n📌 {sitemap} → {len(latest_urls)}개 색인 요청 시작")
-
-        for url in latest_urls:
-            total_urls += 1
-            content = {
-                "url": url,
-                "type": "URL_UPDATED"
-            }
-            json_content = json.dumps(content)
-
-            try:
-                response, content = http.request(
-                    ENDPOINT,
-                    method="POST",
-                    body=json_content
-                )
-                result = json.loads(content.decode())
-
-                # 성공/실패 판별
-                if response.status == 200:
-                    success_count += 1
-                    print(f"✅ 성공: {url}")
-                else:
-                    fail_count += 1
-                    fail_list.append(url)
-                    print(f"❌ 실패: {url} → {result}")
-
-            except Exception as e:
-                fail_count += 1
-                fail_list.append(url)
-                print(f"⚠️ 오류 발생: {url} → {e}")
-
-            time.sleep(0.2)  # 요청 간격 (0.2초 예시)
-
+        sitemap_urls = adv.sitemap_to_df(sitemap_url)
+        url_list = sitemap_urls["loc"].to_list()
     except Exception as e:
-        print(f"⚠️ 사이트맵 오류: {sitemap} → {e}")
+        print(f"⚠️ 사이트맵 오류: {sitemap_url} → {e}")
+        continue
 
-# ✅ 최종 결과 요약
+    # 최근 OFFSET부터 POST_COUNT_PER_SITE 만큼 선택
+    selected_urls = url_list[OFFSET : OFFSET + POST_COUNT_PER_SITE]
+
+    print(f"총 {len(url_list)}개 URL 중 {len(selected_urls)}개 제출 (OFFSET={OFFSET})")
+
+    for url in selected_urls:
+        total_urls += 1
+        data = {
+            "siteUrl": site,
+            "url": url
+        }
+        status, result = submit_url(data)
+
+        if status == 200:
+            success_count += 1
+            print(f"✅ 성공: {url}")
+        else:
+            fail_count += 1
+            fail_list.append(url)
+            print(f"❌ 실패: {url} → {result}")
+
+        time.sleep(REQUEST_DELAY)
+
+# ==========================================
+# ✅ 최종 결과
+# ==========================================
 print("\n================ 최종 실행 결과 ================")
 print(f"총 요청 URL: {total_urls}개")
 print(f"성공: {success_count}개")
