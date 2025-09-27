@@ -1,9 +1,11 @@
 name: Blogger Autopost Galaxy kr
 
 on:
-  workflow_dispatch:        # 수동 실행 가능
+  workflow_dispatch:        # ✅ 수동 실행 가능
   schedule:
-    - cron: '0 21 * * *'   # 매일 KST 06:00 (UTC+9) = 매일 21:00 UTC
+    - cron: '0 21 * * *'   # ✅ KST 새벽 6시
+    - cron: '0 9 * * *'    # ✅ KST 오후 6시
+
 
 
 jobs:
@@ -61,4 +63,5 @@ jobs:
       # ✅ 실행할 파이썬 파일 (여기만 변경)
       - name: Run autopost script
         run: python app_galaxy_kr.py
+
 
