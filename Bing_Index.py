@@ -25,7 +25,7 @@ SITE_URLS = [
 ]
 
 # 각 사이트별 제출할 개수
-POST_COUNT_PER_SITE = 5
+POST_COUNT_PER_SITE = 7
 
 # OFFSET: 0=최신부터, 5=6번째부터, 10=11번째부터 …
 OFFSET = 0
@@ -111,5 +111,6 @@ if fail_list:
     for u in fail_list:
         print("-", u)
 print("================================================")
+
 
 
