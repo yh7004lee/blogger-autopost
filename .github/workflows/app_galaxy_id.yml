@@ -1,9 +1,11 @@
 name: Blogger Autopost Galaxy id
 
 on:
-  workflow_dispatch: # ✅ 여전히 수동 실행도 가능
+  workflow_dispatch: # ✅ 수동 실행 가능
   schedule:
-    - cron: '0 18 * * *' # 매일 KST 03:00 (UTC 18:00) 실행
+    - cron: '0 18 * * *' # ✅ KST 새벽 3시
+    - cron: '0 6 * * *'  # ✅ KST 오후 3시
+
 
 
 jobs:
@@ -61,6 +63,7 @@ jobs:
       # ✅ 실행할 파이썬 파일 (여기만 변경)
       - name: Run autopost script
         run: python app_galaxy_id.py
+
 
 
 
