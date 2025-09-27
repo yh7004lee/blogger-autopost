@@ -18,6 +18,8 @@ REQUEST_DELAY = 0.2
 # ==========================================
 
 sitemaps = [
+    "https://bokji.appsos.kr/",
+    "https://info.alltopx.com/",
     "https://movie.appsos.kr/sitemap.xml",
     "https://jpapp.appsos.kr/sitemap.xml",
     "https://apk.appsos.kr/sitemap.xml",
@@ -90,6 +92,7 @@ if fail_list:
     for u in fail_list:
         print("-", u)
 print("================================================")
+
 
 
 
