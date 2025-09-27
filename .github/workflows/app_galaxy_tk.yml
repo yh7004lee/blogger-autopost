@@ -1,9 +1,11 @@
 name: Blogger Autopost Galaxy tk
 
 on:
-  workflow_dispatch:        # ✅ 여전히 수동 실행도 가능
+  workflow_dispatch:        # ✅ 수동 실행 가능
   schedule:
-    - cron: "10 20 * * *"
+    - cron: "10 20 * * *"  # ✅ KST 새벽 5:10
+    - cron: "10 8 * * *"   # ✅ KST 오후 5:10
+
 
 
 
@@ -63,6 +65,7 @@ jobs:
       # ✅ 실행할 파이썬 파일 (여기만 변경)
       - name: Run autopost script
         run: python app_galaxy_tk.py
+
 
 
 
