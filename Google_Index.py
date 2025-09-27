@@ -5,6 +5,19 @@ import advertools as adv
 import httplib2
 from oauth2client.service_account import ServiceAccountCredentials
 
+# ==========================================
+# ✅ 사용자 설정 영역
+# ==========================================
+# 각 사이트맵에서 몇 개씩 색인 요청할지
+POST_COUNT_PER_SITEMAP = 5
+
+# 어디서부터 시작할지 (0=최신부터, 5=6번째부터, 10=11번째부터 …)
+OFFSET = 5
+
+# 요청 간격(초)
+REQUEST_DELAY = 0.2
+# ==========================================
+
 # ✅ 여러 개 블로그 sitemap 리스트
 sitemaps = [
     "https://movie.appsos.kr/sitemap.xml",
@@ -39,11 +52,11 @@ for sitemap in sitemaps:
     try:
         sitemap_urls = adv.sitemap_to_df(sitemap)
         url_lists = sitemap_urls["loc"].to_list()
-        latest_urls = url_lists[:5]
+        selected_urls = url_lists[OFFSET : OFFSET + POST_COUNT_PER_SITEMAP]  # ✅ 구간 설정 반영
 
-        print(f"\n📌 {sitemap} → {len(latest_urls)}개 색인 요청 시작")
+        print(f"\n📌 {sitemap} → {len(selected_urls)}개 색인 요청 시작 (OFFSET={OFFSET})")
 
-        for url in latest_urls:
+        for url in selected_urls:
             total_urls += 1
             content = {"url": url, "type": "URL_UPDATED"}
             json_content = json.dumps(content)
@@ -65,7 +78,7 @@ for sitemap in sitemaps:
                 fail_list.append(url)
                 print(f"⚠️ 오류 발생: {url} → {e}")
 
-            time.sleep(0.2)  # 요청 간격
+            time.sleep(REQUEST_DELAY)
 
     except Exception as e:
         print(f"⚠️ 사이트맵 오류: {sitemap} → {e}")
