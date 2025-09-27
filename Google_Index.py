@@ -11,7 +11,7 @@ from google.auth.transport.requests import AuthorizedSession
 # ✅ 사용자 설정 영역
 # ==========================================
 # 각 사이트맵에서 몇 개씩 색인 요청할지
-POST_COUNT_PER_SITEMAP = 5
+POST_COUNT_PER_SITEMAP = 7
 # 어디서부터 시작할지 (0=최신부터, 5=6번째부터, 10=11번째부터 …)
 OFFSET = 0
 REQUEST_DELAY = 0.2
@@ -92,6 +92,7 @@ if fail_list:
     for u in fail_list:
         print("-", u)
 print("================================================")
+
 
 
 
