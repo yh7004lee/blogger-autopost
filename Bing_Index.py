@@ -21,6 +21,9 @@ SITE_URLS = [
     "https://cinebr.appsos.kr/",
     "https://cineindo.appsos.kr/",
     "https://cinetrk.appsos.kr/",
+    "https://cafe.appsos.kr/",
+    "https://pro.alltopx.com/",
+    "https://appnara.blogspot.com/",
     # 필요하면 추가
 ]
 
@@ -111,6 +114,7 @@ if fail_list:
     for u in fail_list:
         print("-", u)
 print("================================================")
+
 
 
 
