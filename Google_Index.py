@@ -1,8 +1,9 @@
-from oauth2client.service_account import ServiceAccountCredentials
-import httplib2
+import os
 import json
 import time
 import advertools as adv
+import httplib2
+from oauth2client.service_account import ServiceAccountCredentials
 
 # ✅ 여러 개 블로그 sitemap 리스트
 sitemaps = [
@@ -16,11 +17,11 @@ sitemaps = [
     "https://cinebr.appsos.kr/sitemap.xml",
     "https://cineindo.appsos.kr/sitemap.xml",
     "https://cinetrk.appsos.kr/sitemap.xml",
-
-    # 필요한 만큼 추가
 ]
 
-JSON_KEY_FILE = "D:/py/geometric-shift-369100-21ba5abf1bac.json"  # 서비스계정 키
+# ✅ GitHub Actions에서 base64 → 디코딩된 JSON 키 파일
+JSON_KEY_FILE = "service_account.json"
+
 SCOPES = ["https://www.googleapis.com/auth/indexing"]
 ENDPOINT = "https://indexing.googleapis.com/v3/urlNotifications:publish"
 
@@ -36,32 +37,21 @@ fail_list = []
 
 for sitemap in sitemaps:
     try:
-        # 사이트맵 불러오기
         sitemap_urls = adv.sitemap_to_df(sitemap)
         url_lists = sitemap_urls["loc"].to_list()
-
-        # 최신 5개만
         latest_urls = url_lists[:5]
 
         print(f"\n📌 {sitemap} → {len(latest_urls)}개 색인 요청 시작")
 
         for url in latest_urls:
             total_urls += 1
-            content = {
-                "url": url,
-                "type": "URL_UPDATED"
-            }
+            content = {"url": url, "type": "URL_UPDATED"}
             json_content = json.dumps(content)
 
             try:
-                response, content = http.request(
-                    ENDPOINT,
-                    method="POST",
-                    body=json_content
-                )
+                response, content = http.request(ENDPOINT, method="POST", body=json_content)
                 result = json.loads(content.decode())
 
-                # 성공/실패 판별
                 if response.status == 200:
                     success_count += 1
                     print(f"✅ 성공: {url}")
@@ -75,7 +65,7 @@ for sitemap in sitemaps:
                 fail_list.append(url)
                 print(f"⚠️ 오류 발생: {url} → {e}")
 
-            time.sleep(0.2)  # 요청 간격 (0.2초 예시)
+            time.sleep(0.2)  # 요청 간격
 
     except Exception as e:
         print(f"⚠️ 사이트맵 오류: {sitemap} → {e}")
