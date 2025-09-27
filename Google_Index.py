@@ -30,6 +30,9 @@ sitemaps = [
     "https://cinebr.appsos.kr/sitemap.xml",
     "https://cineindo.appsos.kr/sitemap.xml",
     "https://cinetrk.appsos.kr/sitemap.xml",
+    "https://cafe.appsos.kr/sitemap.xml",
+    "https://pro.alltopx.com/sitemap.xml",
+    "https://appnara.blogspot.com/sitemap.xml",
 ]
 
 JSON_KEY_FILE = "service_account.json"
@@ -92,6 +95,7 @@ if fail_list:
     for u in fail_list:
         print("-", u)
 print("================================================")
+
 
 
 
