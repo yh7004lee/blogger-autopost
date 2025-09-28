@@ -43,7 +43,7 @@ def get_sheet():
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    return gc.open_by_key(SHEET_ID).get_worksheet(8)  # index=8 → 8번째 시트
+    return gc.open_by_key(SHEET_ID).get_worksheet(7)   # 0부터 시작 → 7이면 8번째 시트
 
 ws = get_sheet()
 
@@ -618,6 +618,7 @@ except Exception as e:
     print("Falló:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 에러 메시지 기록
+
 
 
 
