@@ -30,7 +30,7 @@ DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
 # ID / URL del blog (versión México)
 BLOG_ID = "8582128276301125850"
-BLOG_URL = "https://appmx.appsos.kr/"
+BLOG_URL = "https://appes.appsos.kr/"
 
 # Google Custom Search (opcional)
 GCS_API_KEY = os.getenv("GCS_API_KEY", "").strip()
@@ -709,6 +709,7 @@ if __name__ == "__main__":
         sheet_append_log(ws8, row_for_err, f"Fallo: {e}")
         sheet_append_log(ws8, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("Fallo:", e, tb)
+
 
 
 
