@@ -20,7 +20,7 @@ DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
 # ✅ 블로그 고정 (맥시코 버전)
 BLOG_ID = "8582128276301125850"
-BLOG_URL = "https://appes.appsos.kr/"
+BLOG_URL = "https://appmx.appsos.kr/"
 
 # ================================
 # OpenAI API Key 로드
@@ -43,7 +43,7 @@ def get_sheet():
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    return gc.open_by_key(SHEET_ID).get_worksheet(7)  # index=7 → 8번째 시트
+    return gc.open_by_key(SHEET_ID).get_worksheet(8)  # index=8 → 8번째 시트
 
 ws = get_sheet()
 
@@ -618,6 +618,7 @@ except Exception as e:
     print("Falló:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 에러 메시지 기록
+
 
 
 
