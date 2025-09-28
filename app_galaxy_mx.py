@@ -20,7 +20,7 @@ DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
 # ✅ 블로그 고정 (맥시코 버전)
 BLOG_ID = "8582128276301125850"
-BLOG_URL = "https://appmx.appsos.kr/"
+BLOG_URL = "https://appes.appsos.kr/"
 
 # ================================
 # OpenAI API Key 로드
@@ -618,6 +618,7 @@ except Exception as e:
     print("Falló:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 에러 메시지 기록
+
 
 
 
