@@ -29,8 +29,8 @@ SHEET_ID = os.getenv("SHEET_ID", "1SeQogbinIrDTMKjWhGgWPEQq8xv6ARv5n3I-2BsMrSc")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
 # ID / URL del blog (versión México)
-BLOG_ID = "3433544505760551722"
-BLOG_URL = "https://apptk.appsos.kr/"
+BLOG_ID = "8582128276301125850"
+BLOG_URL = "https://appmx.appsos.kr/"
 
 # Google Custom Search (opcional)
 GCS_API_KEY = os.getenv("GCS_API_KEY", "").strip()
@@ -50,19 +50,21 @@ if not OPENAI_API_KEY:
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 
 # =============== Google Sheets autenticación (sheet7) ===============
-def get_sheet7():
+# =============== Google Sheets autenticación (sheet8) ===============
+def get_sheet8():
     service_account_file = "sheetapi.json"
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
     try:
-        ws7 = sh.worksheet("sheet7")
+        ws8 = sh.worksheet("sheet8")
     except Exception:
-        ws7 = sh.get_worksheet(6)
-    return ws7
+        ws8 = sh.get_worksheet(7)  # 시트8은 인덱스 7 (0부터 시작)
+    return ws8
 
-ws7 = get_sheet7()
+ws8 = get_sheet8()
+
 
 # =============== Función para generar títulos ===============
 def make_post_title(keyword: str) -> str:
@@ -562,48 +564,48 @@ def sheet_append_log(ws, row_idx, message, tries=3, delay=2):
 if __name__ == "__main__":
     try:
         # 1) Obtener fila/registro objetivo
-        target_row, row = pick_target_row(ws7)
+        target_row, row = pick_target_row(ws8)
         if not target_row or not row:
-            sheet_append_log(ws7, 2, "No hay keywords para procesar (columna A)")
+            sheet_append_log(ws8, 2, "No hay keywords para procesar (columna A)")
             raise SystemExit(0)
 
         keyword = row[0].strip()   # columna A
         label_val = row[1].strip() if len(row) > 1 else ""  # columna B
 
-        sheet_append_log(ws7, target_row, f"Fila objetivo={target_row}, Keyword='{keyword}', Label='{label_val}'")
+        sheet_append_log(ws8, target_row, f"Fila objetivo={target_row}, Keyword='{keyword}', Label='{label_val}'")
 
         # 2) Generar título
         title = make_post_title(keyword)
-        sheet_append_log(ws7, target_row, f"Título='{title}'")
+        sheet_append_log(ws8, target_row, f"Título='{title}'")
 
         # 3) Generar y subir thumbnail
         thumb_dir = "thumbnails"
         os.makedirs(thumb_dir, exist_ok=True)
         thumb_path = os.path.join(thumb_dir, f"{keyword}.png")
-        sheet_append_log(ws7, target_row, "Inicio generación thumbnail")
-        thumb_url = make_thumb_with_logging(ws7, target_row, thumb_path, title)
-        sheet_append_log(ws7, target_row, f"Resultado thumbnail: {thumb_url or 'Fallido'}")
+        sheet_append_log(ws8, target_row, "Inicio generación thumbnail")
+        thumb_url = make_thumb_with_logging(ws8, target_row, thumb_path, title)
+        sheet_append_log(ws8, target_row, f"Resultado thumbnail: {thumb_url or 'Fallido'}")
 
         # 4) Buscar IDs de apps
-        sheet_append_log(ws7, target_row, "Inicio búsqueda de IDs de apps")
+        sheet_append_log(ws8, target_row, "Inicio búsqueda de IDs de apps")
         eng_keyword = row[3].strip() if len(row) > 3 else ""  # columna D
         apps = search_app_store_ids(keyword, limit=20, eng_keyword=eng_keyword)
 
         if not apps:
-            sheet_append_log(ws7, target_row, "No se encontraron apps → salir")
-            ws7.update_cell(target_row, 5, "OK")      # columna E
-            ws7.update_cell(target_row, 7, "")        # columna G
-            sheet_append_log(ws7, target_row, "Registro hoja completado: E='OK', G='' (sin resultados)")
+            sheet_append_log(ws8, target_row, "No se encontraron apps → salir")
+            ws8.update_cell(target_row, 5, "OK")      # columna E
+            ws8.update_cell(target_row, 7, "")        # columna G
+            sheet_append_log(ws8, target_row, "Registro hoja completado: E='OK', G='' (sin resultados)")
             raise SystemExit(0)
 
         if len(apps) < 3:
-            sheet_append_log(ws7, target_row, "Menos de 3 apps → marcar como completado")
-            ws7.update_cell(target_row, 5, "OK")
-            ws7.update_cell(target_row, 7, "")
-            sheet_append_log(ws7, target_row, "Registro hoja completado: E='OK', G='' (pocas apps)")
+            sheet_append_log(ws8, target_row, "Menos de 3 apps → marcar como completado")
+            ws8.update_cell(target_row, 5, "OK")
+            ws8.update_cell(target_row, 7, "")
+            sheet_append_log(ws8, target_row, "Registro hoja completado: E='OK', G='' (pocas apps)")
             raise SystemExit(0)
 
-        sheet_append_log(ws7, target_row, f"IDs de apps={[(a['id'], a['name']) for a in apps]}")
+        sheet_append_log(ws8, target_row, f"IDs de apps={[(a['id'], a['name']) for a in apps]}")
 
         # 5) Introducción
         html_full = build_css_block()
@@ -614,7 +616,7 @@ if __name__ == "__main__":
         </div>
         <p>&nbsp;</p>
         """
-        sheet_append_log(ws7, target_row, "Introducción generada")
+        sheet_append_log(ws8, target_row, "Introducción generada")
 
         # 6) Insertar thumbnail en el cuerpo
         if thumb_url:
@@ -623,21 +625,21 @@ if __name__ == "__main__":
   <img src="{thumb_url}" alt="{keyword} thumbnail" style="max-width:100%; height:auto; border-radius:10px;">
 </p><br /><br />
 """
-            sheet_append_log(ws7, target_row, "Thumbnail insertado en el cuerpo")
+            sheet_append_log(ws8, target_row, "Thumbnail insertado en el cuerpo")
         else:
-            sheet_append_log(ws7, target_row, "No hay thumbnail")
+            sheet_append_log(ws8, target_row, "No hay thumbnail")
 
         # 7) Hashtags
         tag_items = title.split()
         tag_str = " ".join([f"#{t}" for t in tag_items]) + " #AppStore"
-        sheet_append_log(ws7, target_row, f"Hashtags='{tag_str}'")
+        sheet_append_log(ws8, target_row, f"Hashtags='{tag_str}'")
 
         # 8) Recolectar detalles de apps → armar contenido
         for j, app in enumerate(apps, 1):
             if j > 7:  # máximo 7 apps
                 break
             try:
-                sheet_append_log(ws7, target_row, f"[{j}] Inicio recolección app id={app['id']}")
+                sheet_append_log(ws8, target_row, f"[{j}] Inicio recolección app id={app['id']}")
                 detail = fetch_app_detail(app["id"], country="mx")
                 app_url = detail["url"]
                 app_name = detail["name"]
@@ -645,7 +647,7 @@ if __name__ == "__main__":
                 images = detail["images"]
 
                 desc_html = rewrite_app_description(src_html, app_name, keyword)
-                sheet_append_log(ws7, target_row, f"[{j}] {app_name} descripción reescrita")
+                sheet_append_log(ws8, target_row, f"[{j}] {app_name} descripción reescrita")
 
                 img_group_html = "".join(
                     f'<div class="img-wrap"><img src="{img_url}" alt="{app_name}_{cc}"></div>'
@@ -668,13 +670,13 @@ if __name__ == "__main__":
                 """
 
                 html_full += section_html
-                sheet_append_log(ws7, target_row, f"[{j}] Sección {app_name} completada")
+                sheet_append_log(ws8, target_row, f"[{j}] Sección {app_name} completada")
             except Exception as e_each:
-                sheet_append_log(ws7, target_row, f"[{j}] Fallo al procesar app: {e_each}")
+                sheet_append_log(ws8, target_row, f"[{j}] Fallo al procesar app: {e_each}")
 
         # 9) Cierre
         html_full += build_ending_block(title, keyword)
-        sheet_append_log(ws7, target_row, "Cierre generado")
+        sheet_append_log(ws8, target_row, "Cierre generado")
         related_box = get_related_posts(BLOG_ID, count=6)
         html_full += related_box
         html_full += "<script>mbtTOC();</script><br /><br />"
@@ -686,27 +688,28 @@ if __name__ == "__main__":
             res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body,
                                               isDraft=False, fetchImages=True).execute()
             post_url = res.get("url", "")
-            sheet_append_log(ws7, target_row, f"Subida exitosa: {post_url}")
+            sheet_append_log(ws8, target_row, f"Subida exitosa: {post_url}")
         except Exception as up_e:
-            sheet_append_log(ws7, target_row, f"Fallo al subir: {up_e}")
+            sheet_append_log(ws8, target_row, f"Fallo al subir: {up_e}")
             raise
 
         # 11) Registro en hoja
-        ws7.update_cell(target_row, 5, "OK")
-        ws7.update_cell(target_row, 7, post_url)
-        sheet_append_log(ws7, target_row, f"Registro hoja completado: E='OK', G='{post_url}'")
+        ws8.update_cell(target_row, 5, "OK")
+        ws8.update_cell(target_row, 7, post_url)
+        sheet_append_log(ws8, target_row, f"Registro hoja completado: E='OK', G='{post_url}'")
 
         # 12) Finalizado
-        sheet_append_log(ws7, target_row, "Finalización exitosa")
+        sheet_append_log(ws8, target_row, "Finalización exitosa")
 
     except SystemExit:
         pass
     except Exception as e:
         tb = traceback.format_exc()
         row_for_err = target_row if 'target_row' in locals() and target_row else 2
-        sheet_append_log(ws7, row_for_err, f"Fallo: {e}")
-        sheet_append_log(ws7, row_for_err, f"Trace: {tb.splitlines()[-1]}")
+        sheet_append_log(ws8, row_for_err, f"Fallo: {e}")
+        sheet_append_log(ws8, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("Fallo:", e, tb)
+
 
 
 
