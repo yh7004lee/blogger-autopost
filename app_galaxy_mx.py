@@ -18,9 +18,9 @@ import urllib.parse
 SHEET_ID = os.getenv("SHEET_ID", "1SeQogbinIrDTMKjWhGgWPEQq8xv6ARv5n3I-2BsMrSc")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
-# ✅ 블로그 고정 (터키 버전)
-BLOG_ID = "3433544505760551722"
-BLOG_URL = "https://apptk.appsos.kr/"
+# ✅ 블로그 고정 (맥시코 버전)
+BLOG_ID = "8582128276301125850"
+BLOG_URL = "https://appes.appsos.kr/"
 
 # ================================
 # OpenAI API Key 로드
@@ -35,20 +35,20 @@ if not OPENAI_API_KEY:
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # ================================
-# Google Sheets 인증 (시트7 사용)
-# A열: 터키어 키워드 / B열: 카테고리 / D열: 영어 키워드
+# Google Sheets 인증 (시트8 사용)
+# A열: 스페인어 키워드 / B열: 카테고리 / D열: 영어 키워드
 # ================================
 def get_sheet():
     SERVICE_ACCOUNT_FILE = "sheetapi.json"
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    return gc.open_by_key(SHEET_ID).get_worksheet(6)  # index=6 → 7번째 시트
+    return gc.open_by_key(SHEET_ID).get_worksheet(7)  # index=7 → 8번째 시트
 
 ws = get_sheet()
 
 # ================================
-# 추천글 박스 (터키 버전)
+# 추천글 박스 (맥시코 스페인어)
 # ================================
 def get_related_posts(blog_id, count=6):
     import feedparser, random
@@ -61,14 +61,14 @@ def get_related_posts(blog_id, count=6):
     # 랜덤으로 count개 추출
     entries = random.sample(feed.entries, min(count, len(feed.entries)))
 
-    # HTML 박스 생성 (터키어 문구 적용)
+    # HTML 박스 생성 (스페인어 문구 적용)
     html_box = """
 <div style="background: rgb(239, 237, 233); border-radius: 8px; border: 2px dashed rgb(167, 162, 151);
             box-shadow: rgb(239, 237, 233) 0px 0px 0px 10px; color: #565656; font-weight: bold;
             margin: 2em 10px; padding: 2em;">
   <p data-ke-size="size16"
      style="border-bottom: 1px solid rgb(85, 85, 85); color: #555555; font-size: 16px;
-            margin-bottom: 15px; padding-bottom: 5px;">♡♥ Bu faydalı yazılara da göz atın</p>
+            margin-bottom: 15px; padding-bottom: 5px;">♡♥ No te pierdas estos artículos útiles</p>
 """
     for entry in entries:
         title = entry.title
@@ -93,11 +93,11 @@ def get_drive_service():
     return build("drive", "v3", credentials=creds)
 
 # ================================
-# 제목 생성 (G1 인덱스 활용, 터키어 패턴)
+# 제목 생성 (G1 인덱스 활용, 스페인어 패턴)
 # ================================
 def make_rotating_title(ws, keyword: str) -> str:
-    front_choices = ["Telefon", "Akıllı Telefon", "Android"]
-    back_choices = ["Önerilen uygulamalar", "En iyi uygulamalar"]
+    front_choices = ["Teléfono", "Smartphone", "Android"]
+    back_choices = ["Aplicaciones recomendadas", "Mejores aplicaciones"]
 
     # G1 셀에서 인덱스 불러오기 (없으면 0)
     try:
@@ -113,7 +113,7 @@ def make_rotating_title(ws, keyword: str) -> str:
     # 다음 인덱스 저장
     ws.update_cell(1, 7, str(idx + 1))
 
-    # 예: Telefon {keyword} Önerilen uygulamalar
+    # 예: Teléfono {keyword} Aplicaciones recomendadas
     return f"{front} {keyword} {back}"
 
 # ================================
@@ -160,18 +160,16 @@ def get_app_images(soup, app_name: str):
             img_url = img_url.split()[0]
 
             # 해상도 업스케일 (가끔 wXXX-hYYY-rw 패턴을 크게 치환)
-            import re
             img_url = re.sub(r"w\d+-h\d+-rw", "w2048-h1100-rw", img_url)
 
             images_html += f"""
             <div class="img-wrap">
-              <img src="{img_url}" alt="{app_name}_{cc}" style="border-radius:10px;">
+              <img src="{img_url}" alt="{app_name}_{cc}" style="border-radius:10px; font-family: 'PlusJakartaSans-SemiBoldItalic';">
             </div>
             """
     except Exception as e:
         print(f"[이미지 수집 오류] {e}")
     return images_html
-
 
 # ================================
 # 배경 이미지 랜덤 선택
@@ -183,7 +181,7 @@ def pick_random_background() -> str:
     return random.choice(files) if files else ""
 
 # ================================
-# 썸네일 생성 (터키 전용 폰트 적용, 안전한 줄바꿈)
+# 썸네일 생성 (맥시코 버전, 안전한 줄바꿈)
 # ================================
 def make_thumb(save_path: str, var_title: str):
     try:
@@ -195,7 +193,7 @@ def make_thumb(save_path: str, var_title: str):
         else:
             bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
 
-        # ✅ 터키 전용 폰트 적용
+        # ✅ 맥시코 버전용 폰트 적용
         try:
             font = ImageFont.truetype("assets/fonts/PlusJakartaSans-SemiBoldItalic.ttf", 48)
         except:
@@ -311,21 +309,20 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
     except Exception as e:
         log_thumb_step(ws, row_idx, f"[에러]{e}")
         return ""
-
 # ================================
-# OpenAI GPT 처리 (터키 블로그 글용)
+# OpenAI GPT 처리 (맥시코 블로그 글용)
 # ================================
 def rewrite_app_description(original_html: str, app_name: str, keyword_str: str) -> str:
     if not client:
         return original_html
     compact = BeautifulSoup(original_html, 'html.parser').get_text(separator=' ', strip=True)
     system_msg = (
-        "Sen profesyonel bir blog yazarı olarak Türkçe içerik üretiyorsun. "
-        "İçeriği gerçeklere sadık kalarak yeniden yaz, ancak doğal, akıcı ve samimi bir üslup kullan. "
-        "Okuyucu için anlaşılır ve ilgi çekici olsun. "
-        "Çıkış mutlaka <p data-ke-size='size18'> paragraf yapısıyla verilmelidir."
+        "Eres un redactor profesional de blogs generando contenido en español (México). "
+        "Reescribe el contenido respetando los hechos, usando un estilo natural, fluido y cercano. "
+        "Debe ser comprensible y atractivo para el lector. "
+        "La salida debe tener párrafos con <p data-ke-size='size18'>."
     )
-    user_msg = f"[Uygulama adı] {app_name}\n[Anahtar kelime] {keyword_str}\n\n{compact}"
+    user_msg = f"[Nombre de la aplicación] {app_name}\n[Palabra clave] {keyword_str}\n\n{compact}"
     try:
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
@@ -342,41 +339,41 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
         return original_html
 
 # ================================
-# 서론 · 결론 랜덤 (SEO 최적화 + 문장 확장, 터키어 버전)
+# 서론 · 결론 랜덤 (SEO 최적화 + 문장 확장, 맥시코 스페인어 버전)
 # ================================
 intro_start = [
-    "Günümüzde yalnızca bir akıllı telefonla pek çok işi kolayca yapmak mümkün. ",
-    "Artık telefon ve uygulamaları birleştirerek hayatı birçok yönden kolaylaştırabilirsiniz. ",
-    "Akıllı telefon, iletişimin çok ötesine geçen vazgeçilmez bir eşya haline geldi. ",
-    "Mobil dünyanın gelişimiyle birlikte uygulamalar günlük hayatımızı çok daha pratik hale getirdi. ",
-    "Araştırmadan işe, eğitimden eğlenceye kadar her şey telefonla yapılabiliyor. ",
-    "Elinizin avucundaki bir cihazla yaşam kalitenizi yükseltmek mümkün. ",
-    "Kullanımı kolay uygulamalar sayesinde günlük hayat daha dinamik ve basit hale geldi. ",
-    "Doğru uygulamaları seçtiğinizde telefon gerçek bir yardımcıya dönüşür. ",
-    "Uygulamaların en büyük avantajı her zaman bilgiye ve eğlenceye ulaşabilmektir. "
+    "Hoy en día, con un solo teléfono inteligente es posible realizar muchas tareas fácilmente. ",
+    "Ahora puede combinar su teléfono y aplicaciones para simplificar muchos aspectos de la vida. ",
+    "El teléfono inteligente se ha convertido en un objeto indispensable más allá de la comunicación. ",
+    "Con el desarrollo del mundo móvil, las aplicaciones hacen nuestra vida diaria mucho más práctica. ",
+    "Desde investigar hasta trabajar, estudiar y entretenerse, todo se puede hacer con un teléfono. ",
+    "Con un dispositivo en la palma de su mano, es posible mejorar su calidad de vida. ",
+    "Las aplicaciones fáciles de usar hacen que la vida diaria sea más dinámica y sencilla. ",
+    "Al elegir las aplicaciones correctas, el teléfono se convierte en un verdadero asistente. ",
+    "La mayor ventaja de las aplicaciones es el acceso constante a la información y entretenimiento. "
 ]
 
 intro_middle = [
-    "Günlük yaşamda faydalı işlevler sunar ve pratikliği büyük ölçüde artırırlar.",
-    "Zaman kazandırır ve farklı durumlarda daha iyi kararlar almanıza yardımcı olur.",
-    "İş, eğitim ve eğlencede kullanılarak her nesil için vazgeçilmez hale gelir.",
-    "Pratikliğin ötesinde yeni deneyimler kazandırır ve imkanları genişletir.",
-    "Çeşitli ve sezgisel uygulamalar sayesinde kullanıcıların memnuniyeti giderek artmaktadır.",
-    "Bilgi ve eğlencenin her zaman elinizin altında olduğu bir ortam yaratırlar.",
-    "Son trendleri takip ederek uygulamalar hızla gelişmektedir.",
-    "Birçok ücretsiz uygulama şaşırtıcı bir kalite sunar ve denemesi kolaydır.",
-    "Doğru kullanıldığında günlük yaşamın küçük sorunları kolayca çözülebilir. "
+    "Ofrecen funciones útiles y aumentan la practicidad de manera significativa.",
+    "Ahorran tiempo y ayudan a tomar mejores decisiones en diferentes situaciones.",
+    "Se vuelven indispensables para todas las generaciones al usarse en trabajo, educación y entretenimiento.",
+    "Más allá de la practicidad, brindan nuevas experiencias y amplían las posibilidades.",
+    "Gracias a aplicaciones diversas e intuitivas, la satisfacción del usuario aumenta constantemente.",
+    "Crean un entorno donde la información y el entretenimiento están siempre al alcance de la mano.",
+    "Siguiendo las últimas tendencias, las aplicaciones se desarrollan rápidamente.",
+    "Muchas aplicaciones gratuitas ofrecen una calidad sorprendente y son fáciles de probar.",
+    "Cuando se usan correctamente, solucionan fácilmente pequeños problemas de la vida diaria."
 ]
 
 intro_end = [
-    "Bu yazıda mutlaka bilmeniz gereken en popüler ve faydalı uygulamaları derledik.",
-    "Burada günlük kullanım için en pratik ve yüksek puanlı uygulamaları öne çıkaracağız.",
-    "Sık kullanılan uygulamaları seçtik ve bunlardan en iyi şekilde nasıl faydalanabileceğinizi açıkladık.",
-    "Seçiminizi kolaylaştırmak için gerekli uygulamaları düzenli bir şekilde sunduk.",
-    "Güvenilir ve faydalı uygulamaları görecek, günlük rutininizi geliştireceksiniz.",
-    "En güvenilir uygulamalara odaklanıyor ve temel özelliklerini açıklıyoruz.",
-    "En çok aranan uygulamaları, gerçek kullanıcı deneyimleriyle birlikte paylaşıyoruz.",
-    "Telefonunuza mutlaka yüklemeniz gereken vazgeçilmez uygulamaları seçtik. "
+    "Aquí hemos recopilado las aplicaciones más populares y útiles que debe conocer.",
+    "Destacaremos las aplicaciones más prácticas y con mejores calificaciones para el uso diario.",
+    "Seleccionamos las aplicaciones más utilizadas y explicamos cómo sacarles el máximo provecho.",
+    "Organizamos las aplicaciones necesarias de manera clara para facilitar su elección.",
+    "Verá aplicaciones confiables y útiles que mejorarán su rutina diaria.",
+    "Nos enfocamos en las aplicaciones más seguras y explicamos sus funciones principales.",
+    "Compartimos las aplicaciones más buscadas junto con experiencias reales de usuarios.",
+    "Elegimos las aplicaciones imprescindibles que debe instalar en su teléfono."
 ]
 
 def make_intro(title, keyword):
@@ -385,52 +382,52 @@ def make_intro(title, keyword):
 <div id="jm">&nbsp;</div>
 <p data-ke-size="size18">
 {intro}
-Bu yazıda, “{keyword}” ile ilgili uygulamalara odaklanıyoruz.
-Seçimler, Google Play'de “{keyword}” araması yapıldığında en üst sıralarda çıkan uygulamalara dayanmaktadır.
-Bir akıllı telefon kullanıcısıysanız, bu pratik seçeneklere mutlaka göz atın ve doğru zamanda değerlendirin.
+En este artículo nos enfocamos en aplicaciones relacionadas con “{keyword}”.
+Las selecciones se basan en aplicaciones que aparecen en los primeros resultados al buscar “{keyword}” en Google Play.
+Si eres usuario de un teléfono inteligente, definitivamente revisa estas opciones prácticas y evalúalas en el momento adecuado.
 </p>
 <span><!--more--></span>
 <p data-ke-size="size18">&nbsp;</p>
 """
 
 end_start = [
-    "Umarız sunduğumuz uygulamalar günlük yaşamınızı daha pratik ve keyifli hale getirir.",
-    "Bu uygulama seçkisinin farklı durumlarda size faydalı olmasını dileriz.",
-    "Yalnızca işlevlere değil, uygulamaların gerçek kullanımına da dikkat ettik.",
-    "Önerilen uygulamaları kullanarak günlük rutininizi çok daha verimli hale getirin.",
-    "İlginizi en çok çeken uygulamayı deneyin ve size en uygun olanı bulun."
+    "Esperamos que las aplicaciones que presentamos hagan su vida diaria más práctica y agradable.",
+    "Deseamos que esta selección de aplicaciones le sea útil en diferentes situaciones.",
+    "Nos enfocamos no solo en las funciones, sino también en el uso real de las aplicaciones.",
+    "Al usar las aplicaciones recomendadas, haga su rutina diaria mucho más eficiente.",
+    "Pruebe la aplicación que más le interese y encuentre la que mejor se adapte a usted."
 ]
 
 end_summary = [
-    "Her uygulamanın güçlü yönlerini ve avantajlarını seçiminizi kolaylaştıracak şekilde özetledik.",
-    "Her uygulamanın öne çıkan özelliklerini net ve karşılaştırmalı olarak sunduk.",
-    "Gerçek kullanıcı değerlendirmelerini dikkate alarak güvenli bir seçim sağlamaya çalıştık.",
-    "Sadece güvenilir ve popüler uygulamaları önerdik.",
-    "Farklı ihtiyaçlara hitap etmek için hem ücretsiz hem de ücretli seçenekler ekledik."
+    "Resumimos las fortalezas y ventajas de cada aplicación para facilitar su elección.",
+    "Presentamos de manera clara y comparativa las características destacadas de cada aplicación.",
+    "Consideramos las opiniones de usuarios reales para ayudarle a tomar una decisión segura.",
+    "Solo recomendamos aplicaciones confiables y populares.",
+    "Incluimos opciones gratuitas y de pago para satisfacer diferentes necesidades."
 ]
 
 end_next = [
-    "Uygulamalardaki son trendleri ve yenilikleri paylaşmaya devam edeceğiz.",
-    "Bir sonraki yazılarımızda da faydalı ve ilginç uygulama önerileri bulabilirsiniz.",
-    "Yeni işlevler ve öne çıkan uygulamalar yakında burada yer alacak.",
-    "Günlük rutininizi kolaylaştırabilecek farklı uygulamaları önermeyi sürdüreceğiz.",
-    "Uygulama kullanımına dair pratik ipuçları ve bilgilerle içeriği sürekli güncelleyeceğiz."
+    "Continuaremos compartiendo las últimas tendencias y novedades en aplicaciones.",
+    "En nuestros próximos artículos encontrará más recomendaciones útiles e interesantes.",
+    "Nuevas funciones y aplicaciones destacadas pronto estarán aquí.",
+    "Seguiremos recomendando aplicaciones que puedan facilitar su rutina diaria.",
+    "Actualizaremos el contenido continuamente con consejos prácticos y datos sobre el uso de aplicaciones."
 ]
 
 end_action = [
-    "İçeriği beğendiyseniz yorum bırakın ve yazıyı beğenmeyi unutmayın.",
-    "Fikirleriniz bizim için çok değerli, düşüncelerinizi yorumlarda paylaşın.",
-    "Faydalı bulduysanız, arkadaşlarınızla ve ailenizle paylaşın.",
-    "Geri bildiriminiz, içeriği daha da geliştirmemize yardımcı olur.",
-    "Yeni yazılardan haberdar olmak için bizi takip edin."
+    "Si le gustó el contenido, deje un comentario y no olvide dar like.",
+    "Sus opiniones son muy valiosas, compártalas en los comentarios.",
+    "Si le resultó útil, compártalo con sus amigos y familiares.",
+    "Su retroalimentación nos ayuda a mejorar el contenido aún más.",
+    "Síganos para estar al tanto de nuevos artículos."
 ]
 
 end_greet = [
-    "Sonuna kadar okuduğunuz için teşekkürler! Harika bir gün dileriz!",
-    "Okuduğunuz için teşekkür ederiz, umarız hayatınız daha pratik ve mutlu olur!",
-    "Yakında daha faydalı içerikler paylaşacağız, bizi takipte kalın!",
-    "Blogumuzu takip ettiğiniz için teşekkürler, bir sonraki yazıda görüşmek üzere!",
-    "Size başarılarla dolu harika bir gün dileriz!"
+    "¡Gracias por leer hasta el final! ¡Le deseamos un gran día!",
+    "Gracias por leer, esperamos que su vida sea más práctica y feliz.",
+    "Pronto compartiremos contenido aún más útil, ¡manténgase atento!",
+    "Gracias por seguir nuestro blog, ¡nos vemos en el próximo artículo!",
+    "Le deseamos un día fantástico lleno de éxitos y buenas experiencias."
 ]
 
 def make_last(title):
@@ -446,11 +443,10 @@ def make_last(title):
 <p data-ke-size="size18">&nbsp;</p>
 </div>
 """
-
 # ================================
-# 앱 크롤링 (터키어)
+# 앱 크롤링 (맥시코 스페인어)
 # ================================
-def crawl_apps(keyword, lang="tr", country="TR"):
+def crawl_apps(keyword, lang="es", country="MX"):
     url = f"https://play.google.com/store/search?q={keyword}&c=apps&hl={lang}&gl={country}"
     resp = requests.get(url, headers={"User-Agent":"Mozilla/5.0"})
     soup = BeautifulSoup(resp.text, "html.parser")
@@ -461,8 +457,9 @@ def crawl_apps(keyword, lang="tr", country="TR"):
         a = s.find("a")
         if a: app_links.append("https://play.google.com" + a["href"])
     return app_links[3:]
+
 # ================================
-# 메인 실행 (시트7 기반, 터키 블로그 고정)
+# 메인 실행 (시트7 기반, 맥시코 블로그 고정)
 # ================================
 try:
     rows = ws.get_all_values()
@@ -479,10 +476,10 @@ try:
             break
 
     if not keyword:
-        print("처리할 키워드가 없습니다.")
+        print("No hay palabras clave para procesar.")
         exit()
 
-    print(f"👉 이번 실행: {title} (라벨={label})")
+    print(f"👉 Ejecución actual: {title} (Etiqueta={label})")
 
     # ✅ 썸네일 생성
     thumb_dir = "thumbnails"
@@ -520,7 +517,7 @@ try:
 
     # ✅ 자동 목차 (서론 직후)
     html += """
-    <div class="mbtTOC"><button>İçindekiler</button>
+    <div class="mbtTOC"><button>Contenido</button>
     <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
     </div>
     <p>&nbsp;</p>
@@ -529,18 +526,18 @@ try:
     if img_url:
         html += f"""
         <p style="text-align:center;">
-          <img src="{img_url}" alt="{keyword} küçük resim" style="max-width:100%; height:auto; border-radius:10px;">
+          <img src="{img_url}" alt="{keyword} miniatura" style="max-width:100%; height:auto; border-radius:10px;">
         </p>
         <br /><br />
         """
 
     # ✅ 앱 크롤링
     app_links = crawl_apps(keyword)
-    print(f"수집된 앱 링크: {len(app_links)}개")
+    print(f"Número de enlaces de apps recopilados: {len(app_links)}")
 
     # 🔹 앱 개수 확인 (3개 미만이면 종료)
     if len(app_links) < 3:
-        print("⚠️ 앱 개수가 3개 미만 → 자동 완료 처리")
+        print("⚠️ Menos de 3 aplicaciones → marcado como completado automáticamente")
         ws.update_cell(target_row, 6, "OK")  # F열: 완료 플래그
         exit()
 
@@ -553,7 +550,7 @@ try:
         soup = BeautifulSoup(resp.text, "html.parser")
 
         # 앱 제목
-        h1 = soup.find("h1").text if soup.find("h1") else f"Uygulama {j}"
+        h1 = soup.find("h1").text if soup.find("h1") else f"Aplicación {j}"
 
         # 앱 설명
         raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
@@ -568,7 +565,7 @@ try:
             link_block = f"""
             <div class="ottistMultiRelated">
               <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
-                <span style="font-size: medium;"><strong>Daha fazla {label} yazısı gör</strong></span>
+                <span style="font-size: medium;"><strong>Ver más publicaciones sobre {label}</strong></span>
                 <i class="fas fa-link 2xs"></i>
               </a>
             </div>
@@ -578,15 +575,15 @@ try:
 
         # ✅ 제목+본문+스크린샷
         html += f"""
-        <h2 data-ke-size="size26">{j}. {h1} — Uygulama Tanıtımı</h2>
+        <h2 data-ke-size="size26">{j}. {h1} — Presentación de la Aplicación</h2>
         <br />
         {desc}
         <br />
-        <p data-ke-size="size18"><b>Ekran görüntüleri: {h1}</b></p>
+        <p data-ke-size="size18"><b>Capturas de pantalla: {h1}</b></p>
         <div class="img-group">{images_html}</div>
         <br />
         <p style="text-align: center;" data-ke-size="size18">
-          <a class="myButton" href="{app_url}">İndir {h1}</a>
+          <a class="myButton" href="{app_url}">Descargar {h1}</a>
         </p><br /><br />
         <p data-ke-size="size18">{tag_str}</p>
         <br /><br /><br />
@@ -610,7 +607,7 @@ try:
     }
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False).execute()
     url = res.get("url", "")
-    print(f"✅ 업로드 성공: {url}")
+    print(f"✅ Subida exitosa: {url}")
 
     # ✅ 시트 업데이트
     ws.update_cell(target_row, 6, "OK")   # F열: 완료 플래그
@@ -618,9 +615,10 @@ try:
 
 except Exception as e:
     tb = traceback.format_exc()
-    print("실패:", e)
+    print("Falló:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 에러 메시지 기록
+
 
 
 
