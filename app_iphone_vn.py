@@ -730,7 +730,7 @@ if __name__ == "__main__":
                 sheet_append_log(ws9, target_row, f"[{j}] 앱 처리 실패: {e_each}")
 
         # 9) 마무리
-        html_full += build_ending_block(title, keyword, lang="vi")
+        html_full += build_ending_block(title, keyword)
         sheet_append_log(ws9, target_row, "엔딩 생성 완료")
         related_box = get_related_posts(BLOG_ID, count=6)
         html_full += related_box
@@ -764,6 +764,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
