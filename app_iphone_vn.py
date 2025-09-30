@@ -366,7 +366,7 @@ def make_thumb(save_path: str, var_title: str, font_path=None):
 
         var_title_wrap = wrap_text(var_title, font, max_width=460)
 
-        bbox = font.getbbox("가")  # 기준 글자
+        bbox = font.getbbox("A")  # 기준 글자
         line_height = (bbox[3] - bbox[1]) + 12
         total_text_height = len(var_title_wrap) * line_height
         y = 500 / 2 - total_text_height / 2
@@ -768,6 +768,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
