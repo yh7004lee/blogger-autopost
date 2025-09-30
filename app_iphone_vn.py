@@ -644,8 +644,8 @@ if __name__ == "__main__":
         sheet_append_log(ws9, target_row, f"앱 ID 목록={[(a['id'], a['name']) for a in apps]}")
 
         # 5) 서론
-        html_full = build_css_block()
-        html_full += build_intro_block(title, keyword, lang="vi")  # 베트남어
+         = build_css_block()
+         += build_intro_block(title, keyword, lang="vi")  # 베트남어
         html_full += """
         <div class="mbtTOC"><button>Mục lục</button>
         <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
@@ -744,6 +744,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
