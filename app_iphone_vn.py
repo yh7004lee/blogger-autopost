@@ -280,7 +280,41 @@ def pick_random_background() -> str:
         files.extend(glob.glob(os.path.join("assets", "backgrounds", ext)))
     return random.choice(files) if files else ""
 
-# =============== 썸네일 생성 (픽셀 기준 줄바꿈 적용) ===============
+
+# =============== Google Drive 업로드 → 공개 URL 반환 ===============
+def upload_to_drive(file_path, file_name):
+    try:
+        drive_service = get_drive_service()
+        folder_id = DRIVE_FOLDER_ID
+
+        if not folder_id or folder_id == "YOUR_DRIVE_FOLDER_ID":
+            # 'blogger' 폴더 검색/생성
+            query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
+            results = drive_service.files().list(q=query, fields="files(id, name)").execute()
+            items = results.get("files", [])
+            if items:
+                folder_id = items[0]["id"]
+            else:
+                folder_metadata = {"name": "blogger", "mimeType": "application/vnd.google-apps.folder"}
+                folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
+                folder_id = folder.get("id")
+
+        # 파일 업로드
+        file_metadata = {"name": file_name, "parents": [folder_id]}
+        media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
+        file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+
+        # 공개 권한 설정
+        drive_service.permissions().create(
+            fileId=file["id"],
+            body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
+        ).execute()
+
+        return f"https://lh3.googleusercontent.com/d/{file['id']}"
+    except Exception as e:
+        print(f"[에러] 구글드라이브 업로드 실패: {e}")
+        return ""
+
 
 # =============== 썸네일 생성 함수 수정 ===============
 def make_thumb(save_path: str, var_title: str, font_path=None):
@@ -297,7 +331,7 @@ def make_thumb(save_path: str, var_title: str, font_path=None):
         # 폰트 설정
         try:
             if font_path and os.path.exists(font_path):
-                font = ImageFont.truetype(font_path, 48)
+                 font = ImageFont.truetype(os.path.join("assets", "fonts", "BeVietnamPro-SemiBold.ttf"), 48)
             else:
                 font = ImageFont.load_default()
                 print("[폰트 경고] 폰트 경로 없음 또는 로드 실패, 기본 폰트 사용")
@@ -351,41 +385,8 @@ def make_thumb(save_path: str, var_title: str, font_path=None):
         print(f"[에러] 썸네일 생성 실패: {e}")
         return False
 
-# =============== Google Drive 업로드 → 공개 URL 반환 ===============
-def upload_to_drive(file_path, file_name):
-    try:
-        drive_service = get_drive_service()
-        folder_id = DRIVE_FOLDER_ID
 
-        if not folder_id or folder_id == "YOUR_DRIVE_FOLDER_ID":
-            # 'blogger' 폴더 검색/생성
-            query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
-            results = drive_service.files().list(q=query, fields="files(id, name)").execute()
-            items = results.get("files", [])
-            if items:
-                folder_id = items[0]["id"]
-            else:
-                folder_metadata = {"name": "blogger", "mimeType": "application/vnd.google-apps.folder"}
-                folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
-                folder_id = folder.get("id")
 
-        # 파일 업로드
-        file_metadata = {"name": file_name, "parents": [folder_id]}
-        media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
-        file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-
-        # 공개 권한 설정
-        drive_service.permissions().create(
-            fileId=file["id"],
-            body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
-        ).execute()
-
-        return f"https://lh3.googleusercontent.com/d/{file['id']}"
-    except Exception as e:
-        print(f"[에러] 구글드라이브 업로드 실패: {e}")
-        return ""
-
-# =============== 썸네일 생성 + 로그 + 업로드 ===============
 # =============== 썸네일 생성 + 로그 + 업로드 (수정) ===============
 def make_thumb_with_logging(ws, row_idx, save_path, title, font_path=None):
     """
@@ -767,6 +768,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
