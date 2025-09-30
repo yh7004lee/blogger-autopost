@@ -28,9 +28,9 @@ from PIL import Image, ImageDraw, ImageFont
 SHEET_ID = os.getenv("SHEET_ID", "1SeQogbinIrDTMKjWhGgWPEQq8xv6ARv5n3I-2BsMrSc")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
-# 블로그 ID / URL (터키 버전으로 고정)
-BLOG_ID = "3433544505760551722"
-BLOG_URL = "https://apptk.appsos.kr/"
+# 블로그 ID / URL
+BLOG_ID = "7550707353079627944"
+BLOG_URL = "https://appvn.appsos.kr/"
 
 # Google Custom Search (선택 사항: 미사용 시 앱스토어 직접 파싱)
 GCS_API_KEY = os.getenv("GCS_API_KEY", "").strip()
@@ -44,39 +44,51 @@ if os.path.exists("openai.json"):
             data = json.load(f)
             OPENAI_API_KEY = data.get("api_key", "").strip()
     except Exception:
+        print("OpenAI 키 로드 중 오류 발생")
         OPENAI_API_KEY = ""
 if not OPENAI_API_KEY:
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 
-# =============== Google Sheets 인증 (sheet7 사용) ===============
-def get_sheet7():
-    # 서비스 계정 인증
-    service_account_file = "sheetapi.json"
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
-    gc = gspread.authorize(creds)
-    sh = gc.open_by_key(SHEET_ID)
+# =============== Google Sheets 인증 (sheet9 사용) ===============
+def get_sheet9():
     try:
-        ws7 = sh.worksheet("sheet7")   # 시트 이름이 'sheet7'인 경우
-    except Exception:
-        ws7 = sh.get_worksheet(6)      # 0부터 시작 → 일곱 번째 탭
-    return ws7
+        # 서비스 계정 인증
+        service_account_file = "sheetapi.json"
+        scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+        creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
+        gc = gspread.authorize(creds)
+        sh = gc.open_by_key(SHEET_ID)
+        try:
+            ws9 = sh.worksheet("sheet9")   # 시트 이름이 'sheet9'인 경우
+        except Exception:
+            ws9 = sh.get_worksheet(8)      # 0부터 시작 → 아홉 번째 탭
+        return ws9
+    except Exception as e:
+        print(f"Google Sheets 인증 중 오류 발생: {e}")
+        return None
 
-ws7 = get_sheet7()
+ws9 = get_sheet9()
 
-# =============== 제목 생성 함수 ===============
+# =============== 폰트 로드 설정 ===============
+FONT_PATH = os.path.join(os.getcwd(), "BeVietnamPro-SemiBold.ttf")
+try:
+    font = ImageFont.truetype(FONT_PATH, 36)
+except Exception as e:
+    print(f"폰트 로드 실패: {e}")
+    font = None
+
+# =============== 제목 생성 함수 (베트남어) ===============
 def make_post_title(keyword: str) -> str:
-    # 원하는 제목 패턴을 여기에 추가
+    # 베트남어 제목 패턴
     patterns = [
-        f"{keyword} uygulaması — iPhone için en iyi seçenekler",
-        f"iPhone kullanıcıları için {keyword} uygulamaları önerisi",
-        f"{keyword} ile ilgili en popüler iPhone uygulamaları",
-        f"{keyword} iOS uygulamaları — indirmeniz gereken en iyi seçimler",
-        f"{keyword} hakkında iPhone için önerilen uygulamalar"
+        f"{keyword} ứng dụng — Lựa chọn tốt nhất cho iPhone",
+        f"Gợi ý các ứng dụng {keyword} cho người dùng iPhone",
+        f"Các ứng dụng {keyword} phổ biến nhất trên iPhone",
+        f"{keyword} iOS — Ứng dụng tốt nhất bạn nên tải",
+        f"Ứng dụng {keyword} được đề xuất cho iPhone"
     ]
     return random.choice(patterns)
-
 
 # =============== Google Drive 인증 ===============
 def get_drive_service():
@@ -106,28 +118,28 @@ blog_handler = get_blogger_service()
 
 # =============== 제목 생성 ===============
 def make_post_title(keyword: str) -> str:
+    # 베트남어 제목 패턴
     patterns = [
-        f"iPhone için {keyword} uygulamaları — en iyi seçimler",
-        f"{keyword} iOS uygulamaları: indirmeniz gerekenler",
-        f"iPhone kullanıcıları için {keyword} uygulamaları",
-        f"{keyword} hakkında en popüler iPhone uygulamaları",
-        f"{keyword} — iPhone’da işinize yarayacak uygulamalar"
+        f"{keyword} ứng dụng iPhone — Lựa chọn tốt nhất",
+        f"{keyword} iOS — Các ứng dụng bạn nên tải",
+        f"Gợi ý các ứng dụng {keyword} cho người dùng iPhone",
+        f"Các ứng dụng {keyword} phổ biến nhất trên iPhone",
+        f"{keyword} — Ứng dụng hữu ích trên iPhone"
     ]
     return random.choice(patterns)
-
 
 # =============== 라벨 생성 ===============
 def make_post_labels(sheet_row: list) -> list:
     label_val = sheet_row[1].strip() if len(sheet_row) > 1 and sheet_row[1] else ""
-    labels = ["Uygulamalar", "iPhone"]
+    labels = ["Ứng dụng", "iPhone"]
     if label_val:
         labels.append(label_val)
     return labels
 
-
 # =============== 앱스토어 검색 (iTunes Search API) ===============
-def search_app_store_ids(keyword, limit=20, country="tr", eng_keyword=""):
+def search_app_store_ids(keyword, limit=20, country="vn", eng_keyword=""):
     import requests, urllib.parse
+
     def fetch(term):
         url = f"https://itunes.apple.com/search?term={urllib.parse.quote(term)}&country={country}&entity=software&limit={limit}"
         try:
@@ -144,7 +156,7 @@ def search_app_store_ids(keyword, limit=20, country="tr", eng_keyword=""):
     if len(apps) < 7:
         apps += fetch(f"{keyword} app")
     if len(apps) < 7:
-        apps += fetch(f"{keyword} uygulama")
+        apps += fetch(f"{keyword} ứng dụng")
     if len(apps) < 7 and eng_keyword:
         apps += fetch(eng_keyword)
 
@@ -155,12 +167,11 @@ def search_app_store_ids(keyword, limit=20, country="tr", eng_keyword=""):
             uniq.append(a)
     return uniq
 
-
 # =============== 앱 상세 크롤링 ===============
-def fetch_app_detail(app_id: str, country="tr"):
+def fetch_app_detail(app_id: str, country="vn"):
     import html
     url = f"https://apps.apple.com/{country}/app/id{app_id}"
-    name = f"Aplicativo {app_id}"
+    name = f"Ứng dụng {app_id}"
     desc_html, images = "", []
 
     try:
@@ -229,18 +240,17 @@ def fetch_app_detail(app_id: str, country="tr"):
         return {"url": url, "name": name, "desc_html": "", "images": []}
 
 
-
 # =============== 설명 리라이트 (OpenAI, fallback 있음) ===============
 def rewrite_app_description(original_html: str, app_name: str, keyword: str) -> str:
     from bs4 import BeautifulSoup
     plain = BeautifulSoup(original_html or "", "html.parser").get_text(" ", strip=True)
     if not client:
-        return f"<p data-ke-size='size18'>{plain or (app_name + ' Tanıtım')}</p>"
+        return f"<p data-ke-size='size18'>{plain or (app_name + ' Giới thiệu')}</p>"
     try:
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
-                {"role": "system", "content": "Türkçe blog yazarı gibi doğal bir tanıtım metni üret. Paragrafları <p data-ke-size='size18'> 안에 넣."},
+                {"role": "system", "content": "Viết bài giới thiệu tự nhiên như blogger Việt Nam. Đặt các đoạn văn trong <p data-ke-size='size18'>."},
                 {"role": "user", "content": plain}
             ],
             temperature=0.7,
@@ -252,8 +262,7 @@ def rewrite_app_description(original_html: str, app_name: str, keyword: str) -> 
         return text
     except Exception as e:
         print("[OpenAI 실패]", e)
-        return f"<p data-ke-size='size18'>{plain or (app_name + ' Tanıtım')}</p>"
-
+        return f"<p data-ke-size='size18'>{plain or (app_name + ' Giới thiệu')}</p>"
 
 # =============== 썸네일 로그 기록 (H열 사용) ===============
 def log_thumb_step(ws, row_idx, message):
@@ -283,11 +292,12 @@ def make_thumb(save_path: str, var_title: str):
         else:
             bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
 
-        # 폰트 설정 (터키 전용 폰트)
+        # 폰트 설정 (베트남어용)
         try:
-            font = ImageFont.truetype(os.path.join("assets", "fonts", "PlusJakartaSans-SemiBoldItalic.ttf"), 48)
+            font = ImageFont.truetype(os.path.join("assets", "fonts", "BeVietnamPro-SemiBold.ttf"), 48)
         except Exception:
             font = ImageFont.load_default()
+            print("[폰트 경고] BeVietnamPro-SemiBold.ttf 로드 실패, 기본 폰트 사용")
 
         # 캔버스 생성
         canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
@@ -332,7 +342,7 @@ def make_thumb(save_path: str, var_title: str):
         canvas.save(save_path, "PNG")
         return True
     except Exception as e:
-        print(f"에러: 썸네일 생성 실패: {e}")
+        print(f"[에러] 썸네일 생성 실패: {e}")
         return False
 
 # =============== Google Drive 업로드 → 공개 URL 반환 ===============
@@ -342,6 +352,7 @@ def upload_to_drive(file_path, file_name):
         folder_id = DRIVE_FOLDER_ID
 
         if not folder_id or folder_id == "YOUR_DRIVE_FOLDER_ID":
+            # 'blogger' 폴더 검색/생성
             query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
             results = drive_service.files().list(q=query, fields="files(id, name)").execute()
             items = results.get("files", [])
@@ -352,10 +363,12 @@ def upload_to_drive(file_path, file_name):
                 folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
                 folder_id = folder.get("id")
 
+        # 파일 업로드
         file_metadata = {"name": file_name, "parents": [folder_id]}
         media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
         file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
+        # 공개 권한 설정
         drive_service.permissions().create(
             fileId=file["id"],
             body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
@@ -363,7 +376,7 @@ def upload_to_drive(file_path, file_name):
 
         return f"https://lh3.googleusercontent.com/d/{file['id']}"
     except Exception as e:
-        print(f"에러: 구글드라이브 업로드 실패: {e}")
+        print(f"[에러] 구글드라이브 업로드 실패: {e}")
         return ""
 
 # =============== 썸네일 생성 + 로그 + 업로드 ===============
@@ -384,10 +397,8 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
             log_thumb_step(ws, row_idx, "썸네일 실패")
             return ""
     except Exception as e:
-        log_thumb_step(ws, row_idx, f"에러:{e}")
+        log_thumb_step(ws, row_idx, f"[에러] {e}")
         return ""
-
-
 
 # =============== CSS 블록 (한 번만 출력) ===============
 def build_css_block() -> str:
@@ -415,41 +426,40 @@ def build_css_block() -> str:
 }
 </style>
 """
-
 # =============== 서론 블록 ===============
 def build_intro_block(title: str, keyword: str) -> str:
     intro_groups = [
         [
-            f"Hoje em dia, o smartphone já não é apenas um meio de comunicação, mas uma ferramenta essencial para a vida moderna.",
-            f"Com um dispositivo na palma da mão é possível aproveitar recursos como 『{keyword}』 de forma prática e rápida.",
-            f"No cotidiano, aplicativos de 『{keyword}』 se tornaram indispensáveis para trazer mais conveniência.",
-            f"Tópicos como 『{title}』 despertam o interesse de muitos usuários de tecnologia.",
-            f"Com a evolução dos smartphones, o uso de aplicativos relacionados a 『{keyword}』 cresce cada vez mais.",
-            f"Qualquer pessoa pode aproveitar 『{keyword}』 com facilidade através de aplicativos dedicados."
+            f"Hôm nay, điện thoại thông minh không chỉ là công cụ liên lạc mà còn là trợ thủ quan trọng trong cuộc sống hiện đại.",
+            f"Với thiết bị trong tay, bạn có thể tận dụng 『{keyword}』 một cách nhanh chóng và tiện lợi.",
+            f"Trong sinh hoạt hàng ngày, ứng dụng 『{keyword}』 đã trở thành không thể thiếu để mang lại sự thuận tiện.",
+            f"Chủ đề như 『{title}』 luôn thu hút sự quan tâm của nhiều người dùng công nghệ.",
+            f"Với sự phát triển của smartphone, việc sử dụng các ứng dụng liên quan đến 『{keyword}』 ngày càng phổ biến.",
+            f"Bất kỳ ai cũng có thể tận hưởng 『{keyword}』 dễ dàng thông qua các ứng dụng chuyên dụng."
         ],
         [
-            f"Há uma grande variedade de apps disponíveis e as opções de 『{keyword}』 aumentam a cada dia.",
-            f"A busca por 『{title}』 mostra como esse tema está em alta.",
-            f"Trabalho, estudos, lazer e até 『{keyword}』 podem ser otimizados por aplicativos.",
-            f"Os apps ajudam a economizar tempo e tornam a vida mais eficiente.",
-            f"Aplicativos de 『{keyword}』 oferecem novas experiências e praticidade aos usuários.",
-            f"Novos apps de 『{keyword}』 surgem diariamente, aumentando as possibilidades de escolha."
+            f"Có rất nhiều ứng dụng khác nhau và lựa chọn 『{keyword}』 ngày càng tăng.",
+            f"Tìm kiếm 『{title}』 cho thấy chủ đề này đang rất “hot”.",
+            f"Công việc, học tập, giải trí và cả 『{keyword}』 đều có thể tối ưu nhờ ứng dụng.",
+            f"Apps giúp tiết kiệm thời gian và làm cuộc sống hiệu quả hơn.",
+            f"Ứng dụng 『{keyword}』 mang lại trải nghiệm mới và tiện ích cho người dùng.",
+            f"Các ứng dụng mới về 『{keyword}』 xuất hiện hàng ngày, tăng khả năng lựa chọn."
         ],
         [
-            f"Existem desde aplicativos para produtividade até opções de entretenimento ligados a 『{keyword}』.",
-            f"『{title}』 é uma das categorias mais populares entre os usuários.",
-            f"Assim como jogos e streaming, os apps de 『{keyword}』 tornam o tempo livre mais agradável.",
-            f"Compras, finanças e transporte já dependem de apps — e 『{keyword}』 segue a mesma linha.",
-            f"Muitos aplicativos permitem gerenciar conteúdos como fotos, vídeos e 『{keyword}』 de forma simples.",
-            f"Os apps de 『{keyword}』 conquistam cada vez mais destaque junto aos de comunicação."
+            f"Từ ứng dụng tăng năng suất đến giải trí, tất cả đều liên quan đến 『{keyword}』.",
+            f"『{title}』 là một trong những hạng mục phổ biến với người dùng.",
+            f"Giống như game hay streaming, ứng dụng 『{keyword}』 làm thời gian rảnh thú vị hơn.",
+            f"Mua sắm, tài chính và vận chuyển đều dựa vào app — và 『{keyword}』 cũng vậy.",
+            f"Nhiều ứng dụng cho phép quản lý nội dung như ảnh, video và 『{keyword}』 dễ dàng.",
+            f"Ứng dụng 『{keyword}』 ngày càng được chú ý, giống như các app giao tiếp."
         ],
         [
-            f"Dessa forma, aplicativos de 『{keyword}』 vão além da função básica e transformam a vida do usuário.",
-            f"Com 『{title}』 é possível elevar ainda mais a qualidade do dia a dia.",
-            f"Quando necessário, basta abrir o app de 『{keyword}』 para ter o recurso desejado.",
-            f"Mais do que praticidade, os apps de 『{keyword}』 também trazem novas experiências.",
-            f"Muitos já aproveitam aplicativos de 『{keyword}』 para levar uma rotina mais inteligente.",
-            f"Um único app de 『{keyword}』 pode mudar totalmente o estilo de vida."
+            f"Nhờ đó, ứng dụng 『{keyword}』 không chỉ thực hiện chức năng cơ bản mà còn nâng cao trải nghiệm người dùng.",
+            f"Với 『{title}』, bạn có thể nâng cao chất lượng cuộc sống hàng ngày.",
+            f"Khi cần, chỉ cần mở app 『{keyword}』 để sử dụng tính năng mong muốn.",
+            f"Không chỉ tiện lợi, app 『{keyword}』 còn mang đến những trải nghiệm mới.",
+            f"Nhiều người đã tận dụng app 『{keyword}』 để có một thói quen thông minh hơn.",
+            f"Chỉ một app 『{keyword}』 cũng có thể thay đổi hoàn toàn lối sống."
         ]
     ]
 
@@ -471,36 +481,36 @@ def build_intro_block(title: str, keyword: str) -> str:
 def build_ending_block(title: str, keyword: str) -> str:
     end_groups = [
         [
-            f"Esperamos que os aplicativos relacionados a 『{title}』 apresentados aqui deixem sua vida digital ainda melhor.",
-            f"Este artigo reuniu apps de 『{title}』 que certamente serão úteis no dia a dia.",
-            f"As opções de 『{title}』 mostradas podem ajudar você a fazer escolhas mais inteligentes.",
-            f"Se os aplicativos de 『{title}』 se tornarem ferramentas indispensáveis para você, ficaremos muito felizes.",
-            f"Para quem se interessa por 『{title}』, este resumo pode ser uma leitura valiosa.",
-            f"Ao conhecer diversos aplicativos de 『{keyword}』, seu uso do smartphone ficará ainda mais completo."
+            f"Hy vọng các ứng dụng liên quan đến 『{title}』 được giới thiệu ở đây sẽ làm cuộc sống số của bạn tốt hơn.",
+            f"Bài viết này tổng hợp các app 『{title}』 chắc chắn hữu ích trong sinh hoạt hàng ngày.",
+            f"Các lựa chọn 『{title}』 được giới thiệu có thể giúp bạn đưa ra quyết định thông minh hơn.",
+            f"Nếu app 『{title}』 trở thành công cụ không thể thiếu, chúng tôi sẽ rất vui.",
+            f"Đối với ai quan tâm 『{title}』, tóm tắt này sẽ rất đáng đọc.",
+            f"Khi biết nhiều app về 『{keyword}』, việc sử dụng smartphone của bạn sẽ đầy đủ hơn."
         ],
         [
-            f"Apresentamos os recursos e vantagens de cada app para ajudar na escolha de 『{keyword}』.",
-            f"Ao comparar pontos fortes e fracos, fica mais fácil decidir qual 『{title}』 baixar.",
-            f"Com base neste resumo, você poderá encontrar o aplicativo de 『{keyword}』 ideal.",
-            f"As informações reunidas aqui são práticas e podem ser usadas como guia de referência.",
-            f"Na hora de escolher um app de 『{keyword}』, este artigo será um aliado confiável.",
-            f"A comparação de vários apps certamente ajuda a tomar decisões mais conscientes."
+            f"Chúng tôi trình bày tính năng và ưu điểm của từng app để bạn dễ chọn 『{keyword}』.",
+            f"So sánh điểm mạnh và điểm yếu giúp bạn quyết định app 『{title}』 phù hợp.",
+            f"Dựa trên tóm tắt này, bạn có thể tìm được app 『{keyword}』 lý tưởng.",
+            f"Thông tin được tổng hợp có thể dùng làm hướng dẫn tham khảo.",
+            f"Khi chọn app 『{keyword}』, bài viết này sẽ là trợ thủ đáng tin cậy.",
+            f"So sánh nhiều app chắc chắn giúp đưa ra quyết định sáng suốt hơn."
         ],
         [
-            "Continuaremos trazendo novidades e informações úteis sobre aplicativos.",
-            f"No futuro, mais conteúdos sobre 『{keyword}』 e apps recomendados serão publicados aqui.",
-            "As opiniões dos leitores são importantes para oferecer artigos ainda mais completos.",
-            "Em breve, apresentaremos novos aplicativos e funcionalidades em destaque.",
-            "Seguiremos atualizando com informações práticas que possam ajudar no dia a dia.",
-            f"Tópicos populares como 『{title}』 continuarão a ser explorados em nosso blog."
+            "Chúng tôi sẽ tiếp tục cung cấp thông tin và tin tức hữu ích về ứng dụng.",
+            f"Trong tương lai, thêm nhiều nội dung về 『{keyword}』 và app gợi ý sẽ được đăng tải.",
+            "Ý kiến của độc giả rất quan trọng để cung cấp bài viết đầy đủ hơn.",
+            "Sắp tới, các app và tính năng nổi bật sẽ tiếp tục được giới thiệu.",
+            "Chúng tôi sẽ cập nhật thông tin thực tiễn giúp ích trong cuộc sống hàng ngày.",
+            f"Các chủ đề phổ biến như 『{title}』 sẽ tiếp tục được khai thác trên blog."
         ],
         [
-            "Comentários e curtidas são um grande incentivo — participe à vontade!",
-            "Se tiver dúvidas ou sugestões, compartilhe nos comentários para que possamos melhorar.",
-            "O feedback de vocês é essencial para criarmos conteúdos cada vez mais úteis.",
-            "Apoie com um like ou comentário para continuarmos trazendo informações de qualidade.",
-            "Se houver algum aplicativo de interesse, deixe sua sugestão nos comentários.",
-            f"Sua opinião sobre 『{keyword}』 é muito bem-vinda — compartilhe nos comentários!"
+            "Bình luận và like là động lực lớn — hãy tham gia thoải mái!",
+            "Nếu có thắc mắc hoặc gợi ý, hãy chia sẻ ở phần bình luận để chúng tôi cải thiện.",
+            "Phản hồi của các bạn giúp tạo ra nội dung hữu ích hơn.",
+            "Hãy ủng hộ bằng like hoặc bình luận để tiếp tục nhận thông tin chất lượng.",
+            "Nếu có app bạn quan tâm, hãy gợi ý trong bình luận.",
+            f"Ý kiến của bạn về 『{keyword}』 rất quý giá — hãy chia sẻ!"
         ]
     ]
 
@@ -519,7 +529,7 @@ def build_ending_block(title: str, keyword: str) -> str:
 """
     return last
 # ================================
-# 관련 추천글 박스 (RSS 랜덤 4개, 터키어 버전)
+# 관련 추천글 박스 (RSS 랜덤 4개, 베트남어 버전)
 # ================================
 def get_related_posts(blog_id, count=4):
     import feedparser, random
@@ -527,6 +537,7 @@ def get_related_posts(blog_id, count=4):
     feed = feedparser.parse(rss_url)
 
     if not feed.entries:
+        print("[INFO] RSS 피드 항목 없음")
         return ""
 
     entries = random.sample(feed.entries, min(count, len(feed.entries)))
@@ -537,7 +548,7 @@ def get_related_posts(blog_id, count=4):
             margin: 2em 10px; padding: 2em;">
   <p data-ke-size="size16" 
      style="border-bottom: 1px solid rgb(85, 85, 85); color: #555555; font-size: 16px; 
-            margin-bottom: 15px; padding-bottom: 5px;">♡♥ Önerilen Yazılar</p>
+            margin-bottom: 15px; padding-bottom: 5px;">♡♥ Bài Viết Liên Quan</p>
 """
 
     for entry in entries:
@@ -546,29 +557,33 @@ def get_related_posts(blog_id, count=4):
         html_box += f'<a href="{link}" style="color: #555555; font-weight: normal;">● {title}</a><br>\n'
 
     html_box += "</div>\n"
+    print(f"[INFO] 관련 글 박스 생성 완료 ({len(entries)}개 항목)")
     return html_box
 
 
-# =============== 대상 행/키워드/라벨 선택 ===============
+# =============== 대상 행/키워드/라벨 선택 (시트9) ===============
 def pick_target_row(ws):
     rows = ws.get_all_values()
     for i, row in enumerate(rows[1:], start=2):  # 2행부터
-        a = row[0].strip() if len(row) > 0 and row[0] else ""  # A열 = 키워드
-        d = row[4].strip() if len(row) > 4 and row[4] else ""  # E열 = 완료 플래그
-        if a and d != "OK":
+        keyword = row[0].strip() if len(row) > 0 and row[0] else ""  # A열 = 키워드
+        status = row[4].strip() if len(row) > 4 and row[4] else ""   # E열 = 완료 플래그
+        if keyword and status != "OK":
+            print(f"[INFO] 대상 행 선택: {i} (키워드='{keyword}')")
             return i, row
+    print("[INFO] 처리할 대상 행 없음")
     return None, None
 
 
 # =============== H열 로그 누적 ===============
 def sheet_append_log(ws, row_idx, message, tries=3, delay=2):
     """H열(8열)에 타임스탬프+메시지를 이어 붙여 기록"""
+    import time
     ts = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime()) + "Z"
     line = f"[{ts}] {message}"
     for t in range(1, tries+1):
         try:
             prev = ws.cell(row_idx, 8).value or ""   # H열
-            new_val = (prev + (";" if prev else "") + line)
+            new_val = prev + (";" if prev else "") + line
             ws.update_cell(row_idx, 8, new_val)
             print(f"[LOG:H{row_idx}] {line}")
             return True
@@ -577,100 +592,98 @@ def sheet_append_log(ws, row_idx, message, tries=3, delay=2):
             time.sleep(delay * t)
     print(f"[FAIL] 로그 기록 실패: {line}")
     return False
-
-
-# =============== 메인 실행 ===============
+# =============== 메인 실행 (시트9 + 베트남어) ===============
 if __name__ == "__main__":
+    import os, time, traceback
+
     try:
-        # 1) 시트5에서 대상 행/데이터
-        target_row, row = pick_target_row(ws7)
+        # 1) 시트9에서 대상 행/데이터
+        target_row, row = pick_target_row(ws9)  # ws9 사용
         if not target_row or not row:
-            sheet_append_log(ws7, 2, "처리할 키워드가 없습니다(A열)")
+            sheet_append_log(ws9, 2, "처리할 키워드가 없습니다(A열)")
             raise SystemExit(0)
 
         keyword = row[0].strip()   # A열 = 키워드
         label_val = row[1].strip() if len(row) > 1 else ""  # B열 = 라벨
-
-        sheet_append_log(ws7, target_row, f"대상 행={target_row}, 키워드='{keyword}', 라벨='{label_val}'")
+        sheet_append_log(ws9, target_row, f"대상 행={target_row}, 키워드='{keyword}', 라벨='{label_val}'")
 
         # 2) 제목 생성
         title = make_post_title(keyword)
-        sheet_append_log(ws7, target_row, f"제목='{title}'")
+        sheet_append_log(ws9, target_row, f"제목='{title}'")
 
         # 3) 썸네일 생성 & 업로드
         thumb_dir = "thumbnails"
         os.makedirs(thumb_dir, exist_ok=True)
         thumb_path = os.path.join(thumb_dir, f"{keyword}.png")
-        sheet_append_log(ws7, target_row, "썸네일 생성 시작")
-        thumb_url = make_thumb_with_logging(ws7, target_row, thumb_path, title)
-        sheet_append_log(ws7, target_row, f"썸네일 결과: {thumb_url or '실패'}")
+        sheet_append_log(ws9, target_row, "썸네일 생성 시작")
+        thumb_url = make_thumb_with_logging(ws9, target_row, thumb_path, title, font_name="BeVietnamPro-SemiBold.ttf")
+        sheet_append_log(ws9, target_row, f"썸네일 결과: {thumb_url or '실패'}")
 
         # 4) 앱 ID 검색
-        sheet_append_log(ws7, target_row, "앱 ID 검색 시작")
+        sheet_append_log(ws9, target_row, "앱 ID 검색 시작")
         eng_keyword = row[3].strip() if len(row) > 3 else ""  # D열 = 영어 키워드
         apps = search_app_store_ids(keyword, limit=20, eng_keyword=eng_keyword)
 
-        # ✅ 앱이 하나도 없을 경우
+        # ✅ 앱이 없으면 종료
         if not apps:
-            sheet_append_log(ws7, target_row, "앱 ID 없음 → 종료")
-            ws7.update_cell(target_row, 5, "OK")      # E열 완료
-            ws7.update_cell(target_row, 7, "")        # G열 = URL 비움
-            sheet_append_log(ws7, target_row, "시트 기록 완료: E='OK', G='' (검색 결과 없음)")
+            sheet_append_log(ws9, target_row, "앱 ID 없음 → 종료")
+            ws9.update_cell(target_row, 5, "OK")      # E열 완료
+            ws9.update_cell(target_row, 7, "")        # G열 비움
+            sheet_append_log(ws9, target_row, "시트 기록 완료: E='OK', G='' (검색 결과 없음)")
             raise SystemExit(0)
 
-        # ✅ 앱이 3개 미만일 경우
+        # ✅ 앱 3개 미만 → 완료 처리
         if len(apps) < 3:
-            sheet_append_log(ws7, target_row, "앱 개수가 3개 미만 → 완료 처리")
-            ws7.update_cell(target_row, 5, "OK")      # E열 완료
-            ws7.update_cell(target_row, 7, "")        # G열 = URL 비움
-            sheet_append_log(ws7, target_row, "시트 기록 완료: E='OK', G='' (앱 수 부족)")
+            sheet_append_log(ws9, target_row, "앱 개수 3개 미만 → 완료 처리")
+            ws9.update_cell(target_row, 5, "OK")
+            ws9.update_cell(target_row, 7, "")
+            sheet_append_log(ws9, target_row, "시트 기록 완료: E='OK', G='' (앱 수 부족)")
             raise SystemExit(0)
 
-        # ✅ 앱이 충분히 있을 경우 → 로그 기록
-        sheet_append_log(ws7, target_row, f"앱 ID={[(a['id'], a['name']) for a in apps]}")
+        # ✅ 앱 충분 → 로그 기록
+        sheet_append_log(ws9, target_row, f"앱 ID 목록={[(a['id'], a['name']) for a in apps]}")
 
         # 5) 서론
         html_full = build_css_block()
-        html_full += build_intro_block(title, keyword)
-        # ✅ 목차 블록 추가
+        html_full += build_intro_block(title, keyword, lang="vi")  # 베트남어
         html_full += """
-        <div class="mbtTOC"><button>İçindekiler</button>
+        <div class="mbtTOC"><button>Mục lục</button>
         <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
         </div>
         <p>&nbsp;</p>
         """
-        sheet_append_log(ws7, target_row, "인트로 생성 완료")
+        sheet_append_log(ws9, target_row, "인트로 생성 완료")
 
         # 6) 썸네일 본문 삽입
         if thumb_url:
             html_full += f"""
 <p style="text-align:center;">
-  <img src="{thumb_url}" alt="{keyword} küçük resim" style="max-width:100%; height:auto; border-radius:10px;">
+  <img src="{thumb_url}" alt="{keyword} hình thu nhỏ" style="max-width:100%; height:auto; border-radius:10px;">
 </p><br /><br />
 """
-            sheet_append_log(ws7, target_row, "본문에 썸네일 삽입")
+            sheet_append_log(ws9, target_row, "본문에 썸네일 삽입")
         else:
-            sheet_append_log(ws7, target_row, "썸네일 없음")
+            sheet_append_log(ws9, target_row, "썸네일 없음")
 
         # 7) 해시태그
         tag_items = title.split()
         tag_str = " ".join([f"#{t}" for t in tag_items]) + " #AppStore"
-        sheet_append_log(ws7, target_row, f"해시태그='{tag_str}'")
+        sheet_append_log(ws9, target_row, f"해시태그='{tag_str}'")
 
-        # 8) 앱 상세 수집 → 본문 조립
+        # 8) 앱 상세 수집 및 본문 조립
         for j, app in enumerate(apps, 1):
-            if j > 7:  # 최대 7개까지만
+            if j > 7:  # 최대 7개
                 break
             try:
-                sheet_append_log(ws7, target_row, f"[{j}] 앱 수집 시작 id={app['id']}")
-                detail = fetch_app_detail(app["id"], country="tr")
+                sheet_append_log(ws9, target_row, f"[{j}] 앱 수집 시작 id={app['id']}")
+                detail = fetch_app_detail(app["id"], country="vi")  # 베트남 국가 코드
                 app_url = detail["url"]
                 app_name = detail["name"]
                 src_html = detail["desc_html"]
                 images = detail["images"]
 
-                desc_html = rewrite_app_description(src_html, app_name, keyword)
-                sheet_append_log(ws7, target_row, f"[{j}] {app_name} 설명 리라이트 완료")
+                desc_html = rewrite_app_description(src_html, app_name, keyword, lang="vi")
+                sheet_append_log(ws9, target_row, f"[{j}] {app_name} 설명 리라이트 완료")
 
                 img_group_html = "".join(
                     f'<div class="img-wrap"><img src="{img_url}" alt="{app_name}_{cc}"></div>'
@@ -678,61 +691,60 @@ if __name__ == "__main__":
                 )
 
                 section_html = f"""
-                <h2 data-ke-size="size26">{j}. {app_name} — Uygulama Tanıtımı</h2>
+                <h2 data-ke-size="size26">{j}. {app_name} — Giới thiệu ứng dụng</h2>
                 <br />
                 {desc_html}
-                <p data-ke-size="size18"><b>{app_name} Ekran Görüntüleri</b></p>
+                <p data-ke-size="size18"><b>Ảnh màn hình {app_name}</b></p>
                 <div class="img-group">{img_group_html}</div>
                 <br />
                 <p data-ke-size="size18" style="text-align:center;">
-                  <a href="{app_url}" class="myButton">{app_name} İndir</a>
+                  <a href="{app_url}" class="myButton">Tải {app_name}</a>
                 </p>
                 <br />
                 <p data-ke-size="size18">{tag_str}</p>
                 <br /><br />
                 """
-
                 html_full += section_html
-                sheet_append_log(ws7, target_row, f"[{j}] {app_name} 섹션 완료")
+                sheet_append_log(ws9, target_row, f"[{j}] {app_name} 섹션 완료")
             except Exception as e_each:
-                sheet_append_log(ws7, target_row, f"[{j}] 앱 처리 실패: {e_each}")
+                sheet_append_log(ws9, target_row, f"[{j}] 앱 처리 실패: {e_each}")
 
         # 9) 마무리
-        html_full += build_ending_block(title, keyword)
-        sheet_append_log(ws7, target_row, "엔딩 생성 완료")
+        html_full += build_ending_block(title, keyword, lang="vi")
+        sheet_append_log(ws9, target_row, "엔딩 생성 완료")
         related_box = get_related_posts(BLOG_ID, count=6)
         html_full += related_box
-        # ✅ 자동 목차 스크립트 호출
         html_full += "<script>mbtTOC();</script><br /><br />"
 
         # 10) 업로드
         try:
-            labels = make_post_labels(row)  # ["Uygulamalar", "iPhone", B열 값]
+            labels = make_post_labels(row)
             post_body = {"content": html_full, "title": title, "labels": labels}
             res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body,
                                               isDraft=False, fetchImages=True).execute()
             post_url = res.get("url", "")
-            sheet_append_log(ws7, target_row, f"업로드 성공: {post_url}")
+            sheet_append_log(ws9, target_row, f"업로드 성공: {post_url}")
         except Exception as up_e:
-            sheet_append_log(ws7, target_row, f"업로드 실패: {up_e}")
+            sheet_append_log(ws9, target_row, f"업로드 실패: {up_e}")
             raise
 
         # 11) 시트 기록
-        ws7.update_cell(target_row, 5, "OK")      # E열 완료
-        ws7.update_cell(target_row, 7, post_url)  # G열 = URL
-        sheet_append_log(ws7, target_row, f"시트 기록 완료: E='OK', G='{post_url}'")
+        ws9.update_cell(target_row, 5, "OK")
+        ws9.update_cell(target_row, 7, post_url)
+        sheet_append_log(ws9, target_row, f"시트 기록 완료: E='OK', G='{post_url}'")
 
         # 12) 완료
-        sheet_append_log(ws7, target_row, "정상 종료")
+        sheet_append_log(ws9, target_row, "정상 종료")
 
     except SystemExit:
         pass
     except Exception as e:
         tb = traceback.format_exc()
         row_for_err = target_row if 'target_row' in locals() and target_row else 2
-        sheet_append_log(ws7, row_for_err, f"실패: {e}")
-        sheet_append_log(ws7, row_for_err, f"Trace: {tb.splitlines()[-1]}")
+        sheet_append_log(ws9, row_for_err, f"실패: {e}")
+        sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
