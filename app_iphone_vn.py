@@ -317,7 +317,7 @@ def upload_to_drive(file_path, file_name):
 
 
 # =============== 썸네일 생성 (픽셀 기준 줄바꿈 적용) ===============
-def make_thumb(save_path: str, var_title: str):
+def make_thumb(save_path: str, var_title: str, font_path: str = "BeVietnamPro-SemiBold.ttf"):
     try:
         os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
 
@@ -328,10 +328,11 @@ def make_thumb(save_path: str, var_title: str):
         else:
             bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
 
-        # 폰트 설정 (터키 전용 폰트)
+        # 폰트 설정 (베트남 폰트 기본)
         try:
-            font = ImageFont.truetype(os.path.join("assets", "fonts", "BeVietnamPro-SemiBold.ttf"), 48)
+            font = ImageFont.truetype(os.path.join("assets", "fonts", font_path), 48)
         except Exception:
+            print(f"폰트 로드 실패: {font_path}, 기본 폰트 사용")
             font = ImageFont.load_default()
 
         # 캔버스 생성
@@ -381,7 +382,6 @@ def make_thumb(save_path: str, var_title: str):
         return False
 
 
-
 # =============== 썸네일 생성 + 로그 + 업로드 ===============
 def make_thumb_with_logging(ws, row_idx, save_path, title):
     try:
@@ -402,6 +402,7 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
     except Exception as e:
         log_thumb_step(ws, row_idx, f"에러:{e}")
         return ""
+
 
 
 # =============== CSS 블록 (한 번만 출력) ===============
@@ -757,6 +758,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
