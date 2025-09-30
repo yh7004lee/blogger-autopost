@@ -702,7 +702,7 @@ if __name__ == "__main__":
                 src_html = detail["desc_html"]
                 images = detail["images"]
 
-                desc_html = rewrite_app_description(src_html, app_name, keyword, lang="vi")
+                desc_html = rewrite_app_description(src_html, app_name, keyword)
                 sheet_append_log(ws9, target_row, f"[{j}] {app_name} 설명 리라이트 완료")
 
                 img_group_html = "".join(
@@ -764,6 +764,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
