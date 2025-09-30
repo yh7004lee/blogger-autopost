@@ -281,7 +281,9 @@ def pick_random_background() -> str:
     return random.choice(files) if files else ""
 
 # =============== 썸네일 생성 (픽셀 기준 줄바꿈 적용) ===============
-def make_thumb(save_path: str, var_title: str):
+
+# =============== 썸네일 생성 함수 수정 ===============
+def make_thumb(save_path: str, var_title: str, font_path=None):
     try:
         os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
 
@@ -292,12 +294,16 @@ def make_thumb(save_path: str, var_title: str):
         else:
             bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
 
-        # 폰트 설정 (베트남어용)
+        # 폰트 설정
         try:
-            font = ImageFont.truetype(os.path.join("assets", "fonts", "BeVietnamPro-SemiBold.ttf"), 48)
+            if font_path and os.path.exists(font_path):
+                font = ImageFont.truetype(font_path, 48)
+            else:
+                font = ImageFont.load_default()
+                print("[폰트 경고] 폰트 경로 없음 또는 로드 실패, 기본 폰트 사용")
         except Exception:
             font = ImageFont.load_default()
-            print("[폰트 경고] BeVietnamPro-SemiBold.ttf 로드 실패, 기본 폰트 사용")
+            print("[폰트 경고] 폰트 로드 실패, 기본 폰트 사용")
 
         # 캔버스 생성
         canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
@@ -380,10 +386,18 @@ def upload_to_drive(file_path, file_name):
         return ""
 
 # =============== 썸네일 생성 + 로그 + 업로드 ===============
-def make_thumb_with_logging(ws, row_idx, save_path, title):
+# =============== 썸네일 생성 + 로그 + 업로드 (수정) ===============
+def make_thumb_with_logging(ws, row_idx, save_path, title, font_path=None):
+    """
+    ws        : 시트 객체
+    row_idx   : 행 번호
+    save_path : 썸네일 저장 경로
+    title     : 썸네일에 들어갈 텍스트
+    font_path : 사용할 폰트 경로 (선택)
+    """
     try:
         log_thumb_step(ws, row_idx, "썸네일 시작")
-        ok = make_thumb(save_path, title)
+        ok = make_thumb(save_path, title, font_path=font_path)
         if ok:
             log_thumb_step(ws, row_idx, "썸네일 완료")
             url = upload_to_drive(save_path, os.path.basename(save_path))
@@ -753,6 +767,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
