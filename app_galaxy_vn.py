@@ -18,9 +18,9 @@ import urllib.parse
 SHEET_ID = os.getenv("SHEET_ID", "1SeQogbinIrDTMKjWhGgWPEQq8xv6ARv5n3I-2BsMrSc")
 DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
-# ✅ 블로그 고정 (터키 버전)
-BLOG_ID = "3433544505760551722"
-BLOG_URL = "https://apptk.appsos.kr/"
+# ✅ 블로그 고정 (베트남 버전)
+BLOG_ID = "7550707353079627944"
+BLOG_URL = "https://appvn.appsos.kr/"
 
 # ================================
 # OpenAI API Key 로드
@@ -35,20 +35,20 @@ if not OPENAI_API_KEY:
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
 # ================================
-# Google Sheets 인증 (시트7 사용)
-# A열: 터키어 키워드 / B열: 카테고리 / D열: 영어 키워드
+# Google Sheets 인증 (시트9 사용)
+# A열: 베트남어 키워드 / B열: 카테고리
 # ================================
 def get_sheet():
     SERVICE_ACCOUNT_FILE = "sheetapi.json"
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    return gc.open_by_key(SHEET_ID).get_worksheet(6)  # index=6 → 7번째 시트
+    return gc.open_by_key(SHEET_ID).get_worksheet(8)  # index=8 → 9번째 시트
 
 ws = get_sheet()
 
 # ================================
-# 추천글 박스 (터키 버전)
+# 추천글 박스 (베트남 버전)
 # ================================
 def get_related_posts(blog_id, count=6):
     import feedparser, random
@@ -61,14 +61,14 @@ def get_related_posts(blog_id, count=6):
     # 랜덤으로 count개 추출
     entries = random.sample(feed.entries, min(count, len(feed.entries)))
 
-    # HTML 박스 생성 (터키어 문구 적용)
+    # HTML 박스 생성 (베트남어 문구 적용)
     html_box = """
 <div style="background: rgb(239, 237, 233); border-radius: 8px; border: 2px dashed rgb(167, 162, 151);
             box-shadow: rgb(239, 237, 233) 0px 0px 0px 10px; color: #565656; font-weight: bold;
             margin: 2em 10px; padding: 2em;">
   <p data-ke-size="size16"
      style="border-bottom: 1px solid rgb(85, 85, 85); color: #555555; font-size: 16px;
-            margin-bottom: 15px; padding-bottom: 5px;">♡♥ Bu faydalı yazılara da göz atın</p>
+            margin-bottom: 15px; padding-bottom: 5px;">♡♥ Hãy xem thêm những bài viết hữu ích này</p>
 """
     for entry in entries:
         title = entry.title
@@ -93,11 +93,11 @@ def get_drive_service():
     return build("drive", "v3", credentials=creds)
 
 # ================================
-# 제목 생성 (G1 인덱스 활용, 터키어 패턴)
+# 제목 생성 (G1 인덱스 활용, 베트남어 패턴)
 # ================================
 def make_rotating_title(ws, keyword: str) -> str:
-    front_choices = ["Telefon", "Akıllı Telefon", "Android"]
-    back_choices = ["Önerilen uygulamalar", "En iyi uygulamalar"]
+    front_choices = ["Điện thoại", "Ứng dụng Android", "Smartphone"]
+    back_choices = ["Ứng dụng đề xuất", "Ứng dụng hay nhất"]
 
     # G1 셀에서 인덱스 불러오기 (없으면 0)
     try:
@@ -113,7 +113,7 @@ def make_rotating_title(ws, keyword: str) -> str:
     # 다음 인덱스 저장
     ws.update_cell(1, 7, str(idx + 1))
 
-    # 예: Telefon {keyword} Önerilen uygulamalar
+    # 예: Điện thoại {keyword} Ứng dụng đề xuất
     return f"{front} {keyword} {back}"
 
 # ================================
@@ -182,8 +182,9 @@ def pick_random_background() -> str:
         files.extend(glob.glob(os.path.join("assets/backgrounds", ext)))
     return random.choice(files) if files else ""
 
+
 # ================================
-# 썸네일 생성 (터키 전용 폰트 적용, 안전한 줄바꿈)
+# 썸네일 생성 (베트남 전용 폰트 적용, 안전한 줄바꿈)
 # ================================
 def make_thumb(save_path: str, var_title: str):
     try:
@@ -195,9 +196,9 @@ def make_thumb(save_path: str, var_title: str):
         else:
             bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
 
-        # ✅ 터키 전용 폰트 적용
+        # ✅ 베트남어 전용 폰트 적용
         try:
-            font = ImageFont.truetype("assets/fonts/PlusJakartaSans-SemiBoldItalic.ttf", 48)
+            font = ImageFont.truetype("assets/fonts/BeVietnamPro-SemiBold.ttf", 48)
         except:
             font = ImageFont.load_default()
 
@@ -248,9 +249,8 @@ def make_thumb(save_path: str, var_title: str):
     except Exception as e:
         print(f"[에러] 썸네일 생성 실패: {e}")
         return False
-
 # ================================
-# Google Drive 업로드
+# Google Drive 업로드 (베트남용)
 # ================================
 def upload_to_drive(file_path, file_name):
     try:
@@ -286,46 +286,47 @@ def upload_to_drive(file_path, file_name):
 
         return f"https://lh3.googleusercontent.com/d/{file['id']}"
     except Exception as e:
-        print(f"[에러] Google Drive 업로드 실패: {e}")
+        print(f"[Lỗi] Google Drive tải lên thất bại: {e}")
         return ""
 
+
 # ================================
-# 썸네일 생성 + 로그 기록 + 업로드 → URL 반환
+# 썸네일 생성 + 로그 기록 + 업로드 → URL 반환 (베트남용)
 # ================================
 def make_thumb_with_logging(ws, row_idx, save_path, title):
     try:
-        log_thumb_step(ws, row_idx, "썸네일 시작")
+        log_thumb_step(ws, row_idx, "Bắt đầu tạo thumbnail")
         ok = make_thumb(save_path, title)
         if ok:
-            log_thumb_step(ws, row_idx, "썸네일 완료")
+            log_thumb_step(ws, row_idx, "Hoàn thành thumbnail")
             url = upload_to_drive(save_path, os.path.basename(save_path))
             if url:
-                log_thumb_step(ws, row_idx, "업로드 완료")
+                log_thumb_step(ws, row_idx, "Tải lên hoàn tất")
                 return url
             else:
-                log_thumb_step(ws, row_idx, "업로드 실패")
+                log_thumb_step(ws, row_idx, "Tải lên thất bại")
                 return ""
         else:
-            log_thumb_step(ws, row_idx, "썸네일 실패")
+            log_thumb_step(ws, row_idx, "Tạo thumbnail thất bại")
             return ""
     except Exception as e:
-        log_thumb_step(ws, row_idx, f"[에러]{e}")
+        log_thumb_step(ws, row_idx, f"[Lỗi]{e}")
         return ""
 
 # ================================
-# OpenAI GPT 처리 (터키 블로그 글용)
+# OpenAI GPT 처리 (베트남 블로그 글용)
 # ================================
 def rewrite_app_description(original_html: str, app_name: str, keyword_str: str) -> str:
     if not client:
         return original_html
     compact = BeautifulSoup(original_html, 'html.parser').get_text(separator=' ', strip=True)
     system_msg = (
-        "Sen profesyonel bir blog yazarı olarak Türkçe içerik üretiyorsun. "
-        "İçeriği gerçeklere sadık kalarak yeniden yaz, ancak doğal, akıcı ve samimi bir üslup kullan. "
-        "Okuyucu için anlaşılır ve ilgi çekici olsun. "
-        "Çıkış mutlaka <p data-ke-size='size18'> paragraf yapısıyla verilmelidir."
+        "Bạn là một blogger chuyên nghiệp, tạo nội dung bằng tiếng Việt. "
+        "Viết lại nội dung dựa trên thông tin thực tế nhưng giữ văn phong tự nhiên, mạch lạc và thân thiện. "
+        "Nội dung dễ hiểu và thu hút người đọc. "
+        "Kết quả phải được xuất dưới dạng <p data-ke-size='size18'> từng đoạn văn."
     )
-    user_msg = f"[Uygulama adı] {app_name}\n[Anahtar kelime] {keyword_str}\n\n{compact}"
+    user_msg = f"[Tên ứng dụng] {app_name}\n[Từ khóa] {keyword_str}\n\n{compact}"
     try:
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
@@ -338,45 +339,44 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        print(f"[에러] GPT 처리 실패: {e}")
+        print(f"[Lỗi] Xử lý GPT thất bại: {e}")
         return original_html
-
 # ================================
-# 서론 · 결론 랜덤 (SEO 최적화 + 문장 확장, 터키어 버전)
+# 서론 · 결론 랜덤 (SEO 최적화 + 문장 확장, 베트남어 버전)
 # ================================
 intro_start = [
-    "Günümüzde yalnızca bir akıllı telefonla pek çok işi kolayca yapmak mümkün. ",
-    "Artık telefon ve uygulamaları birleştirerek hayatı birçok yönden kolaylaştırabilirsiniz. ",
-    "Akıllı telefon, iletişimin çok ötesine geçen vazgeçilmez bir eşya haline geldi. ",
-    "Mobil dünyanın gelişimiyle birlikte uygulamalar günlük hayatımızı çok daha pratik hale getirdi. ",
-    "Araştırmadan işe, eğitimden eğlenceye kadar her şey telefonla yapılabiliyor. ",
-    "Elinizin avucundaki bir cihazla yaşam kalitenizi yükseltmek mümkün. ",
-    "Kullanımı kolay uygulamalar sayesinde günlük hayat daha dinamik ve basit hale geldi. ",
-    "Doğru uygulamaları seçtiğinizde telefon gerçek bir yardımcıya dönüşür. ",
-    "Uygulamaların en büyük avantajı her zaman bilgiye ve eğlenceye ulaşabilmektir. "
+    "Ngày nay, chỉ với một chiếc điện thoại thông minh, bạn có thể thực hiện nhiều công việc một cách dễ dàng. ",
+    "Bằng cách kết hợp điện thoại và ứng dụng, cuộc sống trở nên thuận tiện hơn nhiều. ",
+    "Điện thoại thông minh đã trở thành vật dụng không thể thiếu, vượt xa việc giao tiếp thông thường. ",
+    "Sự phát triển của thế giới di động giúp các ứng dụng trở nên cực kỳ tiện lợi trong cuộc sống hàng ngày. ",
+    "Từ nghiên cứu đến công việc, từ giáo dục đến giải trí, mọi thứ đều có thể thực hiện trên điện thoại. ",
+    "Chỉ với một thiết bị trong tay, bạn có thể nâng cao chất lượng cuộc sống. ",
+    "Nhờ các ứng dụng dễ sử dụng, cuộc sống hàng ngày trở nên năng động và đơn giản hơn. ",
+    "Khi chọn đúng ứng dụng, điện thoại sẽ trở thành trợ thủ đắc lực thực sự. ",
+    "Ưu điểm lớn nhất của các ứng dụng là luôn tiếp cận được thông tin và giải trí."
 ]
 
 intro_middle = [
-    "Günlük yaşamda faydalı işlevler sunar ve pratikliği büyük ölçüde artırırlar.",
-    "Zaman kazandırır ve farklı durumlarda daha iyi kararlar almanıza yardımcı olur.",
-    "İş, eğitim ve eğlencede kullanılarak her nesil için vazgeçilmez hale gelir.",
-    "Pratikliğin ötesinde yeni deneyimler kazandırır ve imkanları genişletir.",
-    "Çeşitli ve sezgisel uygulamalar sayesinde kullanıcıların memnuniyeti giderek artmaktadır.",
-    "Bilgi ve eğlencenin her zaman elinizin altında olduğu bir ortam yaratırlar.",
-    "Son trendleri takip ederek uygulamalar hızla gelişmektedir.",
-    "Birçok ücretsiz uygulama şaşırtıcı bir kalite sunar ve denemesi kolaydır.",
-    "Doğru kullanıldığında günlük yaşamın küçük sorunları kolayca çözülebilir. "
+    "Chúng cung cấp các chức năng hữu ích trong cuộc sống hàng ngày và tăng tính tiện dụng đáng kể.",
+    "Giúp tiết kiệm thời gian và hỗ trợ đưa ra quyết định tốt hơn trong các tình huống khác nhau.",
+    "Được sử dụng trong công việc, giáo dục và giải trí, trở thành công cụ không thể thiếu cho mọi lứa tuổi.",
+    "Mang đến những trải nghiệm mới và mở rộng khả năng vượt xa sự tiện lợi thông thường.",
+    "Nhờ các ứng dụng đa dạng và trực quan, sự hài lòng của người dùng ngày càng tăng.",
+    "Tạo ra môi trường mà thông tin và giải trí luôn trong tầm tay bạn.",
+    "Theo dõi các xu hướng mới, các ứng dụng phát triển nhanh chóng.",
+    "Nhiều ứng dụng miễn phí mang chất lượng đáng ngạc nhiên và dễ thử nghiệm.",
+    "Khi sử dụng đúng cách, các vấn đề nhỏ trong cuộc sống hàng ngày có thể giải quyết dễ dàng."
 ]
 
 intro_end = [
-    "Bu yazıda mutlaka bilmeniz gereken en popüler ve faydalı uygulamaları derledik.",
-    "Burada günlük kullanım için en pratik ve yüksek puanlı uygulamaları öne çıkaracağız.",
-    "Sık kullanılan uygulamaları seçtik ve bunlardan en iyi şekilde nasıl faydalanabileceğinizi açıkladık.",
-    "Seçiminizi kolaylaştırmak için gerekli uygulamaları düzenli bir şekilde sunduk.",
-    "Güvenilir ve faydalı uygulamaları görecek, günlük rutininizi geliştireceksiniz.",
-    "En güvenilir uygulamalara odaklanıyor ve temel özelliklerini açıklıyoruz.",
-    "En çok aranan uygulamaları, gerçek kullanıcı deneyimleriyle birlikte paylaşıyoruz.",
-    "Telefonunuza mutlaka yüklemeniz gereken vazgeçilmez uygulamaları seçtik. "
+    "Trong bài viết này, chúng tôi đã tổng hợp các ứng dụng phổ biến và hữu ích mà bạn cần biết.",
+    "Chúng tôi sẽ giới thiệu các ứng dụng thực tế, tiện lợi và có điểm đánh giá cao cho việc sử dụng hàng ngày.",
+    "Chúng tôi đã chọn các ứng dụng phổ biến và giải thích cách tận dụng chúng tốt nhất.",
+    "Để giúp bạn dễ dàng lựa chọn, các ứng dụng cần thiết được trình bày một cách có tổ chức.",
+    "Bạn sẽ thấy các ứng dụng đáng tin cậy và hữu ích, cải thiện thói quen hàng ngày của mình.",
+    "Chúng tôi tập trung vào các ứng dụng đáng tin cậy và giải thích các tính năng cơ bản.",
+    "Chia sẻ các ứng dụng được tìm kiếm nhiều nhất kèm theo trải nghiệm thực tế của người dùng.",
+    "Chúng tôi đã chọn các ứng dụng không thể thiếu mà bạn nên cài đặt trên điện thoại."
 ]
 
 def make_intro(title, keyword):
@@ -385,52 +385,52 @@ def make_intro(title, keyword):
 <div id="jm">&nbsp;</div>
 <p data-ke-size="size18">
 {intro}
-Bu yazıda, “{keyword}” ile ilgili uygulamalara odaklanıyoruz.
-Seçimler, Google Play'de “{keyword}” araması yapıldığında en üst sıralarda çıkan uygulamalara dayanmaktadır.
-Bir akıllı telefon kullanıcısıysanız, bu pratik seçeneklere mutlaka göz atın ve doğru zamanda değerlendirin.
+Trong bài viết này, chúng tôi tập trung vào các ứng dụng liên quan đến “{keyword}”.
+Các lựa chọn dựa trên kết quả tìm kiếm hàng đầu trên Google Play khi tìm kiếm “{keyword}”.
+Nếu bạn là người dùng điện thoại thông minh, hãy xem qua những lựa chọn tiện lợi này và tận dụng đúng lúc.
 </p>
 <span><!--more--></span>
 <p data-ke-size="size18">&nbsp;</p>
 """
 
 end_start = [
-    "Umarız sunduğumuz uygulamalar günlük yaşamınızı daha pratik ve keyifli hale getirir.",
-    "Bu uygulama seçkisinin farklı durumlarda size faydalı olmasını dileriz.",
-    "Yalnızca işlevlere değil, uygulamaların gerçek kullanımına da dikkat ettik.",
-    "Önerilen uygulamaları kullanarak günlük rutininizi çok daha verimli hale getirin.",
-    "İlginizi en çok çeken uygulamayı deneyin ve size en uygun olanı bulun."
+    "Chúng tôi hy vọng các ứng dụng được giới thiệu sẽ làm cho cuộc sống hàng ngày của bạn thuận tiện và thú vị hơn.",
+    "Chúng tôi mong rằng bộ sưu tập ứng dụng này sẽ hữu ích trong nhiều tình huống khác nhau.",
+    "Chúng tôi không chỉ chú ý đến chức năng mà còn đến cách sử dụng thực tế của ứng dụng.",
+    "Bằng cách sử dụng các ứng dụng được đề xuất, thói quen hàng ngày của bạn sẽ trở nên hiệu quả hơn.",
+    "Hãy thử ứng dụng bạn quan tâm nhất và tìm ra ứng dụng phù hợp với bạn."
 ]
 
 end_summary = [
-    "Her uygulamanın güçlü yönlerini ve avantajlarını seçiminizi kolaylaştıracak şekilde özetledik.",
-    "Her uygulamanın öne çıkan özelliklerini net ve karşılaştırmalı olarak sunduk.",
-    "Gerçek kullanıcı değerlendirmelerini dikkate alarak güvenli bir seçim sağlamaya çalıştık.",
-    "Sadece güvenilir ve popüler uygulamaları önerdik.",
-    "Farklı ihtiyaçlara hitap etmek için hem ücretsiz hem de ücretli seçenekler ekledik."
+    "Chúng tôi tóm tắt điểm mạnh và lợi ích của từng ứng dụng để giúp bạn dễ dàng lựa chọn.",
+    "Chúng tôi trình bày các tính năng nổi bật của mỗi ứng dụng một cách rõ ràng và so sánh.",
+    "Dựa trên đánh giá thực tế của người dùng để đảm bảo lựa chọn an toàn.",
+    "Chỉ đề xuất các ứng dụng đáng tin cậy và phổ biến.",
+    "Để đáp ứng các nhu cầu khác nhau, chúng tôi bao gồm cả ứng dụng miễn phí và trả phí."
 ]
 
 end_next = [
-    "Uygulamalardaki son trendleri ve yenilikleri paylaşmaya devam edeceğiz.",
-    "Bir sonraki yazılarımızda da faydalı ve ilginç uygulama önerileri bulabilirsiniz.",
-    "Yeni işlevler ve öne çıkan uygulamalar yakında burada yer alacak.",
-    "Günlük rutininizi kolaylaştırabilecek farklı uygulamaları önermeyi sürdüreceğiz.",
-    "Uygulama kullanımına dair pratik ipuçları ve bilgilerle içeriği sürekli güncelleyeceğiz."
+    "Chúng tôi sẽ tiếp tục chia sẻ các xu hướng và ứng dụng mới nhất.",
+    "Trong các bài viết tiếp theo, bạn sẽ tìm thấy thêm các đề xuất ứng dụng hữu ích và thú vị.",
+    "Các tính năng mới và ứng dụng nổi bật sẽ sớm được cập nhật tại đây.",
+    "Chúng tôi sẽ tiếp tục giới thiệu các ứng dụng giúp cải thiện thói quen hàng ngày.",
+    "Cập nhật thường xuyên các mẹo và thông tin hữu ích về cách sử dụng ứng dụng."
 ]
 
 end_action = [
-    "İçeriği beğendiyseniz yorum bırakın ve yazıyı beğenmeyi unutmayın.",
-    "Fikirleriniz bizim için çok değerli, düşüncelerinizi yorumlarda paylaşın.",
-    "Faydalı bulduysanız, arkadaşlarınızla ve ailenizle paylaşın.",
-    "Geri bildiriminiz, içeriği daha da geliştirmemize yardımcı olur.",
-    "Yeni yazılardan haberdar olmak için bizi takip edin."
+    "Nếu bạn thấy nội dung hữu ích, hãy để lại bình luận và nhấn thích bài viết.",
+    "Ý kiến của bạn rất quan trọng, hãy chia sẻ suy nghĩ của bạn trong phần bình luận.",
+    "Nếu thấy hữu ích, hãy chia sẻ với bạn bè và gia đình.",
+    "Phản hồi của bạn giúp chúng tôi cải thiện nội dung hơn nữa.",
+    "Theo dõi chúng tôi để nhận thông báo về các bài viết mới."
 ]
 
 end_greet = [
-    "Sonuna kadar okuduğunuz için teşekkürler! Harika bir gün dileriz!",
-    "Okuduğunuz için teşekkür ederiz, umarız hayatınız daha pratik ve mutlu olur!",
-    "Yakında daha faydalı içerikler paylaşacağız, bizi takipte kalın!",
-    "Blogumuzu takip ettiğiniz için teşekkürler, bir sonraki yazıda görüşmek üzere!",
-    "Size başarılarla dolu harika bir gün dileriz!"
+    "Cảm ơn bạn đã đọc đến cuối! Chúc bạn một ngày tuyệt vời!",
+    "Cảm ơn đã đọc, hy vọng cuộc sống của bạn trở nên thuận tiện và hạnh phúc hơn!",
+    "Chúng tôi sẽ sớm chia sẻ nhiều nội dung hữu ích hơn, hãy tiếp tục theo dõi!",
+    "Cảm ơn bạn đã theo dõi blog, hẹn gặp lại trong bài viết tiếp theo!",
+    "Chúc bạn một ngày tuyệt vời đầy thành công và niềm vui!"
 ]
 
 def make_last(title):
@@ -446,23 +446,25 @@ def make_last(title):
 <p data-ke-size="size18">&nbsp;</p>
 </div>
 """
-
 # ================================
-# 앱 크롤링 (터키어)
+# 앱 크롤링 (베트남 블로그용, 시트9 전용)
 # ================================
-def crawl_apps(keyword, lang="tr", country="TR"):
+def crawl_apps(keyword, lang="vi", country="VN"):
     url = f"https://play.google.com/store/search?q={keyword}&c=apps&hl={lang}&gl={country}"
-    resp = requests.get(url, headers={"User-Agent":"Mozilla/5.0"})
+    resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
     soup = BeautifulSoup(resp.text, "html.parser")
     source = soup.find_all(class_="ULeU3b")
     app_links = []
     for k, s in enumerate(source):
-        if k == 15: break
+        if k == 15: 
+            break
         a = s.find("a")
-        if a: app_links.append("https://play.google.com" + a["href"])
+        if a: 
+            app_links.append("https://play.google.com" + a["href"])
     return app_links[3:]
+
 # ================================
-# 메인 실행 (시트7 기반, 터키 블로그 고정)
+# 메인 실행 (시트9 기반, 베트남 블로그)
 # ================================
 try:
     rows = ws.get_all_values()
@@ -479,10 +481,10 @@ try:
             break
 
     if not keyword:
-        print("처리할 키워드가 없습니다.")
+        print("Không có từ khóa để xử lý.")
         exit()
 
-    print(f"👉 이번 실행: {title} (라벨={label})")
+    print(f"👉 Bài viết lần này: {title} (Nhãn={label})")
 
     # ✅ 썸네일 생성
     thumb_dir = "thumbnails"
@@ -492,7 +494,7 @@ try:
 
     html = make_intro(title, keyword)
 
-    # ✅ 스크린샷 레이아웃 스타일 추가 (2열, 모바일 1열)
+    # ✅ 스크린샷 레이아웃 스타일
     html += """
     <style>
     .img-group {
@@ -520,7 +522,7 @@ try:
 
     # ✅ 자동 목차 (서론 직후)
     html += """
-    <div class="mbtTOC"><button>İçindekiler</button>
+    <div class="mbtTOC"><button>Mục lục</button>
     <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
     </div>
     <p>&nbsp;</p>
@@ -529,19 +531,18 @@ try:
     if img_url:
         html += f"""
         <p style="text-align:center;">
-          <img src="{img_url}" alt="{keyword} küçük resim" style="max-width:100%; height:auto; border-radius:10px;">
+          <img src="{img_url}" alt="{keyword} thumbnail" style="max-width:100%; height:auto; border-radius:10px;">
         </p>
         <br /><br />
         """
 
     # ✅ 앱 크롤링
     app_links = crawl_apps(keyword)
-    print(f"수집된 앱 링크: {len(app_links)}개")
+    print(f"Số lượng liên kết ứng dụng thu thập: {len(app_links)}")
 
-    # 🔹 앱 개수 확인 (3개 미만이면 종료)
     if len(app_links) < 3:
-        print("⚠️ 앱 개수가 3개 미만 → 자동 완료 처리")
-        ws.update_cell(target_row, 6, "OK")  # F열: 완료 플래그
+        print("⚠️ Số lượng ứng dụng ít hơn 3 → đánh dấu hoàn tất")
+        ws.update_cell(target_row, 6, "OK")
         exit()
 
     # ✅ 본문 생성
@@ -553,7 +554,7 @@ try:
         soup = BeautifulSoup(resp.text, "html.parser")
 
         # 앱 제목
-        h1 = soup.find("h1").text if soup.find("h1") else f"Uygulama {j}"
+        h1 = soup.find("h1").text if soup.find("h1") else f"Ứng dụng {j}"
 
         # 앱 설명
         raw_desc = str(soup.find("div", class_="fysCi")) if soup.find("div", class_="fysCi") else ""
@@ -568,7 +569,7 @@ try:
             link_block = f"""
             <div class="ottistMultiRelated">
               <a class="extL alt" href="{BLOG_URL}search/label/{encoded_label}?&max-results=10">
-                <span style="font-size: medium;"><strong>Daha fazla {label} yazısı gör</strong></span>
+                <span style="font-size: medium;"><strong>Xem thêm bài viết về {label}</strong></span>
                 <i class="fas fa-link 2xs"></i>
               </a>
             </div>
@@ -578,31 +579,31 @@ try:
 
         # ✅ 제목+본문+스크린샷
         html += f"""
-        <h2 data-ke-size="size26">{j}. {h1} — Uygulama Tanıtımı</h2>
+        <h2 data-ke-size="size26">{j}. {h1} — Giới thiệu ứng dụng</h2>
         <br />
         {desc}
         <br />
-        <p data-ke-size="size18"><b>Ekran görüntüleri: {h1}</b></p>
+        <p data-ke-size="size18"><b>Ảnh chụp màn hình: {h1}</b></p>
         <div class="img-group">{images_html}</div>
         <br />
         <p style="text-align: center;" data-ke-size="size18">
-          <a class="myButton" href="{app_url}">İndir {h1}</a>
+          <a class="myButton" href="{app_url}">Tải {h1}</a>
         </p><br /><br />
         <p data-ke-size="size18">{tag_str}</p>
         <br /><br /><br />
         """
 
     html += make_last(title)
+
     # ✅ 관련 글 박스 삽입
     related_box = get_related_posts(BLOG_ID, count=6)
     html += related_box
 
-    # ✅ 자동 목차 스크립트 (마지막)
+    # ✅ 자동 목차 스크립트
     html += "<script>mbtTOC();</script><br /><br />"
 
     # ✅ Blogger 업로드 (고정 BLOG_ID + 라벨=B열)
     labels = [label, "Android"] if label else ["Android"]
-    
     post_body = {
         "content": html,
         "title": title,
@@ -610,7 +611,7 @@ try:
     }
     res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False).execute()
     url = res.get("url", "")
-    print(f"✅ 업로드 성공: {url}")
+    print(f"✅ Upload thành công: {url}")
 
     # ✅ 시트 업데이트
     ws.update_cell(target_row, 6, "OK")   # F열: 완료 플래그
@@ -618,9 +619,11 @@ try:
 
 except Exception as e:
     tb = traceback.format_exc()
-    print("실패:", e)
+    print("Thất bại:", e)
     if target_row:
         ws.update_cell(target_row, 11, str(e))  # K열: 에러 메시지 기록
+
+
 
 
 
