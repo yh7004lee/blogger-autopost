@@ -330,7 +330,7 @@ def make_thumb(save_path: str, var_title: str, font_path: str = None):
 
         # 폰트 설정
         if font_path is None:
-            font_path = os.path.join("assets", "fonts", "BeVietnamPro-SemiBold.ttf")
+            font_path = os.path.join("assets", "fonts", "PlusJakartaSans-SemiBoldItalic.ttf")
         try:
             if not os.path.exists(font_path):
                 print(f"폰트 로드 실패: {font_path} 파일이 존재하지 않습니다. 기본 폰트로 대체합니다.")
@@ -764,6 +764,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
