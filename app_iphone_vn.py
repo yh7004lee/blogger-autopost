@@ -316,8 +316,8 @@ def upload_to_drive(file_path, file_name):
         return ""
 
 
-# =============== 썸네일 생성 함수 수정 ===============
-def make_thumb(save_path: str, var_title: str, font_path=None):
+# =============== 썸네일 생성 (픽셀 기준 줄바꿈 적용) ===============
+def make_thumb(save_path: str, var_title: str):
     try:
         os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
 
@@ -328,16 +328,11 @@ def make_thumb(save_path: str, var_title: str, font_path=None):
         else:
             bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
 
-        # 폰트 설정
+        # 폰트 설정 (터키 전용 폰트)
         try:
-            if font_path and os.path.exists(font_path):
-                 font = ImageFont.truetype(os.path.join("assets", "fonts", "BeVietnamPro-SemiBold.ttf"), 48)
-            else:
-                font = ImageFont.load_default()
-                print("[폰트 경고] 폰트 경로 없음 또는 로드 실패, 기본 폰트 사용")
+            font = ImageFont.truetype(os.path.join("assets", "fonts", "BeVietnamPro-SemiBold.ttf"), 48)
         except Exception:
             font = ImageFont.load_default()
-            print("[폰트 경고] 폰트 로드 실패, 기본 폰트 사용")
 
         # 캔버스 생성
         canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
@@ -382,23 +377,16 @@ def make_thumb(save_path: str, var_title: str, font_path=None):
         canvas.save(save_path, "PNG")
         return True
     except Exception as e:
-        print(f"[에러] 썸네일 생성 실패: {e}")
+        print(f"에러: 썸네일 생성 실패: {e}")
         return False
 
 
 
-# =============== 썸네일 생성 + 로그 + 업로드 (수정) ===============
-def make_thumb_with_logging(ws, row_idx, save_path, title, font_path=None):
-    """
-    ws        : 시트 객체
-    row_idx   : 행 번호
-    save_path : 썸네일 저장 경로
-    title     : 썸네일에 들어갈 텍스트
-    font_path : 사용할 폰트 경로 (선택)
-    """
+# =============== 썸네일 생성 + 로그 + 업로드 ===============
+def make_thumb_with_logging(ws, row_idx, save_path, title):
     try:
         log_thumb_step(ws, row_idx, "썸네일 시작")
-        ok = make_thumb(save_path, title, font_path=font_path)
+        ok = make_thumb(save_path, title)
         if ok:
             log_thumb_step(ws, row_idx, "썸네일 완료")
             url = upload_to_drive(save_path, os.path.basename(save_path))
@@ -412,8 +400,9 @@ def make_thumb_with_logging(ws, row_idx, save_path, title, font_path=None):
             log_thumb_step(ws, row_idx, "썸네일 실패")
             return ""
     except Exception as e:
-        log_thumb_step(ws, row_idx, f"[에러] {e}")
+        log_thumb_step(ws, row_idx, f"에러:{e}")
         return ""
+
 
 # =============== CSS 블록 (한 번만 출력) ===============
 def build_css_block() -> str:
@@ -768,6 +757,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
