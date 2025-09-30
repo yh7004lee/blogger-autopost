@@ -627,7 +627,7 @@ if __name__ == "__main__":
         os.makedirs(thumb_dir, exist_ok=True)
         thumb_path = os.path.join(thumb_dir, f"{keyword}.png")
         sheet_append_log(ws9, target_row, "썸네일 생성 시작")
-        thumb_url = make_thumb_with_logging(ws9, target_row, thumb_path, title, font_name="BeVietnamPro-SemiBold.ttf")
+        thumb_url = make_thumb_with_logging(ws9, target_row, thumb_path, title)
         sheet_append_log(ws9, target_row, f"썸네일 결과: {thumb_url or '실패'}")
 
         # 4) 앱 ID 검색
@@ -764,6 +764,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
