@@ -317,7 +317,7 @@ def upload_to_drive(file_path, file_name):
 
 
 # =============== 썸네일 생성 (픽셀 기준 줄바꿈 적용) ===============
-def make_thumb(save_path: str, var_title: str, font_path: str = "BeVietnamPro-SemiBold.ttf"):
+def make_thumb(save_path: str, var_title: str, font_path: str = None):
     try:
         os.makedirs(os.path.dirname(save_path) or ".", exist_ok=True)
 
@@ -328,11 +328,17 @@ def make_thumb(save_path: str, var_title: str, font_path: str = "BeVietnamPro-Se
         else:
             bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
 
-        # 폰트 설정 (베트남 폰트 기본)
+        # 폰트 설정
+        if font_path is None:
+            font_path = os.path.join("assets", "fonts", "BeVietnamPro-SemiBold.ttf")
         try:
-            font = ImageFont.truetype(os.path.join("assets", "fonts", font_path), 48)
-        except Exception:
-            print(f"폰트 로드 실패: {font_path}, 기본 폰트 사용")
+            if not os.path.exists(font_path):
+                print(f"폰트 로드 실패: {font_path} 파일이 존재하지 않습니다. 기본 폰트로 대체합니다.")
+                font = ImageFont.load_default()
+            else:
+                font = ImageFont.truetype(font_path, 48)
+        except Exception as e:
+            print(f"폰트 로드 실패: {e}. 기본 폰트로 대체합니다.")
             font = ImageFont.load_default()
 
         # 캔버스 생성
@@ -383,10 +389,10 @@ def make_thumb(save_path: str, var_title: str, font_path: str = "BeVietnamPro-Se
 
 
 # =============== 썸네일 생성 + 로그 + 업로드 ===============
-def make_thumb_with_logging(ws, row_idx, save_path, title):
+def make_thumb_with_logging(ws, row_idx, save_path, title, font_path: str = None):
     try:
         log_thumb_step(ws, row_idx, "썸네일 시작")
-        ok = make_thumb(save_path, title)
+        ok = make_thumb(save_path, title, font_path=font_path)
         if ok:
             log_thumb_step(ws, row_idx, "썸네일 완료")
             url = upload_to_drive(save_path, os.path.basename(save_path))
@@ -758,6 +764,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
