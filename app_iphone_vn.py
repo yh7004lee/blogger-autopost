@@ -226,7 +226,7 @@ def fetch_app_detail(app_id: str, country="vn"):
         return {"url": url, "name": name, "desc_html": "", "images": []}
 
 
-def rewrite_app_description_vn(original_html: str, app_name: str, keyword_str: str) -> str:
+def rewrite_app_description(original_html: str, app_name: str, keyword_str: str) -> str:
     from bs4 import BeautifulSoup
     compact = BeautifulSoup(original_html or "", 'html.parser').get_text(separator=' ', strip=True)
     if not client:
@@ -742,6 +742,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
