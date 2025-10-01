@@ -226,29 +226,47 @@ def fetch_app_detail(app_id: str, country="vn"):
         return {"url": url, "name": name, "desc_html": "", "images": []}
 
 
-# =============== 설명 리라이트 (OpenAI, fallback 있음, 베트남어) ===============
-def rewrite_app_description(original_html: str, app_name: str, keyword: str) -> str:
+def rewrite_app_description_vn(original_html: str, app_name: str, keyword_str: str) -> str:
     from bs4 import BeautifulSoup
-    plain = BeautifulSoup(original_html or "", "html.parser").get_text(" ", strip=True)
+    compact = BeautifulSoup(original_html or "", 'html.parser').get_text(separator=' ', strip=True)
     if not client:
-        return f"<p data-ke-size='size18'>{plain or (app_name + ' Giới thiệu')}</p>"
+        if compact:
+            return "".join([f"<p data-ke-size='size18'>{line.strip()}</p>" for line in compact.splitlines() if line.strip()]) or f"<p data-ke-size='size18'>{app_name} Giới thiệu</p>"
+        return f"<p data-ke-size='size18'>{app_name} Giới thiệu</p>"
+
+    system_msg = (
+        "Bạn là một copywriter viết blog bằng tiếng Việt. "
+        "Giữ lại thông tin chính xác, nhưng viết lại câu chữ và cấu trúc hoàn toàn mới, "
+        "theo cách tự nhiên, thân thiện như người thật viết. "
+        "Không dùng Markdown, chỉ sử dụng <p data-ke-size='size18'> cho các đoạn văn. "
+        "Chia bài viết thành 3-4 đoạn văn, mỗi đoạn dùng thẻ <p data-ke-size='size18'>."
+    )
+    user_msg = (
+        f"[Tên App] {app_name}\n"
+        f"[Từ khóa] {keyword_str}\n"
+        "Tham khảo nội dung dưới đây và viết lại đoạn giới thiệu blog mới.\n\n"
+        f"{compact}"
+    )
     try:
         resp = client.chat.completions.create(
             model="gpt-4.1-mini",
             messages=[
-                {"role": "system", "content": "베트남 블로그 작가처럼 자연스럽게 앱 소개 글 작성. 문단은 <p data-ke-size='size18'> 안에 넣기."},
-                {"role": "user", "content": plain}
+                {"role": "system", "content": system_msg},
+                {"role": "user", "content": user_msg},
             ],
             temperature=0.7,
-            max_tokens=600,
+            max_tokens=700,
         )
-        text = resp.choices[0].message.content.strip()
-        if "<p" not in text:
-            text = f"<p data-ke-size='size18'>{text}</p>"
-        return text
+        rewritten = resp.choices[0].message.content.strip()
+        if "<p" not in rewritten:
+            rewritten = f'<p data-ke-size="size18">{rewritten}</p>'
+        return rewritten
     except Exception as e:
-        print("[OpenAI 실패]", e)  # 한글 로그
-        return f"<p data-ke-size='size18'>{plain or (app_name + ' Giới thiệu')}</p>"
+        print("[OpenAI lỗi]", e)
+        if compact:
+            return f"<p data-ke-size='size18'>{compact}</p>"
+        return f"<p data-ke-size='size18'>{app_name} Giới thiệu</p>"
+
 
 # =============== 썸네일 로그 기록 (H열 사용) ===============
 def log_thumb_step(ws, row_idx, message):
@@ -724,6 +742,7 @@ if __name__ == "__main__":
         sheet_append_log(ws9, row_for_err, f"실패: {e}")
         sheet_append_log(ws9, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
+
 
 
 
