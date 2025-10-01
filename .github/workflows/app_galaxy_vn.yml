@@ -5,9 +5,6 @@ on:
 
 
 
-
-
-
 jobs:
   autopost:
     runs-on: windows-latest
@@ -63,6 +60,7 @@ jobs:
       # ✅ 실행할 파이썬 파일 (여기만 변경)
       - name: Run autopost script
         run: python app_galaxy_vn.py
+
 
 
 
