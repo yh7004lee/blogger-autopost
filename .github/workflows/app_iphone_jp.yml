@@ -2,8 +2,8 @@ name: Blogger Autopost iphone jp
 
 on:
   workflow_dispatch:        # ✅ 수동 실행도 가능
-  schedule:
-    - cron: '0 0,12 * * *'   # 매일 00:00, 12:00 UTC (한국시간 09:00, 21:00)
+   #schedule:
+     #- cron: '0 0,12 * * *'   # 매일 00:00, 12:00 UTC (한국시간 09:00, 21:00)
 
 
 
@@ -65,6 +65,7 @@ jobs:
         run: python app_iphone_jp.py
 
  
+
 
 
 
