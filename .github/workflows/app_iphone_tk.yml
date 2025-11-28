@@ -2,8 +2,8 @@ name: Blogger Autopost iphone tk
 
 on:
   workflow_dispatch:        # ✅ 여전히 수동 실행도 가능
-  schedule:
-    - cron: "20 20 * * *"
+  #schedule:
+    #- cron: "20 20 * * *"
 
 
 jobs:
@@ -63,6 +63,7 @@ jobs:
         run: python app_iphone_tk.py
 
  
+
 
 
 
