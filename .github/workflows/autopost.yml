@@ -1,13 +1,13 @@
 name: Movie Autopost
 
 on:
-  schedule:
+  #schedule:
     # 한국시간(KST) 01:10 → UTC 16:10
-    - cron: "10 16 * * *"
+   # - cron: "10 16 * * *"
     # 한국시간(KST) 09:10 → UTC 00:10
-    - cron: "10 0 * * *"
+  #  - cron: "10 0 * * *"
     # 한국시간(KST) 18:10 → UTC 09:10
-    - cron: "10 9 * * *"
+  #  - cron: "10 9 * * *"
   workflow_dispatch:
 
 
