@@ -1,13 +1,13 @@
 name: Movie Autopost jp
 
 on:
-  schedule:
+  #schedule:
     # KST 03:20 → UTC 18:20
-    - cron: "20 18 * * *"
+  #  - cron: "20 18 * * *"
     # KST 12:20 → UTC 03:20
-    - cron: "20 3 * * *"
+ #   - cron: "20 3 * * *"
     # KST 22:20 → UTC 13:20
-    - cron: "20 13 * * *"
+ #   - cron: "20 13 * * *"
   workflow_dispatch:
 
 
