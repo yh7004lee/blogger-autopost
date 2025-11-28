@@ -1,10 +1,10 @@
 name: Blogger Autopost Bokji_3th
 
 on:
-  schedule:
-    - cron: "0 0 * * *"   # 매일 09:00 KST 실행 (00:00 UTC)
-    - cron: "0 6 * * *"   # 매일 15:00 KST 실행 (06:00 UTC)
-    - cron: "0 12 * * *"  # 매일 21:00 KST 실행 (12:00 UTC)
+  #schedule:
+   # - cron: "0 0 * * *"   # 매일 09:00 KST 실행 (00:00 UTC)
+   #- cron: "0 6 * * *"   # 매일 15:00 KST 실행 (06:00 UTC)
+   # - cron: "0 12 * * *"  # 매일 21:00 KST 실행 (12:00 UTC)
   workflow_dispatch:       # 수동 실행도 가능
 
 jobs:
