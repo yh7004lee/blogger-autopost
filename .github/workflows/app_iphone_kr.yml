@@ -2,8 +2,8 @@ name: Blogger Autopost iphone kr
 
 on:
   workflow_dispatch:        # ✅ 수동 실행도 가능
-  schedule:
-    - cron: "0 0 * * *"     # ✅ 매일 09:00 (한국시간, KST) 실행 (UTC+0 기준)
+  #schedule:
+    #- cron: "0 0 * * *"     # ✅ 매일 09:00 (한국시간, KST) 실행 (UTC+0 기준)
 
 
 
@@ -64,5 +64,6 @@ jobs:
         run: python app_iphone_kr.py
 
  
+
 
 
