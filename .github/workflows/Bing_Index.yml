@@ -2,8 +2,8 @@ name: Bing Indexing
 
 on:
   workflow_dispatch:   # ✅ 수동 실행 가능
-  schedule:
-    - cron: "0 18 * * 0"   # 매주 월요일 오전 3시 (KST), GitHub Actions는 UTC 기준이라 +9시간
+  #schedule:
+  #  - cron: "0 18 * * 0"   # 매주 월요일 오전 3시 (KST), GitHub Actions는 UTC 기준이라 +9시간
 
 
 jobs:
@@ -28,4 +28,5 @@ jobs:
 
       - name: Run Bing indexing script
         run: python Bing_Index.py
+
 
