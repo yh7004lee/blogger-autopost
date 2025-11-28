@@ -2,9 +2,9 @@ name: Blogger Autopost iphone vn
 
 on:
   workflow_dispatch:        # ✅ 수동 실행 가능
-  schedule:
-    - cron: '30 19 * * *'   # KST 04:30 (UTC+9 → UTC 19:30 전날)
-    - cron: '30 7 * * *'    # KST 16:30 (UTC+9 → UTC 07:30 같은 날)
+ # schedule:
+   # - cron: '30 19 * * *'   # KST 04:30 (UTC+9 → UTC 19:30 전날)
+   # - cron: '30 7 * * *'    # KST 16:30 (UTC+9 → UTC 07:30 같은 날)
 
 
 
@@ -66,6 +66,7 @@ jobs:
         run: python app_iphone_vn.py
 
  
+
 
 
 
