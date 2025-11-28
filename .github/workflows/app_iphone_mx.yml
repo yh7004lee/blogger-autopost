@@ -2,8 +2,8 @@ name: Blogger Autopost iphone mx
 
 on:
   workflow_dispatch:        # ✅ 수동 실행 가능
-  schedule:
-    - cron: "10 2 * * *"   # 매일 새벽 2시 10분 KST
+  #schedule:
+    #- cron: "10 2 * * *"   # 매일 새벽 2시 10분 KST
 
 
 
@@ -65,6 +65,7 @@ jobs:
         run: python app_iphone_mx.py
 
  
+
 
 
 
