@@ -1,10 +1,10 @@
 name: Blogger Autopost Galaxy 3th
 
 on:
-  schedule:
-    - cron: "0 2 * * *"    # 매일 11:00 KST (02:00 UTC)
-    - cron: "0 8 * * *"    # 매일 17:00 KST (08:00 UTC)
-    - cron: "0 14 * * *"   # 매일 23:00 KST (14:00 UTC)
+  #schedule:
+   # - cron: "0 2 * * *"    # 매일 11:00 KST (02:00 UTC)
+    #- cron: "0 8 * * *"    # 매일 17:00 KST (08:00 UTC)
+    -# cron: "0 14 * * *"   # 매일 23:00 KST (14:00 UTC)
   workflow_dispatch:        # 수동 실행 가능
 
 jobs:
