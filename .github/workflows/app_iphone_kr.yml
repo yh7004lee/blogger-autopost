@@ -1,72 +1,79 @@
-
 name: 01 Blogger Autopost iphone kr
 
 on:
-  workflow_dispatch:
+workflow_dispatch:
 
-  schedule:
-    # 한국시간 09:00
-    - cron: "0 0 * * *"
+schedule:
+# 한국시간 09:00
+- cron: "0 0 * * *"
 
-    # 한국시간 15:00
-    - cron: "0 6 * * *"
+```
+# 한국시간 15:00
+- cron: "0 6 * * *"
 
-    # 한국시간 21:00
-    - cron: "0 12 * * *"
+# 한국시간 21:00
+- cron: "0 12 * * *"
+```
 
 jobs:
-  autopost:
-    runs-on: windows-latest
+autopost:
+runs-on: windows-latest
 
-    env:
-      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
+```
+env:
+  API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
+  - name: Set up Python
+    uses: actions/setup-python@v5
+    with:
+      python-version: "3.11"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+  - name: Install dependencies
+    run: pip install -r requirements.txt
 
-      - name: Create blogger_token.json
-        shell: powershell
-        run: |
-          @'
-          ${{ secrets.BLOGGER_TOKEN_JSON }}
-          '@ | Set-Content blogger_token.json
+  # blogger_token.json (원문 JSON)
+  - name: Create blogger_token.json
+    shell: powershell
+    run: |
+      @'
+      ${{ secrets.BLOGGER_TOKEN_JSON }}
+      '@ | Set-Content blogger_token.json
 
-      - name: Create cc.json
-        shell: powershell
-        run: |
-          @'
-          ${{ secrets.CC_JSON }}
-          '@ | Set-Content cc.json
+  # cc.json (Base64)
+  - name: Restore cc.json
+    run: |
+      echo "${{ secrets.CC_JSON_B64 }}" > cc.json.b64
+      certutil -decode cc.json.b64 cc.json
 
-      - name: Create sheetapi.json
-        shell: powershell
-        run: |
-          @'
-          ${{ secrets.SHEETAPI_JSON }}
-          '@ | Set-Content sheetapi.json
+  # sheetapi.json (Base64)
+  - name: Restore sheetapi.json
+    run: |
+      echo "${{ secrets.SHEETAPI_JSON }}" > sheetapi.json.b64
+      certutil -decode sheetapi.json.b64 sheetapi.json
 
-      - name: Create openai.json
-        shell: powershell
-        run: |
-          @'
-          ${{ secrets.OPENAI_JSON }}
-          '@ | Set-Content openai.json
+  # openai.json (Base64)
+  - name: Restore openai.json
+    run: |
+      echo "${{ secrets.OPENAI_JSON_B64 }}" > openai.json.b64
+      certutil -decode openai.json.b64 openai.json
 
-      - name: Create 2nd.json
-        shell: powershell
-        run: |
-          @'
-          ${{ secrets.DRIVE_JSON }}
-          '@ | Set-Content 2nd.json
+  # 2nd.json (Base64)
+  - name: Restore 2nd.json
+    run: |
+      echo "${{ secrets.DRIVE_JSON_B64 }}" > 2nd.json.b64
+      certutil -decode 2nd.json.b64 2nd.json
 
-      - name: Run autopost script
-        run: python app_iphone_kr_blogger3.py
+  # drive_token_2nd.pickle (Base64)
+  - name: Restore drive_token_2nd.pickle
+    run: |
+      echo "${{ secrets.DRIVE_TOKEN_2ND_B64 }}" > drive_token_2nd.pickle.b64
+      certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
+
+  # 실행
+  - name: Run autopost script
+    run: python app_iphone_kr_blogger3.py
+```
