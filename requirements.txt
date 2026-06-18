@@ -13,5 +13,16 @@ openai
 selenium
 webdriver-manager
 urllib3
+google-genai
+google-api-core
+google-auth-httplib2
+google-auth-compat
+
+
+
+
+
+
+
 
 
