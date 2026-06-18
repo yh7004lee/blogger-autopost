@@ -1,75 +1,72 @@
+
 name: 01 Blogger Autopost iphone kr
 
 on:
-workflow_dispatch:
+  workflow_dispatch:
 
-schedule:
-# 한국시간 09:00
-- cron: "0 0 * * *"
+  schedule:
+    # 한국시간 09:00
+    - cron: "0 0 * * *"
 
-```
-# 한국시간 15:00
-- cron: "0 6 * * *"
+    # 한국시간 15:00
+    - cron: "0 6 * * *"
 
-# 한국시간 21:00
-- cron: "0 12 * * *"
-```
+    # 한국시간 21:00
+    - cron: "0 12 * * *"
 
 jobs:
-autopost:
-runs-on: windows-latest
+  autopost:
+    runs-on: windows-latest
 
-```
-env:
-  API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
+    env:
+      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
 
-steps:
-  - name: Checkout
-    uses: actions/checkout@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
 
-  - name: Set up Python
-    uses: actions/setup-python@v5
-    with:
-      python-version: "3.11"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-  - name: Install dependencies
-    run: pip install -r requirements.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt
 
-  - name: Create blogger_token.json
-    shell: powershell
-    run: |
-      @'
-      ${{ secrets.BLOGGER_TOKEN_JSON }}
-      '@ | Set-Content blogger_token.json
+      - name: Create blogger_token.json
+        shell: powershell
+        run: |
+          @'
+          ${{ secrets.BLOGGER_TOKEN_JSON }}
+          '@ | Set-Content blogger_token.json
 
-  - name: Create cc.json
-    shell: powershell
-    run: |
-      @'
-      ${{ secrets.CC_JSON }}
-      '@ | Set-Content cc.json
+      - name: Create cc.json
+        shell: powershell
+        run: |
+          @'
+          ${{ secrets.CC_JSON }}
+          '@ | Set-Content cc.json
 
-  - name: Create sheetapi.json
-    shell: powershell
-    run: |
-      @'
-      ${{ secrets.SHEETAPI_JSON }}
-      '@ | Set-Content sheetapi.json
+      - name: Create sheetapi.json
+        shell: powershell
+        run: |
+          @'
+          ${{ secrets.SHEETAPI_JSON }}
+          '@ | Set-Content sheetapi.json
 
-  - name: Create openai.json
-    shell: powershell
-    run: |
-      @'
-      ${{ secrets.OPENAI_JSON }}
-      '@ | Set-Content openai.json
+      - name: Create openai.json
+        shell: powershell
+        run: |
+          @'
+          ${{ secrets.OPENAI_JSON }}
+          '@ | Set-Content openai.json
 
-  - name: Create 2nd.json
-    shell: powershell
-    run: |
-      @'
-      ${{ secrets.DRIVE_JSON }}
-      '@ | Set-Content 2nd.json
+      - name: Create 2nd.json
+        shell: powershell
+        run: |
+          @'
+          ${{ secrets.DRIVE_JSON }}
+          '@ | Set-Content 2nd.json
 
-  - name: Run autopost script
-    run: python app_iphone_kr_blogger3.py
-```
+      - name: Run autopost script
+        run: python app_iphone_kr_blogger3.py
