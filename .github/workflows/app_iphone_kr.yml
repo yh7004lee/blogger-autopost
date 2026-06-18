@@ -7,19 +7,19 @@ schedule:
 # 한국시간 09:00
 - cron: "0 0 * * *"
 
-```
+
 # 한국시간 15:00
 - cron: "0 6 * * *"
 
 # 한국시간 21:00
 - cron: "0 12 * * *"
-```
+
 
 jobs:
 autopost:
 runs-on: windows-latest
 
-```
+
 env:
   API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
 
