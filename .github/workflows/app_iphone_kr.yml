@@ -61,7 +61,7 @@ jobs:
 
       # ✅ 실행할 파이썬 파일 (아이폰 버전)
       - name: Run autopost script
-        run: python app_iphone_kr.py
+        run: python app_iphone_kr blogger3.py
 
  
 
