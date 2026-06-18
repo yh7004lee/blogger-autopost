@@ -76,4 +76,4 @@ steps:
   # 실행
   - name: Run autopost script
     run: python app_iphone_kr_blogger3.py
-```
+
