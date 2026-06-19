@@ -1,8 +1,3 @@
-제공해주신 기준 코드를 바탕으로, **최신 구글 플레이스토어(Google Play Store)의 HTML 구조**에 맞게 어플 정보 및 이미지(스크린샷) 추출 로직만 정확하게 수정하여 통합한 전체 코드입니다.
-
-플레이스토어 검색 및 상세 페이지 구조 변경에 대응하여 셀레니움 대기열과 CSS 선택자를 최신화했습니다.
-
-```python
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import sys
@@ -1008,4 +1003,3 @@ if __name__ == "__main__":
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
 
-```
