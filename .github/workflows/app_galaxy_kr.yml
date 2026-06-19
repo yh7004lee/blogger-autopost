@@ -8,7 +8,7 @@ on:
     # 한국시간 14:00 (UTC 05:00)
     - cron: "0 5 * * *"
     # 매일 23:00 KST (14:00 UTC)
-    - cron: "0 14 * * *"
+    - cron: "0 18 * * *"
 jobs:
   autopost:
     runs-on: windows-latest
