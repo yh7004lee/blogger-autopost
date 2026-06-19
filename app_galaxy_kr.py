@@ -13,7 +13,6 @@ import urllib.parse
 import glob
 from datetime import datetime
 from bs4 import BeautifulSoup
-import feedparser
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
@@ -31,6 +30,9 @@ try:
     from openai import OpenAI
 except Exception:
     OpenAI = None
+
+# feedparser for related posts
+import feedparser
 
 # Selenium for Google Play
 from selenium import webdriver
@@ -272,10 +274,11 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
 
 
 # =========================
-# 제목/라벨 생성
+# 제목/라벨 생성 (중복 제거)
 # =========================
 def make_post_title(keyword: str) -> str:
-    front_choices = ["안드로이드 안드로이드앱", "안드로이드앱 안드로이드"]
+    # 수정: "안드로이드 안드로이드앱" → "안드로이드 앱" (중복 제거)
+    front_choices = ["안드로이드 앱", "안드로이드 어플", "안드로이드모바일", "스마트안드로이드"]
     back_choices = ["앱 추천 어플", "어플 추천 앱", "어플 앱스토어", "앱스토어 어플", "구글플레이 앱"]
     return f"{random.choice(front_choices)} {keyword} {random.choice(back_choices)}"
 
@@ -314,7 +317,7 @@ def generate_ai_review(prompt):
             print("✅ AI 성공: Gemini Flash Lite")
             return response.text.strip()
         except Exception as e:
-            print("⚠️ Gemini Flash Flash Lite 실패:", e)
+            print("⚠️ Gemini Flash Lite 실패:", e)
 
     # 3. Groq
     if GROQ_API_KEY:
@@ -558,7 +561,7 @@ def get_play_app_info(app_id):
         app_name = h1.text.strip()
         print(f"[앱 이름] {app_name}")
         
-        # ========== [이미지 수집 - 선택적 추출] ==========
+        # ========== [이미지 수집 - 강화된 필터링] ==========
         html_img_urls = []
         cc = 1
         downloaded = set()
@@ -586,18 +589,48 @@ def get_play_app_info(app_id):
                 break
             try:
                 alt_text = (img_el.get_attribute("alt") or "").strip()
+                title_text = (img_el.get_attribute("title") or "").strip()
                 
-                # 앱 아이콘 이미지, 작은 이미지 제외
-                if "아이콘 이미지" in alt_text or "콘텐츠 등급" in alt_text:
+                # 1.-alt/title 기반 필터링
+                # 앱 아이콘, 연령제한 (ESRB), 콘텐츠 등급 제외
+                exclude_keywords = [
+                    "아이콘 이미지", "콘텐츠 등급", "ESRB", "age rating", "내용 평가",
+                    "아이콘", "app icon", "로고", "logo", "버전", "version"
+                ]
+                if any(kw in alt_text.lower() or kw in title_text.lower() for kw in exclude_keywords):
+                    print(f"[제외] alt/title 필터: {alt_text} / {title_text}")
                     continue
                 
-                # 크기 필터링 (data-srcset 등에서 크기 확인)
-                srcset = img_el.get_attribute("data-srcset") or ""
+                # 2. src 기반 필터링 (파일명/경로 분석)
+                src = img_el.get_attribute("src") or ""
+                if any(kw in src.lower() for kw in ["icon", "logo", "badge", "rating", "esrb", "age"]):
+                    print(f"[제외] src 필터: {src}")
+                    continue
+                
+                # 3. srcset/data-srcset 기반 크기 필터링
+                srcset = img_el.get_attribute("data-srcset") or img_el.get_attribute("srcset") or ""
+                min_width = 999999
                 if srcset and "," in srcset:
-                    sizes = [s.split(" ")[0] for s in srcset.split(",")]
-                    min_size = min([int(s) for s in sizes if s.isdigit()]) if any(s.isdigit() for s in sizes) else 0
-                    if min_size < 100:  # 100px 미만 제외
-                        continue
+                    try:
+                        parts = srcset.split(",")
+                        for part in parts:
+                            part = part.strip()
+                            if " " in part:
+                                width_str = part.split(" ")[0]
+                                if width_str.isdigit():
+                                    min_width = min(min_width, int(width_str))
+                            elif "=" in part:
+                                # 예: "url 100w" 형태
+                                width_str = part.split("=")[-1].replace("w", "").replace("x", "")
+                                if width_str.isdigit():
+                                    min_width = min(min_width, int(width_str))
+                    except:
+                        pass
+                
+                # 150px 미만 이미지 제외 (연령제한/작은 이미지 필터)
+                if min_width < 150:
+                    print(f"[제외] 사이즈 필터: {min_width}px")
+                    continue
                 
                 possible_urls = [
                     img_el.get_attribute("src"),
@@ -631,6 +664,7 @@ def get_play_app_info(app_id):
                 downloaded.add(real_url)
                 
                 html_img_urls.append(real_url)
+                print(f"[수집] 이미지 {cc}: {real_url[:80]}...")
                 cc += 1
                 
             except Exception as e:
@@ -639,7 +673,9 @@ def get_play_app_info(app_id):
         # target_images: 1 번째부터 7 번째 (인덱스 1~6) = 6 개
         target_images = html_img_urls[1:7] if len(html_img_urls) > 1 else []
         
-        # ==========詳細 설명 크롤링 ==========
+        print(f"[최종 스크린샷] {len(target_images)}개")
+        
+        # ========== 상세 설명 크롤링 ==========
         contents = "<p>어플 소개 정보를 불러오지 못했습니다.</p>"
         try:
             # "정보 더 보기" 버튼 클릭
@@ -793,7 +829,7 @@ def build_ending_block(title: str, keyword: str) -> str:
             f"다양한 {keyword} 앱들을 살펴본 만큼 스마트폰 활용이 훨씬 풍성해지길 바랍니다."
         ],
         [
-            f"각 앱의 기능과 장점을 꼼꼼히 다뤘으니 {keyword} 앱 선택에 참고하시기 바랍니다.",
+            f"각 앱의 기능과 장点を 꼼꼼히 다뤘으니 {keyword} 앱 선택에 참고하시기 바랍니다.",
             f"앱들의 특징과 장단점을 비교했으니 {title} 선택에 큰 도움이 되실 겁니다.",
             f"이번 정리를 바탕으로 본인에게 맞는 {keyword} 앱을 쉽게 찾으시길 바랍니다.",
             f"필요할 때 바로 활용할 수 있도록 핵심 정보를 모아 두었으니 꼭 참고해 보세요.",
@@ -838,6 +874,9 @@ def build_ending_block(title: str, keyword: str) -> str:
 # 같이 보면 좋은글 박스 (RSS 랜덤 4 개)
 # =========================
 def get_related_posts(blog_id, count=4):
+    if not feedparser:
+        return ""
+    
     rss_url = f"https://www.blogger.com/feeds/{blog_id}/posts/default?alt=rss"
     feed = feedparser.parse(rss_url)
 
@@ -903,7 +942,7 @@ def sheet_append_log(ws, row_idx, message, tries=3, delay=2):
 def get_next_blog_index(ws):
     # 시트 1 탭, B1 셀에서 다음 블로그 인덱스 읽기
     try:
-        val = ws.cell(1, 2).value or "0"  # B1 셀 (คอลัมน์ 2)
+        val = ws.cell(1, 2).value or "0"  # B1 셀 (컬럼 2)
         idx = int(val) % len(BLOG_IDS)
         return idx
     except Exception as e:
