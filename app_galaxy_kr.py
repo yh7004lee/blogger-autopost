@@ -1,39 +1,4 @@
-죄송합니다. 이전 코드 버전을 합치는 과정에서 아이콘이나 등급 마크 같은 작은 이미지들을 걸러내는 로직이 누락되었던 것 같습니다.
 
-스크린샷을 수집할 때 **너비(width) 또는 높이(height)가 일정 크기(예: 300px) 이상인 큰 이미지만 수집**하도록 이미지 필터링 로직을 추가 및 수정했습니다.
-
-다음과 같이 `fetch_app_detail` 함수 내 이미지 처리 부분을 변경해 두었습니다.
-
-```python
-            real_url = re.sub(r"=w\d+-h\d+", "=w2048-h4096", real_url)
-            real_url = re.sub(r"w\d+-h\d+-rw", "w2048-h4096-rw", real_url)
-
-            # =========================================================
-            # [추가] 픽셀 크기(가로/세로)를 강제로 체크하여 작은 아이콘/등급 마크 필터링
-            # =========================================================
-            try:
-                # URL에서 w\d+ 또는 h\d+ 파라미터 추출 시도
-                dimension_match = re.search(r"w(\d+)-h(\d+)", real_url)
-                if dimension_match:
-                    w_size = int(dimension_match.group(1))
-                    h_size = int(dimension_match.group(2))
-                    # 가로나 세로 중 하나라도 300픽셀 미만인 작은 아이콘/배지는 수집하지 않음
-                    if w_size < 300 and h_size < 300:
-                        print(f"[필터링] 작은 이미지 제외 (크기: {w_size}x{h_size}): {real_url}")
-                        continue
-            except Exception as dim_e:
-                print(f"[크기 체크 실패] 무시하고 진행: {dim_e}")
-            # =========================================================
-
-            if real_url in downloaded:
-                continue
-            downloaded.add(real_url)
-
-```
-
-위의 로직을 적용한 전체 실행 코드입니다.
-
-```python
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import sys
