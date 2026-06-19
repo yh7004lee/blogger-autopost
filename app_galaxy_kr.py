@@ -13,6 +13,7 @@ import urllib.parse
 import glob
 from datetime import datetime
 from bs4 import BeautifulSoup
+import feedparser
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
