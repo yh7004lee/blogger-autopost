@@ -11,6 +11,8 @@ on:
 
     # 한국시간 20:00 (UTC 11:00)
     - cron: "0 11 * * *"
+    # 매일 23:00 KST (14:00 UTC)
+    - cron: "0 14 * * *"
 
 jobs:
   autopost:
