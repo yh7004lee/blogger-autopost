@@ -268,7 +268,7 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
 
 
 # =========================
-# AI REVIEW (4 차 시도 폴백 - 기존 코드 유지)
+# AI REVIEW (4 차 시도 폴백)
 # =========================
 def generate_ai_review(prompt):
     # -------------------------
@@ -419,8 +419,8 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
 # 제목 생성
 # =========================
 def make_post_title(keyword: str) -> str:
-    front_choices = ["구글플레이", " android ", "플티스토어"]
-    back_choices = ["앱 추천 어플", "어플 추천 앱", "어플 앱스토어", "앱스토어 어플"]
+    front_choices = ["구글플레이", " android ", "플레이스토어", "원스토어"]
+    back_choices = ["앱 추천 어플", "어플 추천 앱", "어플 앱스토어", "앱스토어 어플", "핵꿀잼 어플", "필수 유틸 앱"]
     return f"{random.choice(front_choices)} {keyword} {random.choice(back_choices)}"
 
 
@@ -433,11 +433,11 @@ def make_post_labels(sheet_row: list) -> list:
 
 
 # =========================
-# 3 블로그 로테이션 (시트 셀 기반)
+# 3 블로그 로테이션
 # =========================
 def get_next_blog_index(ws):
     try:
-        val = ws.cell(1, 1).value or "0"  # A1 셀
+        val = ws.cell(1, 1).value or "0"
         idx = int(val) % len(BLOG_IDS)
         return idx
     except Exception as e:
@@ -447,7 +447,7 @@ def get_next_blog_index(ws):
 
 def save_next_blog_index(ws, next_index):
     try:
-        ws.update_cell(1, 1, str((next_index + 1) % len(BLOG_IDS)))  # A1 셀에 다음 인덱스 저장
+        ws.update_cell(1, 1, str((next_index + 1) % len(BLOG_IDS)))
     except Exception as e:
         print("[WARN] 시트 블로그 인덱스 저장 실패:", e)
 
@@ -477,7 +477,7 @@ def sheet_append_log(ws, row_idx, message, tries=3, delay=2):
 # =========================
 def pick_target_row(ws):
     rows = ws.get_all_values()
-    for i, row in enumerate(rows[1:], start=2):  # 2 행부터
+    for i, row in enumerate(rows[1:], start=2):
         a = row[0].strip() if len(row) > 0 and row[0] else ""  # A 열 = 키워드
         f = row[5].strip() if len(row) > 5 and row[5] else ""  # F 열 = 완료
         if a and f != "완":
@@ -486,7 +486,7 @@ def pick_target_row(ws):
 
 
 # =========================
-# 구글플레이 스토어 앱 크롤링 (최신화된 로직 반영)
+# 구글플레이 스토어 앱 크롤링
 # =========================
 def fetch_google_play_apps(keyword, folder):
     url = f"https://play.google.com/store/search?q={keyword}&c=apps"
@@ -508,7 +508,6 @@ def fetch_google_play_apps(keyword, folder):
 
     fast_wait = WebDriverWait(chrome, 6)
     
-    # 최신 검색 결과 렌더링 대기
     search_result_selector = "//a[contains(@href, '/store/apps/details?id=')]"
     fast_wait.until(EC.presence_of_element_located((By.XPATH, search_result_selector)))
 
@@ -531,7 +530,6 @@ def fetch_google_play_apps(keyword, folder):
 
     chrome.quit()
 
-    # 첫 3 개 제거 (검색 결과 상단 광고)
     if len(app_list) > 3:
         app_list = app_list[3:]
 
@@ -539,7 +537,7 @@ def fetch_google_play_apps(keyword, folder):
 
 
 # =========================
-# 앱 상세 페이지 수집 (최신화된 이미지 및 설명 추출 로직 반영)
+# 앱 상세 페이지 수집
 # =========================
 def fetch_app_detail(app_link, keyword):
     edge_options = EdgeOptions()
@@ -554,7 +552,6 @@ def fetch_app_detail(app_link, keyword):
 
     fast_wait = WebDriverWait(chrome, 6)
 
-    # ========== 제목 구하기 ==========
     html_source = chrome.page_source
     soup = BeautifulSoup(html_source, 'html.parser')
 
@@ -567,15 +564,12 @@ def fetch_app_detail(app_link, keyword):
     app_name = re.sub(r"[^\uAC00-\uD7A30-9a-zA-Z\s]", "", app_name)
     app_name = app_name.replace(" ", "")
 
-    # ========== 이미지(스크린샷) 수집 로직 최신화 ==========
-    # 최신 플레이스토어 구조의 이미지 로딩 대기 셀레니움 요소 지정
     img_selector = "c-wiz div div div div div div div c-wiz div div div div div img, img.T75of, img[src*='googleusercontent'], img[src*='ggpht']"
     try:
         fast_wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, img_selector)))
     except:
         pass
 
-    # 스크린샷 이미지 셀렉터 리스트 최신화
     screenshot_selectors = [
         "img.T75of",
         "img[src*='googleusercontent']",
@@ -641,7 +635,6 @@ def fetch_app_detail(app_link, keyword):
         except Exception as e:
             print(f"[이미지 실패] {e}")
 
-    # ========== 어플 소개 크롤링 및 '정보 더 보기' 버튼 클릭 구조 개선 ==========
     success = False
     try:
         detail_btn = fast_wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(@aria-label, '정보 더 보기') or contains(@aria-label, '상세정보')]")))
@@ -664,7 +657,6 @@ def fetch_app_detail(app_link, keyword):
     html_source = chrome.page_source
     soup = BeautifulSoup(html_source, 'html.parser')
 
-    # 최신 상세 설명 컨테이너 클래스 및 패턴 다중 매칭
     contents_div = soup.find("div", attrs={"class": "fysCi"}) or soup.find("div", re.compile(r"b0vY9b|description"))
     if contents_div:
         contents_list = contents_div.find_all("div")
@@ -677,7 +669,6 @@ def fetch_app_detail(app_link, keyword):
 
     chrome.quit()
 
-    # ========== 이미지 HTML 정렬 (3 개씩 칼각 배치) ==========
     target_images = html_img_urls[1:7] if len(html_img_urls) > 1 else []
 
     if target_images:
@@ -700,7 +691,7 @@ def fetch_app_detail(app_link, keyword):
 
 
 # =========================
-# CSS 블록 (한 번만 출력)
+# CSS 블록
 # =========================
 def build_css_block() -> str:
     return """
@@ -730,30 +721,37 @@ def build_css_block() -> str:
 
 
 # =========================
-# 서론/마무리 블록
+# 서론/마무리 블록 (서론 풍성하게 대폭 강화)
 # =========================
 def build_intro_block(title: str, keyword: str) -> str:
     intro_groups = [
         [
             f"스마트폰은 이제 단순한 통신 수단을 넘어 우리의 생활 전반을 책임지는 필수품이 되었습니다.",
-            f"손안의 작은 기기 하나로도 '{keyword}' 같은 다양한 기능을 즐길 수 있는 시대가 열렸습니다.",
-            f"현대 사회에서 '{keyword}' 앱은 없어서는 안 될 필수 도구로 자리잡고 있습니다.",
-            f"특히 '{title}' 같은 주제는 많은 분들이 실제로 궁금해하는 부분입니다.",
-            f"스마트폰 기술이 발전하면 '{keyword}' 관련 앱의 활용도도 점점 높아지고 있습니다.",
-            f"누구나 사용하는 스마트폰을 통해 '{keyword}'를 더욱 편리하게 즐길 수 있습니다."
+            f"손안의 작은 기기 하나로도 '{keyword}' 같은 다채로운 기능을 원활하게 즐길 수 있는 디지털 시대가 활짝 열렸습니다.",
+            f"현대인의 바쁜 일상 속에서 '{keyword}' 관련 어플은 시간을 절약하고 삶의 질을 높여주는 유용한 도구로 자리매김하고 있습니다.",
+            f"최근 많은 분들이 편리한 일상생활을 위해 관련 정보나 유용한 툴을 적극적으로 찾아보고 계십니다.",
+            f"디지털 기술이 눈부시게 발전함에 따라 스마트폰을 활용한 편의성은 점점 더 강조되고 있습니다.",
+            f"남녀노소 불문하고 누구나 손쉽게 휴대폰을 통해 새로운 트렌드나 유용한 기능들을 경험하고 계실 텐데요."
         ],
         [
-            f"특히 다양한 앱들이 출시되면서 '{keyword}' 앱의 선택 폭도 넓어졌습니다.",
-            f"'{title}'을 찾는 분들이 늘어날 만큼 관심이 점점 커지고 있습니다.",
-            f"앱을 통해 생활, 학습, 취미는 물론 '{keyword}'까지 즐길 수 있습니다.",
-            f"스마트폰 앱은 시간을 절약하고 효율적인 생활을 가능하게 합니다.",
-            f"'{keyword}' 앱은 사용자에게 새로운 경험과 편리함을 동시에 제공합니다.",
-            f"새로운 '{keyword}' 앱들이 매일 등장하며, 그만큼 선택의 재미도 늘어납니다."
+            f"특히 시중에 수많은 모바일 서비스들이 쏟아져 나오면서 내 입맛에 꼭 맞는 제품을 고르는 폭이 무척 넓어졌습니다.",
+            f"'{title}' 같은 주제를 꼼꼼히 비교하며 탐색하는 분들이 늘어날 만큼 관심도가 폭발적으로 커지고 있습니다.",
+            f"단순한 검색을 넘어 일상, 학습, 취미 생활까지 스마트하게 아우를 수 있는 스마트한 시대가 되었습니다.",
+            f"어플리케이션 하나만 잘 활용해도 일상에 새로운 활력을 불어넣고 효율적인 스케줄 관리가 가능해집니다.",
+            f"이러한 모바일 프로그램들은 사용자들에게 시간적 여유와 색다른 경험을 동시에 선물해 줍니다.",
+            f"매일 새롭고 기발한 기능으로 무장한 유틸리티들이 등장하고 있어 새로운 것을 탐색하는 재미도 쏠쏠합니다."
+        ],
+        [
+            f"다양한 플랫폼 사이에서 어떤 서비스를 선택해야 할지 고민이셨던 분들을 위해 오늘은 특별한 정보를 준비해 보았습니다.",
+            f"수많은 라인업 중에서도 실사용자들의 평점과 만족도가 높은 알짜배기 정보들만 엄선하여 정리해 드리고자 합니다.",
+            f"주변 지인들에게 추천받거나 온라인상에서 핫하게 떠오르는 인기 서비스들을 직접 살펴볼 수 있는 좋은 기회가 될 것입니다.",
+            f"어떤 기능이 어떻게 구현되어 있는지 궁금해하셨던 분들이라면 이번 포스팅을 통해 궁금증을 시원하게 해소하실 수 있습니다."
         ]
     ]
 
     intro_sentences = []
     for group in intro_groups:
+        # 각 그룹에서 1~2문장씩 무작위로 뽑아와서 서론을 매우 풍성하고 다양하게 구성
         intro_sentences.extend(random.sample(group, k=random.choice([1, 2])))
 
     intro_text = " ".join(intro_sentences)
@@ -770,25 +768,25 @@ def build_intro_block(title: str, keyword: str) -> str:
 def build_ending_block(title: str, keyword: str) -> str:
     end_groups = [
         [
-            f"이번 글에서 소개한 {title} 관련 앱들이 여러분의 스마트폰 생활에 도움이 되었길 바랍니다.",
-            f"오늘 정리해드린 {title} 앱들이 실제 생활 속에서 유용하게 쓰이길 바랍니다.",
-            f"이번 포스팅을 통해 만난 {title} 관련 앱들이 스마트한 선택에 보탬이 되었으면 합니다.",
-            f"오늘 소개한 {title} 앱들이 독자 여러분의 일상에 꼭 필요한 도구가 되길 바랍니다."
+            f"이번 글에서 소개한 {title} 관련 앱들이 여러분의 스마트폰 라이프에 든든한 활력소가 되었길 바랍니다.",
+            f"오늘 꼼꼼하게 정리해드린 {title} 앱들이 일상생활 속에서 유용하게 쓰이기를 진심으로 바랍니다.",
+            f"이번 포스팅을 통해 알게 되신 {title} 관련 어플들이 현명한 선택을 하는 데 작은 보탬이 되었으면 합니다.",
+            f"오늘 소개해 드린 {title} 앱들이 독자 여러분들의 스마트한 일상에 꼭 필요한 도구로 활용되기를 기대해 봅니다."
         ],
         [
-            f"각 앱의 기능과 장점을 꼼꼼히 다뤘으니 {keyword} 앱 선택에 참고하시기 바랍니다.",
-            f"앱들의 특징과 장단점을 비교했으니 {title} 선택에 큰 도움이 되실 겁니다.",
-            f"이번 정리를 바탕으로 본인에게 맞는 {keyword} 앱을 쉽게 찾으시길 바랍니다."
+            f"각 서비스의 세부적인 기능과 특장점들을 폭넓게 다루어 보았으니 본인에게 알맞은 {keyword} 앱을 고르는 데 참고해 보시기 바랍니다.",
+            f"각 라인업의 특징과 장단점을 객관적으로 비교해 드렸으니 {title}을 선택하는 과정에서 큰 도움이 되실 겁니다.",
+            f"오늘 공유해 드린 내용을 바탕으로 평소 필요로 하셨던 {keyword} 관련 툴을 수월하게 찾아보실 수 있을 것입니다."
         ],
         [
-            "앞으로도 더 다양한 앱 정보를 준비해 찾아뵙겠습니다.",
-            f"계속해서 {keyword}와 관련된 알찬 정보와 추천 앱을 공유하겠습니다.",
-            "독자분들의 의견을 반영해 더욱 유익한 포스팅으로 돌아오겠습니다."
+            "앞으로도 더욱 새롭고 알찬 모바일 정보들을 풍성하게 준비해서 다시 찾아뵙겠습니다.",
+            f"앞으로도 {keyword}와 관련된 유익한 꿀팁 정보들과 최신 추천 어플들을 꾸준히 공유해 드리겠습니다.",
+            "독자분들의 소중한 의견을 적극 반영하여 더욱 깊이 있고 유익한 포스팅으로 보답하겠습니다."
         ],
         [
-            "댓글과 좋아요는 큰 힘이 됩니다. 가볍게 참여해주시면 감사하겠습니다.",
-            "궁금한 점이나 의견이 있다면 댓글로 남겨주시면 적극 반영하겠습니다.",
-            "여러분의 피드백은 더 나은 글을 만드는 데 큰 도움이 됩니다."
+            "콘텐츠가 유익하셨다면 따뜻한 공감과 댓글 한 줄은 블로그 운영에 아주 큰 원동력이 됩니다.",
+            "궁금하신 점이나 추가로 다루어 주었으면 하는 주제가 있다면 편하게 댓글로 남겨주시면 적극 반영하겠습니다.",
+            "독자분들의 솔직한 피드백은 더 나은 양질의 글을 작성하는 데 커다란 밑거름이 됩니다."
         ]
     ]
 
@@ -809,7 +807,7 @@ def build_ending_block(title: str, keyword: str) -> str:
 
 
 # =========================
-# 같이 보면 좋은글 박스 (RSS 랜덤 4 개)
+# 같이 보면 좋은글 박스
 # =========================
 def get_related_posts(blog_id, count=4):
     rss_url = f"https://www.blogger.com/feeds/{blog_id}/posts/default?alt=rss"
@@ -842,6 +840,7 @@ def get_related_posts(blog_id, count=4):
 # 메인 실행
 # =========================
 if __name__ == "__main__":
+    target_row = None
     try:
         # 1) sheet3 에서 대상 행/데이터
         target_row, row = pick_target_row(ws3)
@@ -873,22 +872,22 @@ if __name__ == "__main__":
         app_links = fetch_google_play_apps(keyword, folder)
 
         if not app_links:
-            sheet_append_log(ws3, target_row, "앱 없음 → 종료")
-            ws3.update_cell(target_row, 5, "완")  # F 열 완료
-            ws3.update_cell(target_row, 9, "")    # J 열 = URL 비움
+            sheet_append_log(ws3, target_row, "앱 없음 → 종료 및 완료 처리")
+            ws3.update_cell(target_row, 5, "완")  # F 열 완료 안전장치
+            ws3.update_cell(target_row, 9, "")    # J 열 비움
             sheet_append_log(ws3, target_row, "시트 기록 완료: F='완', J='' (검색결과 없음)")
             raise SystemExit(0)
 
         if len(app_links) < 3:
             sheet_append_log(ws3, target_row, "앱 수가 3 개 미만 → 자동 완료 처리")
-            ws3.update_cell(target_row, 5, "완")
+            ws3.update_cell(target_row, 5, "완")  # F 열 완료 안전장치
             ws3.update_cell(target_row, 9, "")
             sheet_append_log(ws3, target_row, "시트 기록 완료: F='완', J='' (앱 수 부족)")
             raise SystemExit(0)
 
         sheet_append_log(ws3, target_row, f"앱 목록={app_links}")
 
-        # 5) 서론
+        # 5) 서론 조립
         html_full = build_css_block()
         html_full += build_intro_block(title, keyword)
         html_full += """
@@ -998,8 +997,7 @@ if __name__ == "__main__":
         pass
     except Exception as e:
         tb = traceback.format_exc()
-        row_for_err = target_row if 'target_row' in locals() and target_row else 2
+        row_for_err = target_row if target_row else 2
         sheet_append_log(ws3, row_for_err, f"실패: {e}")
         sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
         print("실패:", e, tb)
-
