@@ -31,8 +31,18 @@ try:
 except Exception:
     OpenAI = None
 
-# feedparser for related posts
-import feedparser
+# Selenium for Google Play
+from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from selenium.webdriver.edge.options import Options as EdgeOptions
+
+# Google Play reviews
+try:
+    from google_play_scraper import Sort, reviews
+except Exception:
+    reviews = None
 
 
 # =========================
@@ -74,6 +84,7 @@ if GEMINI_API_KEY:
 # 기본 설정
 # =========================
 BLOG_IDS = ["1271002762142343021", "4265887538424434999", "6159101125292617147"]
+BLOG_ID_FIXED = "6533996132181172904"  # 블로그 1 개 ID (고정)
 BLOG_URL = "https://apk.appsos.kr/"
 
 error_logs = []
@@ -263,14 +274,14 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
 # 제목/라벨 생성
 # =========================
 def make_post_title(keyword: str) -> str:
-    front_choices = ["아이폰 아이패드", "아이패드 아이폰"]
-    back_choices = ["앱 추천 어플", "어플 추천 앱", "어플 앱스토어", "앱스토어 어플"]
+    front_choices = ["안드로이드 안드로이드앱", "안드로이드앱 안드로이드"]
+    back_choices = ["앱 추천 어플", "어플 추천 앱", "어플 앱스토어", "앱스토어 어플", "구글플레이 앱"]
     return f"{random.choice(front_choices)} {keyword} {random.choice(back_choices)}"
 
 
 def make_post_labels(sheet_row: list) -> list:
     label_val = sheet_row[1].strip() if len(sheet_row) > 1 and sheet_row[1] else ""
-    labels = ["어플", "아이폰"]
+    labels = ["어플", "안드로이드"]
     if label_val:
         labels.append(label_val)
     return labels
@@ -302,7 +313,7 @@ def generate_ai_review(prompt):
             print("✅ AI 성공: Gemini Flash Lite")
             return response.text.strip()
         except Exception as e:
-            print("⚠️ Gemini Flash Lite 실패:", e)
+            print("⚠️ Gemini Flash Flash Lite 실패:", e)
 
     # 3. Groq
     if GROQ_API_KEY:
@@ -446,94 +457,242 @@ def rewrite_app_description(original_html: str, app_name: str, keyword_str: str)
 
 
 # =========================
-# 앱스토어 앱 ID 추출 (iTunes Search API)
+# 구글플레이 스토어 앱 검색 (Selenium)
 # =========================
-def search_app_store_ids(keyword, limit=20, country="kr", ws=None, row_idx=None):
-    def fetch(term):
-        encoded = urllib.parse.quote(term)
-        url = f"https://itunes.apple.com/search?term={encoded}&country={country}&entity=software&limit={limit}"
-        print("[iTunes API 요청]", url)
-        try:
-            res = requests.get(url, timeout=10)
-            if res.status_code != 200:
-                print(f"[iTunes API 실패] HTTP {res.status_code}")
-                return []
-            data = res.json()
-            results = data.get("results", [])
-            apps = []
-            for app in results:
-                if "trackId" in app and "trackName" in app:
-                    apps.append({"id": str(app["trackId"]), "name": app["trackName"]})
-            return apps
-        except Exception as e:
-            print("[iTunes API 예외]", e)
-            print(traceback.format_exc())
-            return []
-
-    all_apps = []
-
-    # 1 차: 원 키워드
-    all_apps.extend(fetch(keyword))
-
-    # 2 차: 부족하면 "app" 붙여서
-    if len(all_apps) < 7:
-        all_apps.extend(fetch(f"{keyword} app"))
-
-    # 3 차: 그래도 부족하면 "어플" 붙여서
-    if len(all_apps) < 7:
-        all_apps.extend(fetch(f"{keyword} 어플"))
-
-    # 4 차: 그래도 부족하면 시트 D 열 (영문 번역 키워드) 사용
-    if len(all_apps) < 7 and ws is not None and row_idx is not None:
-        try:
-            eng_keyword = ws.cell(row_idx, 4).value or ""   # D 열 = 4 번째
-            eng_keyword = eng_keyword.strip()
-            if eng_keyword:
-                print(f"[Fallback: D 열 영문 키워드 사용 → {eng_keyword}]")
-                all_apps.extend(fetch(eng_keyword))
-        except Exception as e:
-            print("[WARN] D 열 영문 키워드 가져오기 실패:", e)
-
-    # trackId 기준으로 중복 제거
-    seen = set()
-    unique_apps = []
-    for app in all_apps:
-        if app["id"] not in seen:
-            seen.add(app["id"])
-            unique_apps.append(app)
-
-    print(f"[iTunes API 최종 결과] {[(a['id'], a['name']) for a in unique_apps]}")
-    return unique_apps
-
-
-# =========================
-# 앱 상세 페이지 수집 (iTunes Lookup API)
-# =========================
-def get_app_info(appid):
-    print(f"\n[앱 정보 조회] appid: {appid}")
+def search_google_play_apps(keyword, limit=15):
+    """구글플레이 스토어에서 키워드 검색 → 앱 ID 목록 반환"""
+    
+    edge_options = EdgeOptions()
+    edge_options.add_argument("--headless=new")
+    edge_options.add_argument("--disable-gpu")
+    edge_options.add_argument("--no-sandbox")
+    edge_options.add_argument("--disable-dev-shm-usage")
+    edge_options.add_argument("--disable-extensions")
+    edge_options.add_argument("--disable-logging")
+    edge_options.add_argument("--log-level=3")
+    
+    chrome = None
     try:
-        url = f"https://itunes.apple.com/lookup?id={appid}&country=kr"
-        res = requests.get(url, timeout=20)
-        data = res.json()
-        if not data.get("resultCount"):
-            print(f"[앱 정보 조회 실패] {appid}")
-            return None
-        app = data["results"][0]
-        print(f"[앱 정보 조회 성공] {app.get('trackName')}")
-        return {
-            "title": app.get("trackName", ""),
-            "description": app.get("description", ""),
-            "developer": app.get("sellerName", ""),
-            "icon": app.get("artworkUrl512", ""),
-            "screenshots": app.get("screenshotUrls", []),
-            "ipad_screenshots": app.get("ipadScreenshotUrls", []),
-            "rating": app.get("averageUserRating", 0),
-            "rating_count": app.get("userRatingCount", 0),
-            "category": app.get("primaryGenreName", ""),
-        }
+        chrome = webdriver.Edge(options=edge_options)
+        chrome.implicitly_wait(3)
+        
+        search_url = f"https://play.google.com/store/search?q={keyword}&c=apps"
+        print("[구글플레이 검색]", search_url)
+        chrome.get(search_url)
+        
+        fast_wait = WebDriverWait(chrome, 5)
+        fast_wait.until(EC.presence_of_element_located((By.XPATH, "//a[contains(@href, '/store/apps/details?id=')]")))
+        
+        html_source = chrome.page_source
+        soup = BeautifulSoup(html_source, 'html.parser')
+        
+        source = soup.find_all("a", href=re.compile(r"/store/apps/details\?id="))
+        
+        app_list = []
+        for s in source:
+            if len(app_list) >= limit:
+                break
+            link = s["href"]
+            if not link.startswith("http"):
+                link = "https://play.google.com" + link
+            
+            # 앱 ID 추출
+            app_id_match = re.search(r"id=([a-zA-Z0-9_.]+)", link)
+            if app_id_match:
+                app_id = app_id_match.group(1)
+                app_name = s.text.strip()
+                if app_id and app_name:
+                    app_list.append({"id": app_id, "name": app_name})
+        
+        print(f"[구글플레이 검색 결과] {len(app_list)}개: {[(a['id'], a['name']) for a in app_list]}")
+        return app_list
+    
     except Exception as e:
-        print(f"[앱 정보 조회 실패] {e}")
+        print(f"[구글플레이 검색 실패] {e}")
+        return []
+    
+    finally:
+        if chrome:
+            try:
+                chrome.quit()
+            except:
+                pass
+
+
+# =========================
+# 구글플레이 스토어 앱 상세 정보 수집
+# =========================
+def get_play_app_info(app_id):
+    """구글플레이 스토어 앱 상세 페이지 → 스크린샷 + 상세설명 수집"""
+    
+    edge_options = EdgeOptions()
+    edge_options.add_argument("--headless=new")
+    edge_options.add_argument("--disable-gpu")
+    edge_options.add_argument("--no-sandbox")
+    edge_options.add_argument("--disable-dev-shm-usage")
+    edge_options.add_argument("--disable-extensions")
+    edge_options.add_argument("--disable-logging")
+    edge_options.add_argument("--log-level=3")
+    
+    chrome = None
+    try:
+        chrome = webdriver.Edge(options=edge_options)
+        chrome.implicitly_wait(3)
+        
+        app_url = f"https://play.google.com/store/apps/details?id={app_id}"
+        print(f"[앱 상세 페이지]", app_url)
+        chrome.get(app_url)
+        
+        fast_wait = WebDriverWait(chrome, 5)
+        
+        # ========== 제목 구하기 ==========
+        html_source = chrome.page_source
+        soup = BeautifulSoup(html_source, 'html.parser')
+        
+        h1 = soup.find("h1")
+        if not h1:
+            print("[제목 유실 패스]")
+            return None
+        
+        app_name = h1.text.strip()
+        print(f"[앱 이름] {app_name}")
+        
+        # ========== [이미지 수집 - 선택적 추출] ==========
+        html_img_urls = []
+        cc = 1
+        downloaded = set()
+        
+        screenshot_selectors = [
+            "img.T75of",
+            "img[src*='googleusercontent']",
+            "img[src*='ggpht']",
+        ]
+        
+        selenium_imgs = []
+        for sel in screenshot_selectors:
+            try:
+                found = chrome.find_elements(By.CSS_SELECTOR, sel)
+                for f in found:
+                    if f not in selenium_imgs:
+                        selenium_imgs.append(f)
+            except Exception:
+                pass
+        
+        print(f"[INFO] 발견 이미지 수: {len(selenium_imgs)}")
+        
+        for img_el in selenium_imgs:
+            if cc > 8:
+                break
+            try:
+                alt_text = (img_el.get_attribute("alt") or "").strip()
+                
+                # 앱 아이콘 이미지, 작은 이미지 제외
+                if "아이콘 이미지" in alt_text or "콘텐츠 등급" in alt_text:
+                    continue
+                
+                # 크기 필터링 (data-srcset 등에서 크기 확인)
+                srcset = img_el.get_attribute("data-srcset") or ""
+                if srcset and "," in srcset:
+                    sizes = [s.split(" ")[0] for s in srcset.split(",")]
+                    min_size = min([int(s) for s in sizes if s.isdigit()]) if any(s.isdigit() for s in sizes) else 0
+                    if min_size < 100:  # 100px 미만 제외
+                        continue
+                
+                possible_urls = [
+                    img_el.get_attribute("src"),
+                    img_el.get_attribute("srcset"),
+                    img_el.get_attribute("data-src"),
+                    img_el.get_attribute("data-srcset"),
+                ]
+                
+                real_url = None
+                for val in possible_urls:
+                    if not val:
+                        continue
+                    val = val.strip()
+                    if "," in val:
+                        parts = val.split(",")
+                        val = parts[-1].strip()
+                        if " " in val:
+                            val = val.split(" ")[0]
+                    
+                    if "ggpht.com" in val or "googleusercontent.com" in val:
+                        # 해상도 업그레이드
+                        real_url = re.sub(r"=w\d+-h\d+", "=w2048-h4096", val)
+                        real_url = re.sub(r"w\d+-h\d+-rw", "w2048-h4096-rw", real_url)
+                        break
+                
+                if not real_url:
+                    continue
+                
+                if real_url in downloaded:
+                    continue
+                downloaded.add(real_url)
+                
+                html_img_urls.append(real_url)
+                cc += 1
+                
+            except Exception as e:
+                print(f"[이미지 실패] {e}")
+        
+        # target_images: 1 번째부터 7 번째 (인덱스 1~6) = 6 개
+        target_images = html_img_urls[1:7] if len(html_img_urls) > 1 else []
+        
+        # ==========詳細 설명 크롤링 ==========
+        contents = "<p>어플 소개 정보를 불러오지 못했습니다.</p>"
+        try:
+            # "정보 더 보기" 버튼 클릭
+            detail_btn = fast_wait.until(EC.element_to_be_clickable(
+                (By.XPATH, "//button[contains(@aria-label, '정보 더 보기') or contains(@aria-label, '상세정보')]")
+            ))
+            chrome.execute_script("arguments[0].click();", detail_btn)
+            time.sleep(0.3)
+        except:
+            # 대체 XPath 로 시도
+            base_xpath = '/html/body/c-wiz[{}]/div/div/div[1]/div/div[2]/div/div[1]/div[1]/c-wiz[2]/div/section/header/div/div[2]/button/i'
+            for index in range(2, 7):
+                try:
+                    xpath = base_xpath.format(index)
+                    element = chrome.find_element(By.XPATH, xpath)
+                    chrome.execute_script("arguments[0].click();", element)
+                    time.sleep(0.2)
+                    break
+                except:
+                    continue
+        
+        html_source = chrome.page_source
+        soup = BeautifulSoup(html_source, 'html.parser')
+        
+        # 설명 div 찾기: class="fysCi" 또는 b0vY9b/description
+        contents_div = soup.find("div", attrs={"class": "fysCi"}) or \
+                     soup.find("div", re.compile(r"b0vY9b|description"))
+        
+        if contents_div:
+            contents_list = contents_div.find_all("div")
+            if contents_list:
+                contents = str(contents_list[0])
+            else:
+                contents = str(contents_div)
+        
+        print(f"[상세 설명] {len(contents)} 문자")
+        
+        return {
+            "title": app_name,
+            "app_id": app_id,
+            "screenshots": target_images,
+            "description": contents,
+        }
+    
+    except Exception as e:
+        print(f"[앱 상세 정보 수집 실패] {e}")
         return None
+    
+    finally:
+        if chrome:
+            try:
+                chrome.quit()
+            except:
+                pass
 
 
 # =========================
@@ -545,11 +704,13 @@ def build_css_block() -> str:
 .img-group {
   display: flex;
   flex-wrap: wrap;
+  gap: 10px;
   justify-content: center;
 }
 .img-wrap {
-  flex: 0 0 48%;
-  margin: 1%;
+  flex: 0 0 calc(33.333% - 7px);
+  max-width: calc(33.333% - 7px);
+  margin: 0;
 }
 .img-wrap img {
   width: 100%;
@@ -559,7 +720,7 @@ def build_css_block() -> str:
 @media (max-width: 768px) {
   .img-wrap {
     flex: 0 0 100%;
-    margin: 5px 0;
+    max-width: 100%;
   }
 }
 </style>
@@ -581,7 +742,7 @@ def build_intro_block(title: str, keyword: str) -> str:
         ],
         [
             f"특히 다양한 앱들이 출시되면서 '{keyword}' 앱의 선택 폭도 넓어졌습니다.",
-            f"'{title}'을 찾는 분들이 늘어날 만큼 관심이 점점 커지고 있습니다.",
+            f"'{title}'을 찾는 분들이 늘어날 만큼 관심이 점점 커가고 있습니다.",
             f"앱을 통해 생활, 학습, 취미는 물론 '{keyword}'까지 즐길 수 있습니다.",
             f"스마트폰 앱은 시간을 절약하고 효율적인 생활을 가능하게 합니다.",
             f"'{keyword}' 앱은 사용자에게 새로운 경험과 편리함을 동시에 제공합니다.",
@@ -612,10 +773,10 @@ def build_intro_block(title: str, keyword: str) -> str:
     intro_text = " ".join(intro_sentences)
 
     first = f'''
-<div id="jm"> </div>
+<div id="jm">&nbsp;</div>
 <p data-ke-size="size18">{intro_text}</p>
-<span></span>
-<p data-ke-size="size18"> </p>
+<span><!--more--></span>
+<p data-ke-size="size18">&nbsp;</p>
 '''
     return first
 
@@ -663,10 +824,10 @@ def build_ending_block(title: str, keyword: str) -> str:
     end_text = " ".join(end_sentences)
 
     last = f"""
-<p data-ke-size="size18"> </p>
+<p data-ke-size="size18">&nbsp;</p>
 <div style="margin:40px 0px 20px 0px;">
 <p data-ke-size="size18">{end_text}</p>
-<p data-ke-size="size18"> </p>
+<p data-ke-size="size18">&nbsp;</p>
 </div>
 """
     return last
@@ -703,15 +864,13 @@ def get_related_posts(blog_id, count=4):
 
 
 # =========================
-# 대상 행/키워드 선택 (F 열 '완' 확인)
+# 대상 행/키워드/라벨 선택
 # =========================
 def pick_target_row(ws):
     rows = ws.get_all_values()
-    for i, row in enumerate(rows[1:], start=2):  # 2행부터 시작
-        # A열 = 키워드가 있고
-        a = row[0].strip() if len(row) > 0 and row[0] else ""
-        # F열 = 완료 여부 (0번 인덱스 기준 5번째 열이 F열)
-        f = row[5].strip() if len(row) > 5 and row[5] else ""
+    for i, row in enumerate(rows[1:], start=2):  # 2 행부터
+        a = row[0].strip() if len(row) > 0 and row[0] else ""  # A 열 = 키워드
+        f = row[5].strip() if len(row) > 5 and row[5] else ""  # F 열 = 완료 (0-based: 5)
         if a and f != "완":
             return i, row
     return None, None
@@ -738,51 +897,24 @@ def sheet_append_log(ws, row_idx, message, tries=3, delay=2):
 
 
 # =========================
-# 3 블로그 로테이션 (시트 B1 셀 기반)
+# 3 블로그 로테이션 (시트 셀 기반 - B1 셀 사용)
 # =========================
 def get_next_blog_index(ws):
-    # 시트 B1 셀(1행 2열)에서 다음 블로그 인덱스 읽기
+    # 시트 1 탭, B1 셀에서 다음 블로그 인덱스 읽기
     try:
-        val = ws.cell(1, 2).value or "0"  # B1 셀
+        val = ws.cell(1, 2).value or "0"  # B1 셀 (คอลัมน์ 2)
         idx = int(val) % len(BLOG_IDS)
         return idx
     except Exception as e:
-        print("[WARN] 시트 블로그 인덱스 읽기 실패 (B1):", e)
+        print("[WARN] 시트 블로그 인덱스 읽기 실패:", e)
         return 0
 
 
 def save_next_blog_index(ws, next_index):
-    # 시트 B1 셀(1행 2열)에 다음 블로그 인덱스 저장
     try:
-        ws.update_cell(1, 2, str((next_index + 1) % len(BLOG_IDS)))  # B1 셀
+        ws.update_cell(1, 2, str((next_index + 1) % len(BLOG_IDS)))  # B1 셀에 다음 인덱스 저장
     except Exception as e:
-        print("[WARN] 시트 블로그 인덱스 저장 실패 (B1):", e)
-
-
-# =========================
-# Blogger API 포스팅 업로드 함수 (예시)
-# =========================
-def post_to_blogger(blog_id, title, html_content, labels):
-    try:
-        # labels는 리스트 형태 (예: ["어플", "아이폰"])
-        body = {
-            "title": title,
-            "content": html_content,
-            "labels": labels
-        }
-        
-        # 블로거 API를 통해 포스트 발행
-        # blog_handler는 전역 인증 객체 사용
-        posts_resource = blog_handler.posts()
-        request = posts_resource.insert(blogId=blog_id, body=body, isDraft=False)
-        result = request.execute()
-        
-        print(f"[블로그 포스팅 성공] ID: {result.get('id')}")
-        return result.get("url") # 발행된 포스팅 주소(URL) 반환
-    except Exception as e:
-        print("[블로그 포스팅 에러]:", e)
-        traceback.print_exc()
-        return None
+        print("[WARN] 시트 블로그 인덱스 저장 실패:", e)
 
 
 # =========================
@@ -790,14 +922,14 @@ def post_to_blogger(blog_id, title, html_content, labels):
 # =========================
 if __name__ == "__main__":
     try:
-        # 1) sheet3 에서 대상 행/데이터 가져오기
+        # 1) sheet3 에서 대상 행/데이터
         target_row, row = pick_target_row(ws3)
         if not target_row or not row:
-            sheet_append_log(ws3, 2, "처리할 키워드 없음 (A열) 또는 F열 완료")
+            sheet_append_log(ws3, 2, "처리할 키워드 없음 (A 열)")
             raise SystemExit(0)
 
         keyword = row[0].strip()  # A 열 = 키워드
-        label_val = row[1].strip() if len(row) > 1 and row[1] else ""  # B 열 = 라벨
+        label_val = row[1].strip() if len(row) > 1 else ""  # B 열 = 라벨
 
         sheet_append_log(ws3, target_row, f"대상 행={target_row}, 키워드='{keyword}', 라벨='{label_val}'")
 
@@ -813,21 +945,22 @@ if __name__ == "__main__":
         thumb_url = make_thumb_with_logging(ws3, target_row, thumb_path, title)
         sheet_append_log(ws3, target_row, f"썸네일 결과: {thumb_url or '실패'}")
 
-        # 4) 앱 ID 목록 검색
-        sheet_append_log(ws3, target_row, "앱 ID 검색 시작")
-        apps = search_app_store_ids(keyword, limit=20, ws=ws3, row_idx=target_row)
+        # 4) 구글플레이 앱 ID 목록 검색
+        sheet_append_log(ws3, target_row, "앱 ID 검색 시작 (구글플레이)")
+        apps = search_google_play_apps(keyword, limit=15)
 
         if not apps:
-            sheet_append_log(ws3, target_row, "앱 ID 없음 → J열에 '완' 처리 및 주소 빈칸 종료")
-            ws3.update_cell(target_row, 10, "완")  # J열(10열) '완'
-            ws3.update_cell(target_row, 11, "")     # K열 등 주소 공간 비움 (필요시 조절)
-            sheet_append_log(ws3, target_row, "시트 기록 완료: J='완' (검색결과 없음)")
+            sheet_append_log(ws3, target_row, "앱 ID 없음 → 종료")
+            ws3.update_cell(target_row, 6, "완")      # F 열 완료 (0-based: 5)
+            ws3.update_cell(target_row, 10, "")        # J 열 = URL 비움 (0-based: 9)
+            sheet_append_log(ws3, target_row, "시트 기록 완료: F='완', J='' (검색결과 없음)")
             raise SystemExit(0)
 
         if len(apps) < 3:
-            sheet_append_log(ws3, target_row, "앱 수가 3개 미만 → J열 '완' 처리 후 조기 종료")
-            ws3.update_cell(target_row, 10, "완")  # J열(10열) '완'
-            sheet_append_log(ws3, target_row, "시트 기록 완료: J='완' (앱 수 부족)")
+            sheet_append_log(ws3, target_row, "앱 수가 3 개 미만 → 자동 완료 처리")
+            ws3.update_cell(target_row, 6, "완")      
+            ws3.update_cell(target_row, 10, "")        
+            sheet_append_log(ws3, target_row, "시트 기록 완료: F='완', J='' (앱 수 부족)")
             raise SystemExit(0)
             
         sheet_append_log(ws3, target_row, f"앱 ID={[(a['id'], a['name']) for a in apps]}")
@@ -839,7 +972,7 @@ if __name__ == "__main__":
         <div class="mbtTOC"><button> 목차 </button>
         <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
         </div>
-        <p> </p>
+        <p>&nbsp;</p>
         """
         sheet_append_log(ws3, target_row, "서론 블록 생성 완료")
 
@@ -856,10 +989,10 @@ if __name__ == "__main__":
 
         # 7) 해시태그
         tag_items = title.split()
-        tag_str = " ".join([f"#{t}" for t in tag_items]) + " #앱스토어"
+        tag_str = " ".join([f"#{t}" for t in tag_items]) + " #구글플레이"
         sheet_append_log(ws3, target_row, f"해시태그='{tag_str}'")
 
-        # 8) 3 블로그 로테이션 (B1 셀 사용 확인)
+        # 8) 3 블로그 로테이션 (B1 셀 사용)
         next_index = get_next_blog_index(ws3)
         BLOG_ID = BLOG_IDS[next_index]
         save_next_blog_index(ws3, next_index)
@@ -872,15 +1005,14 @@ if __name__ == "__main__":
             try:
                 sheet_append_log(ws3, target_row, f"[{j}] 앱 수집 시작 id={app['id']}")
                 
-                app_info = get_app_info(app["id"])
+                app_info = get_play_app_info(app["id"])
                 if not app_info:
                     sheet_append_log(ws3, target_row, f"[{j}] 앱 정보 조회 실패")
                     continue
 
                 app_name = app_info["title"]
+                screenshots = app_info["screenshots"]
                 src_desc = app_info["description"]
-                screenshots = app_info["screenshots"] + app_info["ipad_screenshots"]
-                screenshots = list(dict.fromkeys(screenshots))[:6]
 
                 desc_html = rewrite_app_description(src_desc, app_name, keyword)
                 sheet_append_log(ws3, target_row, f"[{j}] {app_name} 설명 리라이트 성공")
@@ -890,7 +1022,7 @@ if __name__ == "__main__":
                     for cc, img_url in enumerate(screenshots)
                 )
 
-                app_url = f"https://apps.apple.com/kr/app/id{app['id']}"
+                app_url = f"https://play.google.com/store/apps/details?id={app['id']}"
 
                 section_html = f'''
                 <h2 data-ke-size="size26">{j}. {app_name} 어플 소개</h2>
@@ -937,27 +1069,38 @@ if __name__ == "__main__":
             except Exception as e_each:
                 sheet_append_log(ws3, target_row, f"[{j}] 앱 처리 실패: {e_each}")
 
-        # 10) 마무리 및 블로그 발행
+        # 10) 마무리
         html_full += build_ending_block(title, keyword)
         sheet_append_log(ws3, target_row, "마무리 블록 생성 완료")
         related_box = get_related_posts(BLOG_ID, count=6)
         html_full += related_box
         html_full += "<script>mbtTOC();</script><br /><br />"
 
-        # 11) 블로그 API 최종 발행 (등록)
-        sheet_append_log(ws3, target_row, "블로그 포스팅 업로드(발행) 시작")
-        post_labels = make_post_labels(row) # 라벨 리스트 생성
-        posted_url = post_to_blogger(BLOG_ID, title, html_full, post_labels)
+        # 11) 업로드
+        try:
+            labels = make_post_labels(row)
+            post_body = {"content": html_full, "title": title, "labels": labels}
+            res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body,
+                                              isDraft=False, fetchImages=True).execute()
+            post_url = res.get("url", "")
+            sheet_append_log(ws3, target_row, f"업로드 성공: {post_url}")
+        except Exception as up_e:
+            sheet_append_log(ws3, target_row, f"업로드 실패: {up_e}")
+            raise
 
-        if posted_url:
-            sheet_append_log(ws3, target_row, f"블로그 발행 완료 → URL: {posted_url}")
-            # J열(10번째 열)에 포스팅 주소 및 '완' 표기
-            ws3.update_cell(target_row, 10, "완")
-            # 만약 J열에 URL을 넣고 싶다면 아래 주석을 해제하거나 별도 셀(예: K열)에 기록하시면 됩니다.
-            # ws3.update_cell(target_row, 11, posted_url) 
-            sheet_append_log(ws3, target_row, "시트 J열 기록('완') 완료")
-        else:
-            sheet_append_log(ws3, target_row, "블로그 발행 실패")
+        # 12) 시트 기록 (F 열, J 열)
+        ws3.update_cell(target_row, 6, "완")      # F 열 완료 (0-based: 5)
+        ws3.update_cell(target_row, 10, post_url)  # J 열 = URL (0-based: 9)
+        sheet_append_log(ws3, target_row, f"시트 기록 완료: F='완', J='{post_url}'")
 
-    except Exception as e_main:
-        print("메인 로직 에러:", e_main)
+        # 13) 완료
+        sheet_append_log(ws3, target_row, "작업 정상 종료")
+
+    except SystemExit:
+        pass
+    except Exception as e:
+        tb = traceback.format_exc()
+        row_for_err = target_row if 'target_row' in locals() and target_row else 2
+        sheet_append_log(ws3, row_for_err, f"실패: {e}")
+        sheet_append_log(ws3, row_for_err, f"Trace: {tb.splitlines()[-1]}")
+        print("실패:", e, tb)
