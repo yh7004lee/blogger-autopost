@@ -74,7 +74,6 @@ if GEMINI_API_KEY:
 # 기본 설정
 # =========================
 BLOG_IDS = ["1271002762142343021", "4265887538424434999", "6159101125292617147"]
-BLOG_ID_FIXED = "6533996132181172904"  # 블로그 1 개 ID (고정)
 BLOG_URL = "https://apk.appsos.kr/"
 
 error_logs = []
@@ -538,24 +537,6 @@ def get_app_info(appid):
 
 
 # =========================
-# 앱 스크린샷 Selenium 우회 추출 (iTunes API 에 screenshotUrls 가 없으면 사용)
-# =========================
-def fetch_screenshots_from_appstore(app_id, folder, app_title):
-    screenshots = []
-    app_url = f"https://apps.apple.com/kr/app/id{app_id}"
-
-    try:
-        print(f"[Selenium 우회 시작] {app_url}")
-        # Selenium 은 필요할 때만 추가 (현재코드에서는 사용하지 않음)
-        # 필요시 Selenium 우회 로직 추가
-        print("[Selenium 우회 생략] - 현재 iTunes API 만 사용")
-    except Exception as e:
-        print(f"[Selenium 우회 스크린샷 추출 에러] {e}")
-
-    return screenshots
-
-
-# =========================
 # CSS 블록 (한 번만 출력)
 # =========================
 def build_css_block() -> str:
@@ -722,16 +703,16 @@ def get_related_posts(blog_id, count=4):
 
 
 # =========================
-# 대상 행/키워드/라벨 선택
+# 대상 행/키워드 선택 (F 열 '완' 확인)
 # =========================
 def pick_target_row(ws):
     rows = ws.get_all_values()
-    for i, row in enumerate(rows[1:], start=2):  # 2 행부터
-    	# A 열 = 키워드
+    for i, row in enumerate(rows[1:], start=2):  # 2행부터 시작
+        # A열 = 키워드가 있고
         a = row[0].strip() if len(row) > 0 and row[0] else ""
-        # E 열 = 완료
-        d = row[4].strip() if len(row) > 4 and row[4] else ""
-        if a and d != "완":
+        # F열 = 완료 여부 (0번 인덱스 기준 5번째 열이 F열)
+        f = row[5].strip() if len(row) > 5 and row[5] else ""
+        if a and f != "완":
             return i, row
     return None, None
 
@@ -779,18 +760,44 @@ def save_next_blog_index(ws, next_index):
 
 
 # =========================
+# Blogger API 포스팅 업로드 함수 (예시)
+# =========================
+def post_to_blogger(blog_id, title, html_content, labels):
+    try:
+        # labels는 리스트 형태 (예: ["어플", "아이폰"])
+        body = {
+            "title": title,
+            "content": html_content,
+            "labels": labels
+        }
+        
+        # 블로거 API를 통해 포스트 발행
+        # blog_handler는 전역 인증 객체 사용
+        posts_resource = blog_handler.posts()
+        request = posts_resource.insert(blogId=blog_id, body=body, isDraft=False)
+        result = request.execute()
+        
+        print(f"[블로그 포스팅 성공] ID: {result.get('id')}")
+        return result.get("url") # 발행된 포스팅 주소(URL) 반환
+    except Exception as e:
+        print("[블로그 포스팅 에러]:", e)
+        traceback.print_exc()
+        return None
+
+
+# =========================
 # 메인 실행
 # =========================
 if __name__ == "__main__":
     try:
-        # 1) sheet3 에서 대상 행/데이터
+        # 1) sheet3 에서 대상 행/데이터 가져오기
         target_row, row = pick_target_row(ws3)
         if not target_row or not row:
-            sheet_append_log(ws3, 2, "처리할 키워드 없음 (A 열)")
+            sheet_append_log(ws3, 2, "처리할 키워드 없음 (A열) 또는 F열 완료")
             raise SystemExit(0)
 
         keyword = row[0].strip()  # A 열 = 키워드
-        label_val = row[1].strip() if len(row) > 1 else ""  # B 열 = 라벨
+        label_val = row[1].strip() if len(row) > 1 and row[1] else ""  # B 열 = 라벨
 
         sheet_append_log(ws3, target_row, f"대상 행={target_row}, 키워드='{keyword}', 라벨='{label_val}'")
 
@@ -811,17 +818,16 @@ if __name__ == "__main__":
         apps = search_app_store_ids(keyword, limit=20, ws=ws3, row_idx=target_row)
 
         if not apps:
-            sheet_append_log(ws3, target_row, "앱 ID 없음 → 종료")
-            ws3.update_cell(target_row, 5, "완")      # E 열 완료
-            ws3.update_cell(target_row, 7, "")        # G 열 = URL 비움
-            sheet_append_log(ws3, target_row, "시트 기록 완료: E='완', G='' (검색결과 없음)")
+            sheet_append_log(ws3, target_row, "앱 ID 없음 → J열에 '완' 처리 및 주소 빈칸 종료")
+            ws3.update_cell(target_row, 10, "완")  # J열(10열) '완'
+            ws3.update_cell(target_row, 11, "")     # K열 등 주소 공간 비움 (필요시 조절)
+            sheet_append_log(ws3, target_row, "시트 기록 완료: J='완' (검색결과 없음)")
             raise SystemExit(0)
 
         if len(apps) < 3:
-            sheet_append_log(ws3, target_row, "앱 수가 3 개 미만 → 자동 완료 처리")
-            ws3.update_cell(target_row, 5, "완")      
-            ws3.update_cell(target_row, 7, "")        
-            sheet_append_log(ws3, target_row, "시트 기록 완료: E='완', G='' (앱 수 부족)")
+            sheet_append_log(ws3, target_row, "앱 수가 3개 미만 → J열 '완' 처리 후 조기 종료")
+            ws3.update_cell(target_row, 10, "완")  # J열(10열) '완'
+            sheet_append_log(ws3, target_row, "시트 기록 완료: J='완' (앱 수 부족)")
             raise SystemExit(0)
             
         sheet_append_log(ws3, target_row, f"앱 ID={[(a['id'], a['name']) for a in apps]}")
@@ -931,12 +937,27 @@ if __name__ == "__main__":
             except Exception as e_each:
                 sheet_append_log(ws3, target_row, f"[{j}] 앱 처리 실패: {e_each}")
 
-        # 10) 마무리
+        # 10) 마무리 및 블로그 발행
         html_full += build_ending_block(title, keyword)
         sheet_append_log(ws3, target_row, "마무리 블록 생성 완료")
         related_box = get_related_posts(BLOG_ID, count=6)
         html_full += related_box
         html_full += "<script>mbtTOC();</script><br /><br />"
+
+        # 11) 블로그 API 최종 발행 (등록)
+        sheet_append_log(ws3, target_row, "블로그 포스팅 업로드(발행) 시작")
+        post_labels = make_post_labels(row) # 라벨 리스트 생성
+        posted_url = post_to_blogger(BLOG_ID, title, html_full, post_labels)
+
+        if posted_url:
+            sheet_append_log(ws3, target_row, f"블로그 발행 완료 → URL: {posted_url}")
+            # J열(10번째 열)에 포스팅 주소 및 '완' 표기
+            ws3.update_cell(target_row, 10, "완")
+            # 만약 J열에 URL을 넣고 싶다면 아래 주석을 해제하거나 별도 셀(예: K열)에 기록하시면 됩니다.
+            # ws3.update_cell(target_row, 11, posted_url) 
+            sheet_append_log(ws3, target_row, "시트 J열 기록('완') 완료")
+        else:
+            sheet_append_log(ws3, target_row, "블로그 발행 실패")
 
     except Exception as e_main:
         print("메인 로직 에러:", e_main)
