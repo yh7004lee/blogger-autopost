@@ -35,23 +35,28 @@ jobs:
 
       - name: Restore cc.json
         run: |
-          echo '${{ secrets.CC_JSON_B64 }}' | base64 --decode > cc.json
+          echo "${{ secrets.CC_JSON_B64 }}" > cc.json.b64
+          certutil -decode cc.json.b64 cc.json
 
       - name: Restore sheetapi.json
         run: |
-          echo '${{ secrets.SHEETAPI_JSON_B64 }}' | base64 --decode > sheetapi.json
+          echo "${{ secrets.SHEETAPI_JSON }}" > sheetapi.json.b64
+          certutil -decode sheetapi.json.b64 sheetapi.json
 
       - name: Restore openai.json
         run: |
-          echo '${{ secrets.OPENAI_JSON_B64 }}' | base64 --decode > openai.json
+          echo "${{ secrets.OPENAI_JSON_B64 }}" > openai.json.b64
+          certutil -decode openai.json.b64 openai.json
 
       - name: Restore 2nd.json
         run: |
-          echo '${{ secrets.DRIVE_JSON_B64 }}' | base64 --decode > 2nd.json
+          echo "${{ secrets.DRIVE_JSON_B64 }}" > 2nd.json.b64
+          certutil -decode 2nd.json.b64 2nd.json
 
       - name: Restore drive_token_2nd.pickle
         run: |
-          echo '${{ secrets.DRIVE_TOKEN_2ND_B64 }}' | base64 --decode > drive_token_2nd.pickle
+          echo "${{ secrets.DRIVE_TOKEN_2ND_B64 }}" > drive_token_2nd.pickle.b64
+          certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
 
       - name: Run autopost script
         run: python app_galaxy_kr.py
