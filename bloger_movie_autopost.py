@@ -414,7 +414,9 @@ def maybe(value, prob=0.5):
 # TMDB 수집기
 def get_movie_bundle(movie_id, lang="ko-KR", bearer=None, api_key=None):
     params = {
-        "language": lang
+        "language": lang,
+        "append_to_response": "credits,images",
+        "include_image_language": "ko,en,null"
     }
 
     return tmdb_get(
