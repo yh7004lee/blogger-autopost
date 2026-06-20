@@ -24,6 +24,197 @@ sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
 
 # ===============================
+# 🔑 AI 키 + 클라이언트 (5차 시도 폴백)
+# ===============================
+# 환경변수에서 API 키를 읽어오도록 설계 (원하면 직접 문자열로 넣어도 됨)
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+# OpenAI
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
+
+client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
+
+# Gemini
+genai_client = None
+if GEMINI_API_KEY:
+    try:
+        from google import genai
+        genai_client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception:
+        genai_client = None
+
+
+def generate_ai_review(prompt: str) -> str:
+    """Gemini → Gemini-lite → Groq → OpenRouter → GPT‑4o‑mini 순 폴백."""
+    # 1. Gemini Flash
+    if genai_client:
+        try:
+            response = genai_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+            print("✅ AI 성공: Gemini Flash")
+            return (response.text or "").strip()
+        except Exception as e:
+            print("⚠️ Gemini Flash 실패:", e)
+
+    # 2. Gemini Flash Lite
+    if genai_client:
+        try:
+            response = genai_client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=prompt
+            )
+            print("✅ AI 성공: Gemini Flash Lite")
+            return (response.text or "").strip()
+        except Exception as e:
+            print("⚠️ Gemini Flash Lite 실패:", e)
+
+    # 3. Groq
+    if GROQ_API_KEY:
+        try:
+            print("🚀 [3 차 시도] Groq")
+            res = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": "You must output ONLY final answer in Korean. No reasoning, no analysis, no English.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 650,
+                },
+                timeout=20,
+            )
+            data = res.json()
+            if res.status_code != 200:
+                print("⚠️ Groq API 오류:", data)
+            if (
+                "choices" in data
+                and data["choices"]
+                and data["choices"][0]["message"].get("content")
+            ):
+                text = data["choices"][0]["message"]["content"]
+                print("✅ AI 성공: Groq")
+                return text.strip()
+            print("⚠️ Groq 응답 없음")
+        except Exception as e:
+            print("⚠️ Groq 실패:", e)
+
+    # 4. OpenRouter
+    if OPENROUTER_API_KEY:
+        try:
+            print("🚀 [4 차 시도] OpenRouter")
+            res = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "openrouter/auto",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7,
+                    "max_tokens": 650,
+                },
+                timeout=20,
+            )
+            data = res.json()
+            if res.status_code != 200:
+                print("⚠️ OpenRouter API 오류:", data)
+            if (
+                "choices" in data
+                and data["choices"]
+                and data["choices"][0]["message"].get("content")
+            ):
+                text = data["choices"][0]["message"]["content"]
+                print("✅ AI 성공: OpenRouter")
+                return text.strip()
+            print("⚠️ OpenRouter 응답 없음")
+        except Exception as e:
+            print("⚠️ OpenRouter 실패:", e)
+
+    # 5. GPT-4o-mini
+    if client:
+        try:
+            print("🚀 [5 차 시도] GPT-4o-mini")
+            res = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "너는 영화 블로그를 운영하는 리뷰어야. "
+                            "항상 자연스러운 한국어 줄거리 요약만 작성해."
+                        ),
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.7,
+                max_tokens=650,
+            )
+            print("✅ AI 성공: GPT-4o-mini")
+            return res.choices[0].message.content.strip()
+        except Exception as e:
+            print("❌ 모든 AI 실패:", e)
+
+    return "영화 줄거리 정보를 불러오는 데 문제가 발생했습니다."
+
+def rewrite_movie_overview_with_ai(title: str, year: str, genres_str: str, overview_raw: str) -> str:
+    """
+    TMDB 줄거리(overview)를 기반으로
+    - 사실은 그대로 유지
+    - 표현만 자연스럽게, 사람이 설명하듯이
+    - 한국어 블로그용 줄거리로 재작성
+    """
+    overview_raw = (overview_raw or "").strip()
+    if not overview_raw:
+        return "줄거리 정보가 아직 준비되지 않았습니다."
+
+    prompt = f"""
+다음은 영화 줄거리 원문이야. 이 내용의 사실 관계는 절대 바꾸면 안 되고,
+중요한 사건과 인물, 결말 방향은 유지해야 해.
+
+단, 블로그에 올릴 리뷰용 줄거리처럼
+사람이 설명하듯이 자연스럽고 읽기 편한 문장으로 바꿔줘.
+
+조건:
+- 한국어로만 작성
+- 존댓말, 편안한 대화체
+- 스포일러는 TMDB 원문 수준까지만 (새로운 스포일러 추가 금지)
+- 문장 구조와 표현만 다양하게 바꿔서 저품질로 보이지 않게
+- 3~5 문단 정도의 짧은 리뷰형 줄거리
+- HTML 태그는 쓰지 말고 순수 텍스트만
+
+[영화 정보]
+- 제목: {title}
+- 연도: {year}
+- 장르: {genres_str}
+
+[원문 줄거리]
+{overview_raw}
+"""
+    ai_text = generate_ai_review(prompt).strip()
+    return ai_text
+
+
+
+
+# ===============================
 # 📝 포스팅 설정
 POST_COUNT =1     # 몇 번 포스팅할지 (예: 10 이면 10회 반복)
 POST_DELAY_MIN = 1   # 각 포스팅 후 대기 시간 (분 단위, 0 이면 즉시 다음 실행)
@@ -99,46 +290,6 @@ def get_youtube_trailers(title_ko, title_en=None, max_results=2):
             return results
 
     return []
-# ===============================
-# 블로그 제목 생성 로직 (10가지 로테이션, 괄호 제거 & 검색 친화 키워드)
-# ===============================
-def get_rotating_title(ws, title, year):
-    """
-    Google Sheets O1 셀에 저장된 인덱스를 기반으로
-    10가지 제목 템플릿을 순환 사용
-    """
-    # 현재 인덱스 불러오기 (비어있으면 0으로 시작)
-    try:
-        idx_val = ws.acell("O1").value
-        idx = int(idx_val.strip()) if idx_val and idx_val.strip().isdigit() else 0
-    except Exception:
-        idx = 0
-
-    # 제목 패턴 10가지 (괄호 제거 + 검색 키워드 강화)
-    templates = [
-        f"영화 {title} {year} 줄거리 출연진 예고편 리뷰",
-        f"{year} 영화 {title} 줄거리와 주연 배우 평점 리뷰",
-        f"{title} {year} 개봉작 줄거리 출연진 관람포인트",
-        f"{title} {year} 영화 리뷰 줄거리 예고편 명장면",
-        f"영화 {title} {year} 추천작 줄거리 배우 정보",
-        f"{title} {year} 줄거리 스틸컷 예고편 평점 리뷰",
-        f"{year} 추천 영화 {title} 줄거리 출연 배우 총정리",
-        f"영화 리뷰 {title} {year} 줄거리와 캐스팅 정보",
-        f"{title} {year} 개봉 영화 줄거리 평점 리뷰 모음",
-        f"영화 {title} {year} 줄거리 출연진 예고편 정보",
-    ]
-
-    # 현재 인덱스로 제목 선택
-    blog_title = templates[idx % len(templates)]
-
-    # 다음 인덱스로 업데이트 (순환)
-    next_idx = (idx + 1) % len(templates)
-    try:
-        ws.update_acell("O1", str(next_idx))
-    except Exception as e:
-        print(f"⚠️ O1 셀 업데이트 실패: {e}")
-
-    return blog_title
 
 
 # ===============================
@@ -158,14 +309,16 @@ def get_sheet():
     SHEET_ID = "10kqYhxmeewG_9-XOdXTbv0RVQG9_-jXjtg0C6ERoGG0"
     return gc.open_by_key(SHEET_ID).sheet1
 
+
 def get_movie_overview(movie_id, bearer=None, api_key=None):
+    """TMDB에서 언어 우선순위(ko → en)로 줄거리만 가져오기."""
     # 1차: 한국어
     data_ko = tmdb_get(f"/movie/{movie_id}", params={"language": "ko-KR"}, bearer=bearer, api_key=api_key)
     overview_ko = data_ko.get("overview")
     if overview_ko:
         return overview_ko
 
-    # 2차: 영어 fallback
+    # 2차: 영어
     data_en = tmdb_get(f"/movie/{movie_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
     overview_en = data_en.get("overview")
     if overview_en:
@@ -174,33 +327,9 @@ def get_movie_overview(movie_id, bearer=None, api_key=None):
     # 3차: 기본 메시지
     return "줄거리 정보가 아직 준비되지 않았습니다."
 
-import re
 
-def normalize_name(person_id, bearer=None, api_key=None):
-    """
-    TMDB 인물 이름을 가져올 때:
-    - 기본 언어(LANG=ko-KR)로 시도
-    - 한글/영문이 아니면 영어(en-US) 이름으로 교체
-    """
-    try:
-        # 1차: 한국어 이름 가져오기
-        data_ko = tmdb_get(f"/person/{person_id}", params={"language": "ko-KR"}, bearer=bearer, api_key=api_key)
-        name_ko = data_ko.get("name", "")
 
-        # 한글 또는 영문이면 그대로 반환
-        if re.match(r"^[\uAC00-\uD7A3A-Za-z\s\.\-']+$", name_ko):
-            return name_ko
 
-        # 2차: 영어 이름 fallback
-        data_en = tmdb_get(f"/person/{person_id}", params={"language": "en-US"}, bearer=bearer, api_key=api_key)
-        name_en = data_en.get("name", "")
-        if name_en:
-            return name_en
-
-        return name_ko or "이름 미상"
-    except Exception as e:
-        print(f"❌ normalize_name 오류 (person_id={person_id}): {e}")
-        return "이름 미상"
 
 # ===============================
 # 공통 유틸
@@ -928,89 +1057,103 @@ def get_related_posts(blog_id, count=4):
 
 def build_html(post, cast_count=10, stills_count=8):
     esc = html.escape
-    title = esc(post.get("title") or post.get("original_title") or "제목 미상")
-    
-    overview = esc(get_movie_overview(post["id"], bearer=BEARER, api_key=API_KEY))
-    release_date = esc(post.get("release_date") or "")
-    year = release_date[:4] if release_date else ""
+
+    # ─────────────────────────
+    # 기본 메타 정보
+    # ─────────────────────────
+    title_raw = post.get("title") or post.get("original_title") or "제목 미상"
+    title = esc(title_raw)
+
+    release_date_raw = post.get("release_date") or ""
+    year = release_date_raw[:4] if release_date_raw else ""
+    release_date = esc(release_date_raw)
+
     runtime = post.get("runtime") or 0
-    genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
+
+    genres_list = [g.get("name", "") for g in post.get("genres", []) if g.get("name")]
     genres_str = ", ".join(genres_list)
+
     tagline = esc(post.get("tagline") or "")
     adult_flag = bool(post.get("adult", False))
-       # 장르
-    genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
-    genres_str = ", ".join(genres_list)
 
     # 제작 국가
-    countries = [c.get("name","") for c in post.get("production_countries",[]) if c.get("name")]
+    countries = [c.get("name", "") for c in post.get("production_countries", []) if c.get("name")]
     country_str = ", ".join(countries) if countries else "국가 정보 없음"
 
+    # 이미지 / 크레딧
     backdrop = img_url(post.get("backdrop_path"), "w1280")
 
     credits = post.get("credits", {}) or {}
     cast = credits.get("cast", [])[:cast_count]
     crew = credits.get("crew", [])
     directors = [c for c in crew if c.get("job") == "Director"]
-    director_names = [esc(normalize_name(d["id"], bearer=BEARER, api_key=API_KEY)) for d in directors if d.get("id")]
-    cast_names = [esc(normalize_name(p["id"], bearer=BEARER, api_key=API_KEY)) for p in cast if p.get("id")]
+    director_names = [esc(d.get("name", "")) for d in directors]
+    cast_names = [esc(p.get("name", "")) for p in cast]
 
-
+    # 스틸컷
     backdrops = (post.get("images", {}) or {}).get("backdrops", [])
-    backdrops = sorted(backdrops, key=lambda b: (b.get("vote_count",0), b.get("vote_average",0)), reverse=True)[:stills_count]
+    backdrops = sorted(
+        backdrops,
+        key=lambda b: (b.get("vote_count", 0), b.get("vote_average", 0)),
+        reverse=True,
+    )[:stills_count]
 
+    # 관람 등급
     cert = get_movie_release_cert(post["id"], bearer=BEARER, api_key=API_KEY)
-    if not cert and adult_flag: cert = "성인 컨텐츠"
+    if not cert and adult_flag:
+        cert = "성인 컨텐츠"
 
-    # 키워드 생성
-    base_keywords = []
-    for w in (title.replace(":", " ").replace("-", " ").split()):
-        if len(w) > 1: base_keywords.append(w)
-    base_keywords += genres_list
-    base_keywords += director_names[:2]
-    base_keywords += cast_names[:3]
-    if year: base_keywords.append(year)
-    if cert: base_keywords.append(cert)
-    
-        # 키워드 생성
+    # ─────────────────────────
+    # 키워드 생성 (중복/타입 정리 버전)
+    # ─────────────────────────
     base_keywords = []
     for w in (title.replace(":", " ").replace("-", " ").split()):
         if len(w) > 1:
             base_keywords.append(str(w))
 
-    # 장르, 감독, 배우 이름도 문자열만
     for g in genres_list:
-        if g: base_keywords.append(str(g))
+        if g:
+            base_keywords.append(str(g))
     for d in director_names[:2]:
-        if d: base_keywords.append(str(d))
+        if d:
+            base_keywords.append(str(d))
     for c in cast_names[:3]:
-        if c: base_keywords.append(str(c))
+        if c:
+            base_keywords.append(str(c))
 
     if year:
         base_keywords.append(str(year))
     if cert:
         base_keywords.append(str(cert))
 
-    # 고정 키워드
     base_keywords += ["리뷰", "평점", "출연진", "예고편", "스틸컷", "추천영화", "관람포인트", "해석"]
 
-    # 중복 제거 (문자열만)
     seen = set()
     keywords = []
     for k in base_keywords:
-        if isinstance(k, str):
-            if k and k not in seen:
-                keywords.append(k)
-                seen.add(k)
+        if isinstance(k, str) and k and k not in seen:
+            keywords.append(k)
+            seen.add(k)
 
-
+    # ─────────────────────────
+    # 서론 (기존 랜덤 스피너 함수 사용)
+    # ─────────────────────────
     intro_6 = make_intro_6(title, year, genres_str, director_names, cast_names, cert, runtime, keywords)
 
-    # 출연진 테이블
+    # ─────────────────────────
+    # ✅ 줄거리: TMDB → AI 리라이트
+    # ─────────────────────────
+    overview_raw = get_movie_overview(post["id"], bearer=BEARER, api_key=API_KEY)
+    overview_ai = rewrite_movie_overview_with_ai(title_raw, year, genres_str, overview_raw)
+    overview = esc(overview_ai)
+
+    # ─────────────────────────
+    # 출연진 테이블 (기존 로직 유지)
+    # ─────────────────────────
     cast_rows = []
     for p in cast:
-        name = esc(p.get("name",""))
-        ch = esc(p.get("character",""))
+        name = esc(p.get("name", ""))
+        ch = esc(p.get("character", ""))
         prof = img_url(p.get("profile_path"), "w185")
         img_tag = f'<img src="{prof}" alt="{name}" style="width:72px;height:auto;border-radius:8px;">' if prof else ""
         cast_rows.append(
@@ -1020,26 +1163,31 @@ def build_html(post, cast_count=10, stills_count=8):
             f'</tr>'
         )
     cast_table = (
-        '<table style="width:100%;border-collapse:collapse;border:1px solid #eee;">' +
-        "".join(cast_rows or ['<tr><td style="padding:10px;">출연진 정보가 없습니다.</td></tr>']) +
-        '</table>'
+        '<table style="width:100%;border-collapse:collapse;border:1px solid #eee;">'
+        + "".join(cast_rows or ['<tr><td style="padding:10px;">출연진 정보가 없습니다.</td></tr>'])
+        + "</table>"
     )
 
-    # 스틸컷
+    # ─────────────────────────
+    # 스틸컷 (기존 로직 유지)
+    # ─────────────────────────
     still_divs = []
     for b in backdrops:
         p = img_url(b.get("file_path"), "w780")
-        if not p: continue
+        if not p:
+            continue
         still_divs.append(
             f'<div style="flex:0 0 49%;margin:0.5%;"><img src="{p}" alt="{title} 스틸컷" style="width:100%;height:auto;border-radius:10px;"></div>'
         )
     stills_html = (
-        '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;">' +
-        "".join(still_divs or ['<div style="padding:10px;">스틸컷 이미지가 없습니다.</div>']) +
-        '</div>'
+        '<div style="display:flex;flex-wrap:wrap;justify-content:space-between;">'
+        + "".join(still_divs or ['<div style="padding:10px;">스틸컷 이미지가 없습니다.</div>'])
+        + "</div>"
     )
 
-    # 평점·예고편
+    # ─────────────────────────
+    # 평점 박스 (기존 + 약간 정리)
+    # ─────────────────────────
     rating_lead = make_section_lead("평점 및 인기", title, year, genres_str, cert)
 
     vote_avg = post.get("vote_average", 0)
@@ -1052,95 +1200,86 @@ def build_html(post, cast_count=10, stills_count=8):
                 padding:30px;margin:20px 0;
                 box-shadow:0 4px 12px rgba(0,0,0,0.08);
                 text-align:center;">
-    <div style="font-size:20px;font-weight:bold;margin-bottom:12px;color:#333;">
+      <div style="font-size:20px;font-weight:bold;margin-bottom:12px;color:#333;">
         ⭐ 평점 & 📊 인기 지수
-    </div>
-    <div style="font-size:18px;color:#222;margin:8px 0;">
+      </div>
+      <div style="font-size:18px;color:#222;margin:8px 0;">
         <b style="color:#ff9800;">평균 평점:</b> {vote_avg:.1f}/10
-    </div>
-    <div style="font-size:16px;color:#555;margin:6px 0;">
+      </div>
+      <div style="font-size:16px;color:#555;margin:6px 0;">
         투표 참여자: {vote_count:,}명
-    </div>
-    <div style="font-size:18px;color:#0066cc;margin-top:10px;">
+      </div>
+      <div style="font-size:18px;color:#0066cc;margin-top:10px;">
         <b>인기 지수:</b> {popularity:.1f}
-    </div>
+      </div>
     </div>
     """
 
-
-   
-    # 🎬 예고편 영역
+    # ─────────────────────────
+    # 예고편 (TMDB + YouTube 검색 + 안내 문구)
+    # ─────────────────────────
     video_html = ""
     video_lead = make_section_lead("예고편", title, year, genres_str, cert)
 
-    # ✅ 안내 문구 후보 (항상 정의)
     video_notice_variants = [
         "아래 예고편 영상이 가끔 오류로 인해 다른 유튜브 영상이 보일 수도 있습니다. 참고 부탁드려요 😊",
         "간혹 아래 예고편 영상이 정상적으로 로드되지 않거나 다른 영상이 나올 수 있습니다. 양해 바랍니다 🙏",
         "예고편 영상이 불안정하게 표시될 수 있으며, 때때로 다른 영상이 뜰 수 있습니다. 참고하세요 ^^",
         "아래 동영상은 자동으로 불러오는 과정에서 오류가 생길 경우 엉뚱한 영상이 재생될 수도 있어요.",
         "예고편 영상이 제대로 안 보이거나 다른 영상으로 연결될 수 있습니다. 참고 부탁드립니다.",
-        "예고편 영상이 정상적으로 보이지 않거나 다른 영상이 표시될 수 있으니 양해 부탁드립니다.",
-        "아래 영상은 자동으로 가져오므로 가끔은 다른 영상이 나타날 수 있습니다. 미리 알려드려요!",
-        "예고편 로딩 중 오류가 생기면 엉뚱한 영상이 나올 수 있으니 감안하고 시청해주세요 ^^",
-        "유튜브 영상이 간혹 오류로 인해 다른 영상이 보일 수 있습니다. 이해 부탁드려요.",
-        "예고편 영상이 간혹 정상적으로 재생되지 않을 수 있어요. 다른 영상이 뜨면 무시해 주세요.",
-        "동영상 로딩 문제로 인해 다른 콘텐츠가 표시될 수 있습니다.",
-        "예고편 영상은 자동으로 연결되며, 오류 시 다른 영상이 표시될 수 있습니다.",
-        "아래 유튜브 영상이 잘못 연결될 수 있습니다. 감안하시고 봐주세요 ^^",
-        "영상 불러오기 오류가 생기면 예고편 대신 다른 영상이 나올 수도 있어요.",
-        "예고편 영상이 정상적으로 표시되지 않을 경우 다른 영상이 보일 수 있습니다.",
-        "동영상 불러오기 과정에서 오류가 발생하면 다른 영상이 표시될 수 있어요.",
-        "예고편 영상이 불안정하게 뜨거나 다른 영상이 재생될 수 있으니 참고 바랍니다.",
-        "간혹 예고편 대신 관련 없는 영상이 뜰 수 있습니다. 양해 부탁드립니다.",
-        "예고편 영상은 자동으로 불러오기 때문에 다른 영상이 나타날 수 있습니다.",
-        "예고편 영상이 오류로 인해 제대로 표시되지 않을 수도 있습니다."
     ]
 
-    # 1) TMDB 공식 예고편 먼저 확인
+    # 1) TMDB 공식 예고편
     videos = get_movie_videos(post["id"], lang=LANG, bearer=BEARER, api_key=API_KEY)
     yt = next((v for v in videos if v.get("site") == "YouTube" and v.get("type") in ("Trailer", "Teaser")), None)
     if yt:
         yt_key = yt.get("key")
-        video_html += f"<p>{video_lead}</p><iframe width='560' height='315' src='https://www.youtube.com/embed/{yt_key}' frameborder='0' allowfullscreen></iframe>"
+        video_html += (
+            f"<p>{video_lead}</p>"
+            f"<iframe width='560' height='315' src='https://www.youtube.com/embed/{yt_key}' "
+            f"frameborder='0' allowfullscreen></iframe>"
+        )
 
-    # 2) YouTube API 검색으로 보조 영상 가져오기
-    query = f"{title} 예고편"
-        # 2) YouTube API 검색 (한국어 → 영어 fallback)
+    # 2) YouTube 검색 보조
     yt_results = get_youtube_trailers(
         post.get("title") or "",
         post.get("original_title") or "",
-        max_results=2
+        max_results=2,
     )
 
     if yt_results:
-        # ✅ 안내문 출력 (항상 공식 영상 아래, 유튜브 검색 영상 위)
         video_notice = random.choice(video_notice_variants)
         video_html += f"<br /><p>{video_notice}</p>"
 
         for vid, vtitle in yt_results:
+            vtitle_esc = esc(vtitle)
             video_html += (
-                f"<p><b>{vtitle}</b></p>"
+                f"<p><b>{vtitle_esc}</b></p>"
                 f"<iframe width='560' height='315' src='https://www.youtube.com/embed/{vid}' "
                 f"frameborder='0' allowfullscreen></iframe><br>"
             )
 
-
-    # 리뷰 (없으면 섹션 생략)
+    # ─────────────────────────
+    # 리뷰 (기존 로직 유지)
+    # ─────────────────────────
     reviews = get_movie_reviews(post["id"], lang=LANG, bearer=BEARER, api_key=API_KEY)
     reviews_html = ""
     if reviews:
         review_blocks = []
         for r in reviews[:5]:
-            auth = html.escape(r.get("author",""))
-            rating = r.get("author_details",{}).get("rating")
-            content = html.escape((r.get("content","") or "").strip())
+            auth = html.escape(r.get("author", ""))
+            rating = r.get("author_details", {}).get("rating")
+            content = html.escape((r.get("content", "") or "").strip())
             if len(content) > 300:
                 content = content[:300] + "..."
-            review_blocks.append(f"<div style='margin:10px 0;'><b>{auth}</b> ({rating if rating else 'N/A'}점)<br>{content}</div>")
-        reviews_html = "<br /><br /><br />\n<h2>"+title+" 베스트 리뷰</h2>" + "".join(review_blocks)
+            review_blocks.append(
+                f"<div style='margin:10px 0;'><b>{auth}</b> ({rating if rating else 'N/A'}점)<br>{content}</div>"
+            )
+        reviews_html = "<br /><br /><br />\n<h2>" + title + " 베스트 리뷰</h2>" + "".join(review_blocks)
 
-    # 추천 영화
+    # ─────────────────────────
+    # 추천 영화 (기존 로직 유지)
+    # ─────────────────────────
     recs = get_movie_recommendations(post["id"], lang=LANG, bearer=BEARER, api_key=API_KEY)[:6]
     rec_html = ""
     if recs:
@@ -1151,50 +1290,43 @@ def build_html(post, cast_count=10, stills_count=8):
             poster2 = img_url(m.get("poster_path"), "w185")
             poster_tag = f"<img src='{poster2}' style='width:100%;border-radius:10px;'>" if poster2 else ""
 
-            # 🔗 블로그스팟 검색 링크 만들기
-            # "이치, 더 킬러 (2001)" → URL 인코딩된 쿼리 문자열
             query = urllib.parse.quote(f"{mtitle} ({year2})")
             search_url = f"https://movie.appsos.kr/search?q={query}"
 
-            # 카드 HTML에 링크 적용 (포스터 + 제목 모두 클릭 가능)
             cards.append(
-            f"<div style='flex:0 0 30%;margin:1%;text-align:center;'>"
-            f"<a href='{search_url}' target='_blank' style='color:#000; !important; text-decoration:none;'>{poster_tag}<br>{mtitle} ({year2})</a>"
-            "</div>"
+                f"<div style='flex:0 0 30%;margin:1%;text-align:center;'>"
+                f"<a href='{search_url}' target='_blank' style='color:#000 !important; text-decoration:none;'>"
+                f"{poster_tag}<br>{mtitle} ({year2})</a>"
+                "</div>"
             )
 
-
-        # ✅ 리드 멘트 추가
         rec_lead = make_section_lead("추천 영화", title, year, genres_str, cert)
-
         rec_html = (
             "<br /><br /><br />\n<h2>비슷한 장르의 추천 영화</h2>"
             f"<p>{rec_lead}</p>"
             "<div style='display:flex;flex-wrap:wrap;'>"
-            + "".join(cards) +
-            "</div>"
+            + "".join(cards)
+            + "</div>"
         )
 
-
-
+    # ─────────────────────────
+    # 마무리 + 관련글 박스
+    # ─────────────────────────
     outro_6 = make_outro_6(title, year, genres_str, director_names, keywords)
-
-     # ✅ 블로그 추천글 4개 추가
     related_box = get_related_posts(BLOG_ID, count=4)
-
-    # 최종 HTML (전체 래퍼로 감싸기)
 
     blog_title1 = f"영화 {title} ({year}) 줄거리 출연진 주인공 예고편"
     hashtags = make_hashtags_from_title(blog_title1)
 
-
+    # ─────────────────────────
+    # 최종 HTML
+    # ─────────────────────────
     html_out = f"""
 
 <p>{intro_6}</p>
 <!--more-->   <!-- ✅ 점프 브레이크 추가 --><br />
 {"<p><img src='"+backdrop+"' style='width:100%;height:auto;border-radius:12px;'></p>" if backdrop else ""}
-{"<p><i>"+html.escape(tagline)+"</i></p>" if tagline else ""}
-
+{"<p><i>"+tagline+"</i></p>" if tagline else ""}
 
 <br /><br /><br />
 <h2>영화 {title} 줄거리</h2>
@@ -1219,7 +1351,7 @@ def build_html(post, cast_count=10, stills_count=8):
 
 <br /><br /><br />
 <h2>영화 {title} 출연진</h2>
-<p>{make_section_lead("출연진", title, year, genres_str, cert, extras={"cast_top": cast_names})}</p>
+<p>{make_section_lead("출연진", title, year, genres_str, cert, extras={{"cast_top": cast_names}})}</p>
 
 {cast_table}
 <br />
@@ -1253,14 +1385,13 @@ def build_html(post, cast_count=10, stills_count=8):
 <br /><br />
 <p>{outro_6}</p>
 
-{related_box}   <!-- ✅ 여기서 추천글 박스 삽입 -->
+{related_box}
 
 <p style="font-size:12px;color:#666;">
 본 콘텐츠는 <a href="https://www.themoviedb.org/" target="_blank" style="color:#666;text-decoration:underline;">TMDB</a> 데이터를 기반으로 작성되었습니다.
 </p>
-
-
 """
+
     return textwrap.dedent(html_out).strip()
 
 # ===============================
@@ -1338,13 +1469,10 @@ def main():
                 # 2) HTML 구성
                 html_out = build_html(post, cast_count=CAST_COUNT, stills_count=STILLS_COUNT)
 
-                # 3) 포스트 제목 (로테이션 적용)
+                # 3) 포스트 제목
                 title = (post.get("title") or post.get("original_title") or f"movie_{movie_id}")
                 year = (post.get("release_date") or "")[:4]
-                
-                # ✅ 로테이션 제목 생성 함수 호출
-                blog_title = get_rotating_title(ws, title, year)
-
+                blog_title = f"영화 {title} ({year}) 줄거리 출연진 주인공 예고편"
 
                 # 4) Blogger 발행
                 genres_list = [g.get("name","") for g in post.get("genres",[]) if g.get("name")]
@@ -1386,9 +1514,6 @@ if __name__ == "__main__":
         if n < POST_COUNT - 1 and POST_DELAY_MIN > 0:
             print(f"⏳ {POST_DELAY_MIN}분 대기 후 다음 포스팅...")
             time.sleep(POST_DELAY_MIN * 60)
-
-
-
 
 
 
