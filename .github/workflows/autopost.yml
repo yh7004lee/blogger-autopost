@@ -15,6 +15,9 @@ jobs:
   autopost:
     runs-on: windows-latest
 
+    env:
+      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
