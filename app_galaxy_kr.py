@@ -524,6 +524,43 @@ def search_google_play_apps(keyword, limit=15):
 
 
 # =========================
+# 이미지 파일 크기 확인 (5KB 미만 제외)
+# =========================
+def check_image_size(url, timeout=5):
+    """이미지 URL 의 파일 크기 확인 (바이트 단위)"""
+    try:
+        # Content-Length 헤더로 크기만 확인 (다운로드하지 않음)
+        response = requests.head(url, timeout=timeout, allow_redirects=True)
+        size_bytes = response.headers.get('Content-Length')
+        
+        if size_bytes:
+            size_bytes = int(size_bytes)
+            size_kb = size_bytes / 1024
+            
+            if size_kb < 5:
+                print(f"[제외] 파일 크기 필터: {size_kb:.2f}KB ({size_bytes}바이트)")
+                return False
+            
+            return True
+        
+        # Content-Length 없으면 실제로 다운로드해서 확인
+        response = requests.get(url, timeout=timeout, stream=True)
+        size_bytes = len(response.content)
+        size_kb = size_bytes / 1024
+        
+        if size_kb < 5:
+            print(f"[제외] 파일 크기 필터: {size_kb:.2f}KB ({size_bytes}바이트)")
+            return False
+        
+        return True
+        
+    except Exception as e:
+        print(f"[크기 확인 실패] {url[:80]}... → {e}")
+        # 실패하면 제외 (안전상)
+        return False
+
+
+# =========================
 # 구글플레이 스토어 앱 상세 정보 수집
 # =========================
 def get_play_app_info(app_id):
@@ -561,7 +598,7 @@ def get_play_app_info(app_id):
         app_name = h1.text.strip()
         print(f"[앱 이름] {app_name}")
         
-        # ========== [이미지 수집 - 강화된 필터링] ==========
+        # ========== [이미지 수집 - 강화된 필터링 + 파일 크기 확인] ==========
         html_img_urls = []
         cc = 1
         downloaded = set()
@@ -591,11 +628,12 @@ def get_play_app_info(app_id):
                 alt_text = (img_el.get_attribute("alt") or "").strip()
                 title_text = (img_el.get_attribute("title") or "").strip()
                 
-                # 1.-alt/title 기반 필터링
+                # 1. alt/title 기반 필터링
                 # 앱 아이콘, 연령제한 (ESRB), 콘텐츠 등급 제외
                 exclude_keywords = [
                     "아이콘 이미지", "콘텐츠 등급", "ESRB", "age rating", "내용 평가",
-                    "아이콘", "app icon", "로고", "logo", "버전", "version"
+                    "아이콘", "app icon", "로고", "logo", "버전", "version",
+                    "rating", "별점", "점수"
                 ]
                 if any(kw in alt_text.lower() or kw in title_text.lower() for kw in exclude_keywords):
                     print(f"[제외] alt/title 필터: {alt_text} / {title_text}")
@@ -603,33 +641,8 @@ def get_play_app_info(app_id):
                 
                 # 2. src 기반 필터링 (파일명/경로 분석)
                 src = img_el.get_attribute("src") or ""
-                if any(kw in src.lower() for kw in ["icon", "logo", "badge", "rating", "esrb", "age"]):
+                if any(kw in src.lower() for kw in ["icon", "logo", "badge", "rating", "esrb", "age", "small"]):
                     print(f"[제외] src 필터: {src}")
-                    continue
-                
-                # 3. srcset/data-srcset 기반 크기 필터링
-                srcset = img_el.get_attribute("data-srcset") or img_el.get_attribute("srcset") or ""
-                min_width = 999999
-                if srcset and "," in srcset:
-                    try:
-                        parts = srcset.split(",")
-                        for part in parts:
-                            part = part.strip()
-                            if " " in part:
-                                width_str = part.split(" ")[0]
-                                if width_str.isdigit():
-                                    min_width = min(min_width, int(width_str))
-                            elif "=" in part:
-                                # 예: "url 100w" 형태
-                                width_str = part.split("=")[-1].replace("w", "").replace("x", "")
-                                if width_str.isdigit():
-                                    min_width = min(min_width, int(width_str))
-                    except:
-                        pass
-                
-                # 150px 미만 이미지 제외 (연령제한/작은 이미지 필터)
-                if min_width < 150:
-                    print(f"[제외] 사이즈 필터: {min_width}px")
                     continue
                 
                 possible_urls = [
@@ -661,10 +674,14 @@ def get_play_app_info(app_id):
                 
                 if real_url in downloaded:
                     continue
-                downloaded.add(real_url)
                 
+                # 3. **파일 크기 확인 (5KB 미만 제외)**
+                if not check_image_size(real_url):
+                    continue
+                
+                downloaded.add(real_url)
                 html_img_urls.append(real_url)
-                print(f"[수집] 이미지 {cc}: {real_url[:80]}...")
+                print(f"[수집] 이미지 {cc}: {real_url[:80]}... (크기 확인 통과)")
                 cc += 1
                 
             except Exception as e:
@@ -829,7 +846,7 @@ def build_ending_block(title: str, keyword: str) -> str:
             f"다양한 {keyword} 앱들을 살펴본 만큼 스마트폰 활용이 훨씬 풍성해지길 바랍니다."
         ],
         [
-            f"각 앱의 기능과 장点を 꼼꼼히 다뤘으니 {keyword} 앱 선택에 참고하시기 바랍니다.",
+            f"각 앱의 기능과 장점을 꼼꼼히 다뤘으니 {keyword} 앱 선택에 참고하시기 바랍니다.",
             f"앱들의 특징과 장단점을 비교했으니 {title} 선택에 큰 도움이 되실 겁니다.",
             f"이번 정리를 바탕으로 본인에게 맞는 {keyword} 앱을 쉽게 찾으시길 바랍니다.",
             f"필요할 때 바로 활용할 수 있도록 핵심 정보를 모아 두었으니 꼭 참고해 보세요.",
