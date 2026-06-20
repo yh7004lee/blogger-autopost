@@ -27,10 +27,12 @@ sys.stderr.reconfigure(encoding="utf-8")
 # 🔑 AI 키 + 클라이언트 (5차 시도 폴백)
 # ===============================
 # 환경변수에서 API 키를 읽어오도록 설계 (원하면 직접 문자열로 넣어도 됨)
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
+OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
+GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
+GROQ_API_KEY = secrets.get("GROQ_API_KEY", "")
+CEREBRAS_API_KEY = secrets.get("CEREBRAS_API_KEY", "")
 
 # OpenAI
 try:
