@@ -27,7 +27,15 @@ sys.stderr.reconfigure(encoding="utf-8")
 # 🔑 AI 키 + 클라이언트 (5차 시도 폴백)
 # ===============================
 # 환경변수에서 API 키를 읽어오도록 설계 (원하면 직접 문자열로 넣어도 됨)
+API_KEYS_JSON = os.getenv("API_KEYS_JSON")
 
+if not API_KEYS_JSON:
+    raise RuntimeError("API_KEYS_JSON 환경변수가 없습니다. GitHub Secrets 를 확인하세요.")
+
+try:
+    secrets = json.loads(API_KEYS_JSON)
+except Exception as e:
+    raise RuntimeError(f"API_KEYS_JSON 파싱 실패: {e}")
 OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
