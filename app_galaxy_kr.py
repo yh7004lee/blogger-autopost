@@ -274,11 +274,11 @@ def make_thumb_with_logging(ws, row_idx, save_path, title):
 
 
 # =========================
-# 제목/라벨 생성 (중복 제거)
+# 제목/라벨 생성 (중복 제거 + 띄어쓰기 수정)
 # =========================
 def make_post_title(keyword: str) -> str:
-    # 수정: "안드로이드 안드로이드앱" → "안드로이드 앱" (중복 제거)
-    front_choices = ["안드로이드 앱", "안드로이드 어플", "안드로이드모바일", "스마트안드로이드"]
+    # 수정: "안드로이드모바일" → "안드로이드 모바일" (띄어쓰기 추가)
+    front_choices = ["안드로이드 앱", "안드로이드 어플", "안드로이드 모바일", "스마트 안드로이드"]
     back_choices = ["앱 추천 어플", "어플 추천 앱", "어플 앱스토어", "앱스토어 어플", "구글플레이 앱"]
     return f"{random.choice(front_choices)} {keyword} {random.choice(back_choices)}"
 
@@ -524,7 +524,7 @@ def search_google_play_apps(keyword, limit=15):
 
 
 # =========================
-# 이미지 파일 크기 확인 (5KB 미만 제외)
+# 이미지 파일 크기 확인 (10KB 미만 제외)
 # =========================
 def check_image_size(url, timeout=5):
     """이미지 URL 의 파일 크기 확인 (바이트 단위)"""
@@ -537,7 +537,7 @@ def check_image_size(url, timeout=5):
             size_bytes = int(size_bytes)
             size_kb = size_bytes / 1024
             
-            if size_kb < 5:
+            if size_kb < 10:  # 10KB 미만 제외 (수정: 5 → 10)
                 print(f"[제외] 파일 크기 필터: {size_kb:.2f}KB ({size_bytes}바이트)")
                 return False
             
@@ -548,7 +548,7 @@ def check_image_size(url, timeout=5):
         size_bytes = len(response.content)
         size_kb = size_bytes / 1024
         
-        if size_kb < 5:
+        if size_kb < 10:  # 10KB 미만 제외
             print(f"[제외] 파일 크기 필터: {size_kb:.2f}KB ({size_bytes}바이트)")
             return False
         
@@ -675,7 +675,7 @@ def get_play_app_info(app_id):
                 if real_url in downloaded:
                     continue
                 
-                # 3. **파일 크기 확인 (5KB 미만 제외)**
+                # 3. **파일 크기 확인 (10KB 미만 제외)**
                 if not check_image_size(real_url):
                     continue
                 
