@@ -1,4 +1,4 @@
-name: Movie Autopost
+name: 03 Movie Autopost
 
 on:
   schedule:
