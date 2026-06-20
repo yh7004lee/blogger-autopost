@@ -1418,7 +1418,7 @@ def build_html(post, cast_count=10, stills_count=8):
 
 <br /><br /><br />
 <h2>영화 {title} 출연진</h2>
-<p>{make_section_lead("출연진", title, year, genres_str, cert, extras={{"cast_top": cast_names}})}</p>
+<p>{make_section_lead("출연진", title, year, genres_str, cert, extras={"cast_top": cast_names})}</p>
 
 {cast_table}
 <br />
