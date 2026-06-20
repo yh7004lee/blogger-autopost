@@ -334,17 +334,70 @@ def get_movie_overview(movie_id, bearer=None, api_key=None):
 # ===============================
 # 공통 유틸
 def tmdb_get(path, params=None, bearer=None, api_key=None):
+
     url = f"{TMDB_V3_BASE}{path}"
-    headers = {"Accept": "application/json"}
+
+    headers = {
+        "Accept": "application/json"
+    }
+
     if bearer:
         headers["Authorization"] = f"Bearer {bearer}"
+
     if params is None:
         params = {}
+
     if api_key and "api_key" not in params and not bearer:
         params["api_key"] = api_key
-    r = requests.get(url, headers=headers, params=params, timeout=20)
-    r.raise_for_status()
-    return r.json()
+
+    print("\n" + "=" * 80)
+    print("TMDB DEBUG")
+    print("=" * 80)
+    print("URL :", url)
+    print("PARAMS :", params)
+    print("BEARER :", "사용중" if bearer else "미사용")
+    print("API_KEY :", "사용중" if api_key else "미사용")
+    print("=" * 80)
+
+    try:
+
+        r = requests.get(
+            url,
+            headers=headers,
+            params=params,
+            timeout=30
+        )
+
+        print("STATUS :", r.status_code)
+
+        print("\n----- RESPONSE HEADERS -----")
+        for k, v in r.headers.items():
+            print(f"{k}: {v}")
+
+        print("\n----- RESPONSE BODY -----")
+        print(r.text[:5000])
+
+        print("\n----- FINAL URL -----")
+        print(r.url)
+
+        r.raise_for_status()
+
+        return r.json()
+
+    except Exception as e:
+
+        print("\n***** TMDB ERROR *****")
+        print(type(e).__name__)
+        print(str(e))
+
+        if hasattr(e, "response") and e.response is not None:
+            print("\n----- ERROR STATUS -----")
+            print(e.response.status_code)
+
+            print("\n----- ERROR BODY -----")
+            print(e.response.text[:5000])
+
+        raise
 
 def img_url(path, size="w780"):
     if not path:
