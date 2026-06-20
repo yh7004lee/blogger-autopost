@@ -18,7 +18,11 @@ import json
 from googleapiclient.discovery import build
 from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
-
+# OpenAI
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
 
 sys.stdout.reconfigure(encoding="utf-8")
 sys.stderr.reconfigure(encoding="utf-8")
