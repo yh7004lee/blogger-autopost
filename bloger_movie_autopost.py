@@ -1162,31 +1162,39 @@ def build_html(post, cast_count=10, stills_count=8):
     if not cert and adult_flag:
         cert = "성인 컨텐츠"
 
-    # ─────────────────────────
-    # 키워드 생성 (중복/타입 정리 버전)
+        # ─────────────────────────
+    # 키워드 생성 (문자열만, 중복 제거)
     # ─────────────────────────
     base_keywords = []
+
+    # 제목에서 단어 추출
     for w in (title.replace(":", " ").replace("-", " ").split()):
         if len(w) > 1:
             base_keywords.append(str(w))
 
+    # 장르 / 감독 / 배우 이름
     for g in genres_list:
-        if g:
-            base_keywords.append(str(g))
-    for d in director_names[:2]:
-        if d:
-            base_keywords.append(str(d))
-    for c in cast_names[:3]:
-        if c:
-            base_keywords.append(str(c))
+        if isinstance(g, str) and g:
+            base_keywords.append(g)
 
+    for d in director_names[:2]:
+        if isinstance(d, str) and d:
+            base_keywords.append(d)
+
+    for c in cast_names[:3]:
+        if isinstance(c, str) and c:
+            base_keywords.append(c)
+
+    # 연도 / 관람등급
     if year:
         base_keywords.append(str(year))
     if cert:
         base_keywords.append(str(cert))
 
+    # 고정 키워드
     base_keywords += ["리뷰", "평점", "출연진", "예고편", "스틸컷", "추천영화", "관람포인트", "해석"]
 
+    # 중복 제거
     seen = set()
     keywords = []
     for k in base_keywords:
