@@ -584,7 +584,7 @@ try:
 </p>
 <span></span><br />
 
-<br /><h2 data-ke-size='size26' style="border-left: 8px solid #1a2a40; padding-left: 10px;">{keyword} 주요 정보 요약</h2><br />
+<br /><h2 data-ke-size='size26'>{keyword} 주요 정보 요약</h2><br />
 <p data-ke-size='size18'>정책 검토 시 기준이 되는 <b>{keyword}</b>의 핵심 요약 데이터 표입니다.</p>
 {summary_table_html}
 <br />
