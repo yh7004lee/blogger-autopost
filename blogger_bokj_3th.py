@@ -75,7 +75,7 @@ try:
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    SHEET_ID = os.getenv("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
+    ("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
     ws = gc.open_by_key(SHEET_ID).sheet1
     log_step("1단계: Google Sheets 인증 성공")
 except Exception as e:
@@ -270,15 +270,26 @@ log_step("5단계: Blogger 인증 성공")
 # ================================
 # 복지 데이터 가져오기
 # ================================
+# ================================
+# 복지 데이터 가져오기 (timeout + 에러 핸들링 추가)
+# ================================
 def fetch_welfare_info(wlfareInfoId):
     url = f"https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId={wlfareInfoId}&wlfareInfoReldBztpCd=01"
-    resp = requests.get(url)
-    resp.encoding = "utf-8"
-    html = resp.text
-    outer_match = re.search(r'initParameter\((\{.*?\})\);', html, re.S)
-    if not outer_match:
-        raise ValueError("initParameter JSON을 찾지 못했습니다.")
-    return json.loads(json.loads(outer_match.group(1))["initValue"]["dmWlfareInfo"])
+    
+    try:
+        resp = requests.get(url, timeout=20)  # 20 초 타임아웃 추가
+        resp.encoding = "utf-8"
+        html = resp.text
+        outer_match = re.search(r'initParameter\((\{.*?\})\);', html, re.S)
+        if not outer_match:
+            raise ValueError("initParameter JSON 을 찾지 못했습니다.")
+        return json.loads(json.loads(outer_match.group(1))["initValue"]["dmWlfareInfo"])
+    except requests.exceptions.ConnectTimeout:
+        log_step(f"복지로 연결 시간 초과 (wlfareInfoId={wlfareInfoId})")
+        raise RuntimeError(f"복지로 연결 실패: 시간 초과 (wlfareInfoId={wlfareInfoId})")
+    except requests.exceptions.RequestException as e:
+        log_step(f"복지로 요청 오류 (wlfareInfoId={wlfareInfoId}): {e}")
+        raise RuntimeError(f"복지로 연결 실패: {e}")
 
 def clean_html(raw_html):
     return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
