@@ -8,6 +8,7 @@ import textwrap
 import traceback
 import pickle
 import requests
+import urllib.request
 from urllib.parse import urlparse, parse_qs
 
 from bs4 import BeautifulSoup
@@ -56,7 +57,7 @@ OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
 SHEET_ID = "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs"
-BLOG_ID = os.getenv("BLOG_ID", "5711594645656469839")
+BLOG_ID = "4737456424227083027"  # 고정
 
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 genai_client = None
@@ -83,6 +84,7 @@ log_step("1 단계: Google Sheets 인증 성공")
 ASSETS_BG_DIR = "assets/backgrounds"
 ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
 THUMB_DIR = "thumbnails"
+IMAGE_SAVE_DIR = "car_images"
 
 def get_blogger_service():
     if not os.path.exists("blogger_token.json"):
@@ -216,6 +218,123 @@ def sanitize_filename(filename: str) -> str:
     filename = filename.strip('_ ').strip()
     return filename
 
+async def close_popup(page):
+    try:
+        await page.keyboard.press("Escape")
+        await page.wait_for_timeout(200)
+    except Exception:
+        pass
+    try:
+        close_btn = page.locator("button.civ__close, .civ__close_btn, button[class*='close']").first
+        if await close_btn.count() > 0:
+            await close_btn.click(timeout=500)
+            await page.wait_for_timeout(200)
+    except Exception:
+        pass
+
+async def get_preview_big_image_url(page):
+    selectors = [
+        "body > div.civ.civ_ko.civ__full_screen img",
+        "body > div.civ.civ_ko.civ__full_screen img[src]",
+        "#root img",
+        "img[alt]",
+    ]
+    for sel in selectors:
+        try:
+            img = page.locator(sel).first
+            await img.wait_for(state="visible", timeout=800)
+            current_src = await img.evaluate("el => el.currentSrc || ''")
+            src = await img.get_attribute("src")
+            srcset = await img.get_attribute("srcset")
+            data_src = await img.get_attribute("data-src")
+            data_original = await img.get_attribute("data-original")
+            data_lazy_src = await img.get_attribute("data-lazy-src")
+            data_srcset = await img.get_attribute("data-srcset")
+            candidates = [
+                current_src,
+                pick_best_from_srcset(srcset),
+                pick_best_from_srcset(data_srcset),
+                data_original,
+                data_src,
+                data_lazy_src,
+                src
+            ]
+            for c in candidates:
+                c = normalize_url(c)
+                if c and is_valid_car_image_url(c) and not is_probably_thumbnail(c):
+                    try:
+                        size = await img.evaluate("""
+                            el => ({
+                                nw: el.naturalWidth || 0,
+                                nh: el.naturalHeight || 0
+                            })
+                        """)
+                        if max(size["nw"], size["nh"]) >= 800:
+                            return c
+                    except Exception:
+                        return c
+        except Exception:
+            continue
+    return None
+
+async def extract_images_from_section(page, section_name, section_index, max_count, photo_url):
+    extracted_urls = []
+    try:
+        await page.goto(photo_url, wait_until="domcontentloaded")
+        await page.wait_for_timeout(800)
+        if section_index == 2:
+            try:
+                tab_buttons = page.locator("div.tab_menu > ul > li, .tab_menu li, button.tab")
+                tab_count = await tab_buttons.count()
+                if tab_count >= 2:
+                    interior_tab = tab_buttons.nth(1)
+                    await interior_tab.click(timeout=800)
+                    await page.wait_for_timeout(800)
+            except Exception:
+                pass
+        section_div = page.locator(f"#root > section > div.content_wrap > div > div > div:nth-child({section_index})")
+        await section_div.wait_for(state="visible", timeout=1500)
+        await page.wait_for_timeout(300)
+        base_selector = f"#root > section > div.content_wrap > div > div > div:nth-child({section_index}) > div.photo_list_wrap > div > li"
+        li_elements = await page.locator(base_selector).all()
+        li_count = len(li_elements)
+        if li_count == 0:
+            return extracted_urls
+        actual_max = min(li_count, max_count)
+        extracted_count = 0
+        for i in range(actual_max):
+            try:
+                img_locator = page.locator(f"{base_selector}:nth-child({i+1}) > a > img")
+                await img_locator.wait_for(state="visible", timeout=1500)
+                await img_locator.click(timeout=800)
+                await page.wait_for_timeout(300)
+                for attempt in range(30):
+                    try:
+                        big_url = await get_preview_big_image_url(page)
+                        if big_url and is_valid_car_image_url(big_url) and not is_probably_thumbnail(big_url):
+                            if big_url not in extracted_urls:
+                                ext = get_ext_from_url(big_url)
+                                file_name = f"{section_name}_photo_{extracted_count + 1}{ext}"
+                                file_path = os.path.join(IMAGE_SAVE_DIR, file_name)
+                                urllib.request.urlretrieve(big_url, file_path)
+                                extracted_urls.append(big_url)
+                                extracted_count += 1
+                                break
+                    except Exception:
+                        pass
+                    break
+                await close_popup(page)
+                await page.wait_for_timeout(300)
+            except TimeoutError:
+                await close_popup(page)
+                break
+            except Exception:
+                await close_popup(page)
+                break
+    except Exception:
+        pass
+    return extracted_urls
+
 async def main():
     global target_row
     target_row, row = None, None
@@ -245,11 +364,17 @@ async def main():
 
     summary_items = {}
     extracted_specs = []
+    exterior_urls = []
+    interior_urls = []
+    web_image_urls = []
+
+    os.makedirs(IMAGE_SAVE_DIR, exist_ok=True)
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
+        # 1. 정보 탭
         await page.goto(info_url, wait_until="domcontentloaded")
         await page.wait_for_timeout(2000)
 
@@ -291,6 +416,7 @@ async def main():
             if grid_data.get("배기량"):
                 summary_items["🧪 엔진 배기량"] = grid_data["배기량"]
 
+        # 2. 제원 탭
         await page.goto(spec_url, wait_until="domcontentloaded")
         await page.wait_for_timeout(3000)
 
@@ -339,6 +465,19 @@ async def main():
             except Exception:
                 pass
 
+        # 3. 포토 탭 – 이미지 추출
+        MAX_IMAGES_PER_SECTION = 10
+        try:
+            exterior_urls = await extract_images_from_section(page, "익스테리어", 1, MAX_IMAGES_PER_SECTION, photo_url)
+        except Exception:
+            pass
+        try:
+            interior_urls = await extract_images_from_section(page, "인테리어", 2, MAX_IMAGES_PER_SECTION, photo_url)
+        except Exception:
+            pass
+
+        web_image_urls = exterior_urls + interior_urls
+
         await browser.close()
 
     if not summary_items:
@@ -348,12 +487,31 @@ async def main():
 
     title_for_post = f"{car_name} 자동차 상세정보"
 
-    # 이미지 없이 텍스트만 사용
-    first_img_html = f"""
-    <div style="text-align:center; margin:30px 0 40px 0; width:100%;">
-        <p style="font-size:18px; color:#222; font-weight:bold;">▲ {car_name} 자동차 상세정보</p>
-    </div>
-    """
+    # 이미지 갤러리 HTML
+    first_img_html = ""
+    if len(web_image_urls) > 0:
+        first_img_html = f"""
+        <div style="text-align: center; margin: 30px 0 40px 0; width: 100%;">
+            <img src="{web_image_urls[0]}" style="width: 100%; max-width: 100%; height: auto; border-radius: 4px;" alt="{car_name}">
+            <p style="font-size: 13px; color: #777; margin-top: 10px; font-weight: bold;">▲ {car_name} 전면부 메인 디자인 공식 포토</p>
+        </div>
+        """
+
+    gallery_exterior_html = ""
+    for i, url in enumerate(exterior_urls, start=1):
+        gallery_exterior_html += f"""
+        <div style="text-align: center; margin-bottom: 35px; width: 100%;">
+            <img src="{url}" style="width: 100%; max-width: 100%; height: auto; border-radius: 4px;" alt="{car_name} 익스테리어">
+            <p style="font-size: 13px; color: #666; margin-top: 10px; font-weight: bold;">▲ {car_name} 외관 디자인 사진 {i}</p>
+        </div>"""
+
+    gallery_interior_html = ""
+    for i, url in enumerate(interior_urls, start=1):
+        gallery_interior_html += f"""
+        <div style="text-align: center; margin-bottom: 35px; width: 100%;">
+            <img src="{url}" style="width: 100%; max-width: 100%; height: auto; border-radius: 4px;" alt="{car_name} 인테리어">
+            <p style="font-size: 13px; color: #666; margin-top: 10px; font-weight: bold;">▲ {car_name} 실내 인테리어 사진 {i}</p>
+        </div>"""
 
     summary_table_rows = ""
     for title, value in summary_items.items():
@@ -425,10 +583,34 @@ async def main():
     <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">2. {car_name} 자동차 상세 제원 데이터 종합 테이블</h2>
     <p style="font-size:15px; color:#555; margin-bottom:10px;">기계적인 엔진 스펙 사양 정보와 트림별 치수 규격을 체계화한 정밀 제원표입니다.</p>
     {spec_table_html}
-    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">3. {car_name} 자동차 총평</h2>
+    <br><br>
+    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; text-align: center;">
+        <span style="font-size: 20px; font-weight: bold;">
+            🔗 <a href="{info_url}" target="_blank" style="text-decoration: none; color: #1a2a40;">더 자세한 내용은 여기를 클릭하세요!!</a>
+        </span>
+    </div>
+    <br><br>
+    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">3. {car_name} 자동차 실물 디자인 외관 사진</h2>
+    <p style="font-size:15px; color:#555; margin-bottom:15px;">외관의 강인한 디자인과 디테일을 생생하게 확인할 수 있는 {car_name} 공식 익스테리어 포토 갤러리입니다.</p>
+    <div style="margin: 20px 0; width: 100%;">
+        {gallery_exterior_html if exterior_urls else "<p>익스테리어 이미지를 불러오지 못했습니다.</p>"}
+    </div>
+    <br><br>
+    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">4. {car_name} 자동차 실물 디자인 내부 사진</h2>
+    <p style="font-size:15px; color:#555; margin-bottom:15px;">실내의 고급스러운 인테리어와 편의사양을 자세히 살펴볼 수 있는 {car_name} 공식 인테리어 포토 갤러리입니다.</p>
+    <div style="margin: 20px 0; width: 100%;">
+        {gallery_interior_html if interior_urls else "<p>인테리어 이미지를 불러오지 못했습니다.</p>"}
+    </div>
+    <br><br>
+    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">5. {car_name} 자동차 총평</h2>
     <p style="font-size:15px; color:#555; margin-bottom:15px;"></p>
     {ai_review_html}
 </div>
+<br><br>
+<div style="margin-top: 30px; font-size: 14px; color: #888;">
+    {' '.join(['#' + word for word in title_for_post.split()])}
+</div>
+<br><br>
 </body>
 </html>"""
 
@@ -452,6 +634,7 @@ async def main():
     ws.update_cell(target_row, 15, res["url"])
     log_step(f"포스팅 성공: {res['url']}")
     print(f"[완료] 블로그 포스팅: {res['url']}")
+    print(f"📸 이미지: 익스테리어 {len(exterior_urls)}개 + 인테리어 {len(interior_urls)}개 = 총 {len(web_image_urls)}개")
 
 if __name__ == "__main__":
     try:
