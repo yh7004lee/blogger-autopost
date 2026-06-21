@@ -542,7 +542,7 @@ try:
     safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", keyword)
 
     os.makedirs(THUMB_DIR, exist_ok=True)
-    thumb_path = os.path.join(THUMBDIR, f"{safe_keyword}.png")
+    thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
     make_thumb(thumb_path, title)
     log_step("6단계: 썸네일(WebP 변환포함) 생성 성공")
     
