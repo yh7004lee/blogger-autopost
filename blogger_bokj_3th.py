@@ -132,18 +132,17 @@ target_row, my_url = None, None
 rows = ws.get_all_values()
 
 for i, row in enumerate(rows[1:], start=2):
-    url_cell = row[4].strip() if len(row) > 4 and row[4] else ""
-    status_cell = row[6].strip() if len(row) > 6 and row[6] else ""
+    url_cell = row[4].strip() if len(row) > 4 and row[4] else ""   # E열
+    status_cell = row[6].strip() if len(row) > 6 and row[6] else ""  # G열
+
     debug(f"검사중 {i}행 -> URL='{url_cell}', STATUS='{status_cell}'")
 
     if url_cell and status_cell != "완":
         my_url, target_row = url_cell, i
-        debug(f"선택된 행: {target_row}, URL: {my_url}")
         break
 
 if not my_url:
     log_step("2단계: 처리할 URL 없음 (모든 행 완료)")
-    debug("URL을 찾지 못했음. E열 값과 G열 값, 그리고 탭 이름을 확인하세요.")
     sys.exit(0)
 
 log_step(f"2단계: URL 추출 성공 ({my_url})")
