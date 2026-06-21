@@ -33,14 +33,39 @@ def log_step(msg: str):
 # ================================
 # OpenAI 키 로드 (선택)
 # ================================
-OPENAI_API_KEY = ""
-if os.path.exists("openai.json"):
-    with open("openai.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-        OPENAI_API_KEY = data.get("api_key", "").strip()
-if not OPENAI_API_KEY:
-    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
-client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+# ================================
+# API 키 - GitHub Secrets 에서 읽기 (기존 OpenAI 키 로드 부분 전체 교체)
+# ================================
+API_KEYS_JSON = os.getenv("API_KEYS_JSON")
+
+if not API_KEYS_JSON:
+    raise RuntimeError("API_KEYS_JSON 환경변수가 없습니다. GitHub Secrets 를 확인하세요.")
+
+try:
+    secrets = json.loads(API_KEYS_JSON)
+except Exception as e:
+    raise RuntimeError(f"API_KEYS_JSON 파싱 실패: {e}")
+
+# 키 가져오기
+OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
+OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
+GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
+GROQ_API_KEY = secrets.get("GROQ_API_KEY", "")
+CEREBRAS_API_KEY = secrets.get("CEREBRAS_API_KEY", "")
+SHEET_ID = secrets.get("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")  # 기존 SHEET_ID 로 유지
+DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
+GCS_API_KEY = secrets.get("GCS_API_KEY", "")
+GCS_CX = secrets.get("GCS_CX", "")
+
+# OpenAI 클라이언트
+client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
+genai_client = None
+if GEMINI_API_KEY:
+    try:
+        from google import genai
+        genai_client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception:
+        genai_client = None
 
 # ================================
 # Google Sheets 인증
@@ -68,9 +93,9 @@ THUMB_DIR = "thumbnails"
 # 블로그 ID 로테이션 (3개)
 # ================================
 BLOG_IDS = [
-    "1271002762142343021",
-    "4265887538424434999",
-    "6159101125292617147",
+    "5711594645656469839",
+    "5711594645656469839",
+    "5711594645656469839",
 ]
 
 # ================================
@@ -261,37 +286,144 @@ def clean_html(raw_html):
 # ================================
 # ChatGPT API로 본문 가공 (요약 + 3~4문단, <p size18> 강제)
 # ================================
+# ================================
+# AI REVIEW (5 차 시도 폴백)
+# ================================
+def generate_ai_review(prompt):
+    # 1. Gemini Flash
+    if genai_client:
+        try:
+            response = genai_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+            print("✅ AI 성공: Gemini Flash")
+            return response.text.strip()
+        except Exception as e:
+            print("⚠️ Gemini Flash 실패:", e)
+
+    # 2. Gemini Flash Lite
+    if genai_client:
+        try:
+            response = genai_client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=prompt
+            )
+            print("✅ AI 성공: Gemini Flash Lite")
+            return response.text.strip()
+        except Exception as e:
+            print("⚠️ Gemini Flash Lite 실패:", e)
+
+    # 3. Groq
+    if GROQ_API_KEY:
+        try:
+            print("🚀 [3 차 시도] Groq")
+            res = requests.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {GROQ_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": [
+                        {"role": "system", "content": "You must output ONLY final answer in Korean. No reasoning, no analysis, no English."},
+                        {"role": "user", "content": prompt}
+                    ],
+                    "temperature": 0.7,
+                    "max_tokens": 650
+                },
+                timeout=20
+            )
+            data = res.json()
+            if res.status_code != 200:
+                print("⚠️ Groq API 오류:", data)
+            if "choices" in data and data["choices"] and data["choices"][0]["message"].get("content"):
+                text = data["choices"][0]["message"]["content"]
+                print("✅ AI 성공: Groq")
+                return text.strip()
+            print("⚠️ Groq 응답 없음")
+        except Exception as e:
+            print("⚠️ Groq 실패:", e)
+
+    # 4. OpenRouter
+    if OPENROUTER_API_KEY:
+        try:
+            print("🚀 [4 차 시도] OpenRouter")
+            res = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "openrouter/auto",
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.7,
+                    "max_tokens": 650
+                },
+                timeout=20
+            )
+            data = res.json()
+            if res.status_code != 200:
+                print("⚠️ OpenRouter API 오류:", data)
+            if "choices" in data and data["choices"] and data["choices"][0]["message"].get("content"):
+                text = data["choices"][0]["message"]["content"]
+                print("✅ AI 성공: OpenRouter")
+                return text.strip()
+            print("⚠️ OpenRouter 응답 없음")
+        except Exception as e:
+            print("⚠️ OpenRouter 실패:", e)
+
+    # 5. GPT-4o-mini
+    if client:
+        try:
+            print("🚀 [5 차 시도] GPT-4o-mini")
+            res = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=650
+            )
+            print("✅ AI 성공: GPT-4o-mini")
+            return res.choices[0].message.content.strip()
+        except Exception as e:
+            print("❌ 모든 AI 실패:", e)
+
+    return f"설명 정보입니다. 실패"
+
+
+# ================================
+# process_with_gpt (본문 생성용 AI 가공, 5 차 시도 풀백 적용)
+# ================================
 def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
-    if not client:
+    # AI 가 없으면 간단한 HTML 로 반환
+    if not (genai_client or GROQ_API_KEY or OPENROUTER_API_KEY or client):
         return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
 
-    system_msg = (
-        "너는 한국어 블로그 글을 쓰는 카피라이터야. "
-        "주제는 정부 복지서비스이고, 주어진 원문을 "
-        "1) 먼저 <b>태그로 굵게 요약(한두 문장)</b>, "
-        "2) 그 아래에 친절하고 자세한 설명을 붙이는 형태로 가공해. "
-        "출력은 반드시 3~4개의 문단으로 나눠서 작성하되, "
-        "각 문단 사이에는 <p data-ke-size=\"size18\"> 태그를 사용하고 "
-        "빈 줄(줄바꿈)으로 구분해. "
-        "마크다운 금지, 반드시 <p data-ke-size=\"size18\"> 태그 사용."
-    )
-    user_msg = f"[섹션 제목] {keyword} {section_title}\n[원문]\n{raw_text}"
+    prompt = f"""
+너는 한국어 블로그 글을 쓰는 카피라이터야.
+주제는 정부 복지서비스이고, 주어진 원문을
+1) 먼저 <b>태그로 굵게 요약 (한두 문장)>,
+2) 그 아래에 친절하고 자세한 설명을 붙이는 형태로 가공해.
+출력은 반드시 3~4 개의 문단으로 나눠서 작성하되,
+각 문단 사이에는 <p data-ke-size="size18"> 태그를 사용하고
+빈 줄 (줄바꿈) 으로 구분해.
+마크다운 금지, 반드시 <p data-ke-size="size18"> 태그 사용.
+사람이 직접 경험하고 작성한 것처럼 따뜻한 대화체 톤으로 풀어나가줘.
+자연스러운 한국어
+중요: 오직 한국어로만 작성해야해 중간중간에 한자나 일본어 같은 외국어가 들어가면 안된다.
+/////////////////////////
+[섹션 제목] {keyword} {section_title}
+[원문]
+{raw_text}
+"""
 
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4.1-mini",
-            messages=[
-                {"role": "system", "content": system_msg},
-                {"role": "user", "content": user_msg},
-            ],
-            temperature=0.7,
-            max_tokens=800,
-        )
-        log_step(f"4단계: GPT 변환 성공 ({section_title})")
-        return resp.choices[0].message.content.strip()
-    except Exception as e:
-        log_step(f"4단계: GPT 변환 실패 ({section_title}): {e}")
-        return f"<p data-ke-size='size18'>{clean_html(raw_text)}</p>"
+    rewritten = generate_ai_review(prompt)
+    rewritten = rewritten.replace("<body>", "").replace("</body>", "")
+    if "<p" not in rewritten:
+        rewritten = f'<p data-ke-size="size18">{rewritten}</p>'
+    return rewritten
 
 # ================================
 # 서론/마무리 7문장 랜덤
