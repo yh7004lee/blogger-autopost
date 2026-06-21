@@ -134,10 +134,10 @@ for i, row in enumerate(rows[1:], start=2):
     url_cell = row[4].strip() if len(row) > 4 and row[4] else ""    # E열
     statuscell = row[6].strip() if len(row) > 6 and row[6] else ""  # G열
 
-    debug(f"검사중 {i}행 -> URL='{urlcell}', STATUS='{statuscell}'")
+    debug(f"검사중 {i}행 -> URL='{url_cell}', STATUS='{statuscell}'")
 
-    if urlcell and statuscell != "완":
-        my_url, target_row = urlcell, i
+    if url_cell and statuscell != "완":
+        my_url, target_row = url_cell, i
         break
 
 if not my_url:
@@ -297,8 +297,11 @@ blog_handler = get_blogger_service()
 log_step("5단계: Blogger 인증 성공")
 
 # ================================
-# 복지 데이터 가져오기 (네이버 파싱 방식 도입, 5회 재시도 적용)
+# 복지 데이터 가져오기 (세션 및 재시도 로직 대폭 강화)
 # ================================
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+
 def fetch_welfare_info(wlfareInfoId):
     url = f"https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId={wlfareInfoId}&wlfareInfoReldBztpCd=01"
     headers = {
@@ -310,12 +313,16 @@ def fetch_welfare_info(wlfareInfoId):
         "Upgrade-Insecure-Requests": "1"
     }
     
+    session = requests.Session()
+    retries = Retry(total=5, backoff_factor=2, status_forcelist=[500, 502, 503, 504])
+    session.mount("https://", HTTPAdapter(max_retries=retries))
+    
     for attempt in range(5):
         try:
-            time.sleep(random.uniform(5, 10))  # 5~10초 대기열
+            time.sleep(random.uniform(10, 15))  # 서버 IP 차단 방어 위해 대기 시간 대폭 증가
             debug(f"복지로 데이터 호출 시도 URL: {url}, 회차: {attempt+1}/5")
             
-            resp = requests.get(url, headers=headers, timeout=30)
+            resp = session.get(url, headers=headers, timeout=40)
             resp.encoding = "utf-8"
             
             if resp.status_code == 200:
@@ -326,12 +333,12 @@ def fetch_welfare_info(wlfareInfoId):
                 return json.loads(json.loads(outer_match.group(1))["initValue"]["dmWlfareInfo"])
             else:
                 debug(f"⚠️ 상태 코드 {resp.status_code} - 재시도 ({attempt + 1}/5)")
-                time.sleep(3)
+                time.sleep(5)
                 
         except Exception as e:
             debug(f"⚠️ 연결 실패 ({attempt + 1}/5): {e}")
             if attempt < 4:
-                time.sleep(5)
+                time.sleep(10)
             else:
                 raise
                 
@@ -535,11 +542,10 @@ try:
     safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", keyword)
 
     os.makedirs(THUMB_DIR, exist_ok=True)
-    thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
+    thumb_path = os.path.join(THUMBDIR, f"{safe_keyword}.png")
     make_thumb(thumb_path, title)
     log_step("6단계: 썸네일(WebP 변환포함) 생성 성공")
     
-    # 드라이브 링크는 확장자 .webp로 변경
     img_url = upload_to_drive(thumb_path.replace('.png', '.webp'), f"{safe_keyword}.webp")
 
     intro = make_intro(keyword)
@@ -646,7 +652,7 @@ except Exception as e:
     try:
         log_step(f"7단계: 실패: {e} | {tb}")
         if target_row:
-            ws.update_cell(target_row, 7, "실폐")
+            ws.update_cell(target_row, 7, "실패")
     except Exception as inner:
         print(f"⚠️ 실패 로그 기록도 실패: {inner}")
     raise
