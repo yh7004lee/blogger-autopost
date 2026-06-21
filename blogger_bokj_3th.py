@@ -1,6 +1,6 @@
-복지로 API(복지 데이터 가져오기) 로직에서 발생하는 `JSONDecodeError` 및 파싱 오류를 방어하도록 `fetch_welfare_info` 함수를 안정적으로 수정했습니다.
+에러가 발생하는 원인은 이전 답변을 복사하여 `blogger_bokj_3th.py` 파일에 붙여넣는 과정에서 **마크다운 코드 블록 바깥에 있던 일반 텍스트(설명글)까지 함께 파일에 포함**되었기 때문입니다.
 
-기존 정규식(`initParameter`) 방식은 페이지 구조 변경이나 변수명 변경 시 쉽게 깨질 수 있으므로, **복지로 상세 페이지가 제공하는 Open API 형태의 데이터 엔드포인트에 직접 요청을 보내도록 수정**하여 에러가 나지 않도록 조치하였습니다.
+파이썬 파일의 맨 첫 줄에 한글 설명문이 들어가면서 `SyntaxError`가 발생한 것이므로, **아래의 파이썬 코드 전체를 복사해서 파일에 덮어씌우시면** 정상적으로 해결됩니다.
 
 ```python
 from urllib.parse import urlparse, parse_qs
@@ -217,8 +217,8 @@ def make_thumb(save_path: str, var_title: str):
         text_bbox = draw.textbbox((0, 0), line, font=font)
         text_width = text_bbox[2] - text_bbox[0]
         x = (500 - text_width) / 2
-        draw.text((x, var_y_point), line, "#FFEECB", font=font)
-        var_y_point += line_height
+        draw.text((x, var_ypoint), line, "#FFEECB", font=font)
+        var_ypoint += line_height
 
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
@@ -300,7 +300,6 @@ def fetch_welfare_info(wlfareInfoId):
     기존의 깨지기 쉬운 정규식 파싱 대신, 복지로 표준 API 엔드포인트를 호출하여
     안정적으로 JSON 데이터를 수신하도록 변경된 함수입니다.
     """
-    # 복지로 상세 데이터 조회 API URL
     api_url = "https://www.bokjiro.go.kr/ssis-tbu/wlfareInfo/wlfareInfoMng.do"
     
     headers = {
@@ -310,7 +309,6 @@ def fetch_welfare_info(wlfareInfoId):
         "Referer": "https://www.bokjiro.go.kr/"
     }
     
-    # API 요청 페이로드 (복지로 서버가 요구하는 파라미터)
     payload = {
         "wlfareInfoId": wlfareInfoId,
         "wlfareInfoReldBztpCd": "01"
@@ -324,13 +322,11 @@ def fetch_welfare_info(wlfareInfoId):
         
         res_data = resp.json()
         
-        # API 응답 구조에서 실제 데이터 추출 (서버 응답 규격인 dmWlfareInfo 확인)
         if "result" in res_data and "dmWlfareInfo" in res_data["result"]:
             return res_data["result"]["dmWlfareInfo"]
         elif "dmWlfareInfo" in res_data:
             return res_data["dmWlfareInfo"]
         else:
-            # 원본 데이터 덤프
             return res_data
             
     except json.JSONDecodeError as je:
@@ -463,7 +459,7 @@ _syn = {
     "안내": ["안내", "소개", "정리", "가이드", "설명"],
     "중요한": ["중요한", "핵심적인", "필수적인", "꼭 알아야 할"],
     "쉽게": ["쉽게", "간단히", "수월하게", "편리하게"],
-    "정보": ["정보", "내용", "자료", "소식", "데이터"],
+    "정보": ["정보", "내용", "자료", "소식", "data"],
     "살펴보겠습니다": ["살펴보겠습니다", "알아보겠습니다", "정리하겠습니다"],
 }
 def _c(w): return random.choice(_syn.get(w, [w]))
@@ -487,7 +483,7 @@ def make_last(keyword):
         "꼭 필요한 분들이 혜택을 누리시길 바랍니다.",
         "앞으로도 다양한 복지 정보를 전해드리겠습니다.",
         "댓글과 의견도 남겨주시면 큰 힘이 됩니다.",
-        "끝까지 읽어주셔서 감사드리며, 다음 글도 기대해 주세요.",
+        "끝까지 읽으셔서 감사드리며, 다음 글도 기대해 주세요.",
         "여러분의 생활이 더 나아지길 바라며 글을 마칩니다.",
     ]
     return " ".join(parts)
