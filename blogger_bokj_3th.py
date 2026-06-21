@@ -1,5 +1,5 @@
 from urllib.parse import urlparse, parse_qs
-import re, json, requests, random, os, textwrap, glob, sys, traceback, pickle, time
+import re, json, requests, random, os, textwrap, glob, sys, traceback, pickle
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 from googleapiclient.discovery import build
@@ -17,6 +17,15 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 sys.stdout.reconfigure(encoding="utf-8")
 
 # ================================
+# 디버그 모드
+# ================================
+DEBUG_MODE = True
+
+def debug(msg: str):
+    if DEBUG_MODE:
+        print(f"[DEBUG] {msg}")
+
+# ================================
 # 단계별 로그 기록 함수 (P열, 한 줄 유지)
 # ================================
 def log_step(msg: str):
@@ -26,9 +35,9 @@ def log_step(msg: str):
             prev = ws.cell(tr, 16).value or ""
             sep = " | " if prev else ""
             ws.update_cell(tr, 16, f"{prev}{sep}{msg}")
-        print(msg)
     except Exception as e:
-        print(f"⚠️ 로그 기록 실패: {e} / 원문: {msg}")
+        print("⚠️ 로그 기록 실패:", e)
+    print(msg)
 
 # ================================
 # API 키 - GitHub Secrets 에서 읽기
@@ -59,7 +68,8 @@ if GEMINI_API_KEY:
     try:
         from google import genai
         genai_client = genai.Client(api_key=GEMINI_API_KEY)
-    except Exception:
+    except Exception as e:
+        debug(f"Gemini client init 실패: {e}")
         genai_client = None
 
 # ================================
@@ -70,7 +80,14 @@ try:
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    ws = gc.open_by_key(SHEET_ID).sheet1
+
+    sh = gc.open_by_key(SHEET_ID)
+    debug(f"스프레드시트 제목: {sh.title}")
+    debug(f"탭 목록: {[w.title for w in sh.worksheets()]}")
+
+    ws = sh.worksheet(sh.worksheets()[0].title)
+    debug(f"선택된 탭: {ws.title}")
+
     log_step("1단계: Google Sheets 인증 성공")
 except Exception as e:
     print("❌ Google Sheets 인증 실패:", e)
@@ -84,43 +101,66 @@ ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
 THUMB_DIR = "thumbnails"
 
 # ================================
-# 블로그 ID 로테이션
+# 블로그 ID 로테이션 (3개)
 # ================================
 BLOG_IDS = [
-    "5711594645656469839",
-    "5711594645656469839",
-    "5711594645656469839",
+    "1271002762142343021",
+    "4265887538424434999",
+    "6159101125292617147",
 ]
 
 # ================================
-# 대상 URL 찾기
+# 시트 덤프 디버그
+# ================================
+def dump_sheet_preview():
+    try:
+        rows = ws.get_all_values()
+        debug(f"전체 행 수: {len(rows)}")
+        for i, row in enumerate(rows[:8], start=1):
+            e = row[4].strip() if len(row) > 4 and row[4] else ""
+            g = row[6].strip() if len(row) > 6 and row[6] else ""
+            debug(f"{i}행 | E='{e}' | G='{g}' | row={row}")
+    except Exception as e:
+        debug(f"시트 미리보기 실패: {e}")
+
+dump_sheet_preview()
+
+# ================================
+# Google Sheet에서 처리할 URL 찾기
 # ================================
 target_row, my_url = None, None
 rows = ws.get_all_values()
+
 for i, row in enumerate(rows[1:], start=2):
-    url_cell = row[4] if len(row) > 4 else ""
-    status_cell = row[6] if len(row) > 6 else ""
-    if url_cell and (not status_cell or status_cell.strip() != "완"):
+    url_cell = row[4].strip() if len(row) > 4 and row[4] else ""
+    status_cell = row[6].strip() if len(row) > 6 and row[6] else ""
+    debug(f"검사중 {i}행 -> URL='{url_cell}', STATUS='{status_cell}'")
+
+    if url_cell and status_cell != "완":
         my_url, target_row = url_cell, i
+        debug(f"선택된 행: {target_row}, URL: {my_url}")
         break
 
 if not my_url:
     log_step("2단계: 처리할 URL 없음 (모든 행 완료)")
+    debug("URL을 찾지 못했음. E열 값과 G열 값, 그리고 탭 이름을 확인하세요.")
     sys.exit(0)
 
 log_step(f"2단계: URL 추출 성공 ({my_url})")
 
 # ================================
-# 로테이션 인덱스 읽기
+# 로테이션 인덱스 읽기 (O1)
 # ================================
 def read_rotation_index():
     try:
         val = (ws.acell("O1").value or "").strip()
+        debug(f"O1 값: '{val}'")
         idx = int(val)
         if idx < -1 or idx >= len(BLOG_IDS):
             return -1
         return idx
-    except:
+    except Exception as e:
+        debug(f"회전 인덱스 읽기 실패: {e}")
         return -1
 
 last_index = read_rotation_index()
@@ -129,17 +169,23 @@ BLOG_ID = BLOG_IDS[next_index]
 log_step(f"회전 인덱스: last={last_index} -> next={next_index} (BLOG_ID={BLOG_ID})")
 
 # ================================
-# 썸네일
+# 배경 이미지 랜덤 선택
 # ================================
 def pick_random_background() -> str:
     files = []
     for ext in ("*.png", "*.jpg", "*.jpeg"):
         files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
+    debug(f"배경 파일 수: {len(files)}")
     return random.choice(files) if files else ""
 
+# ================================
+# 썸네일 생성
+# ================================
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     bg_path = pick_random_background()
+    debug(f"선택된 배경: {bg_path}")
+
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
     else:
@@ -147,7 +193,8 @@ def make_thumb(save_path: str, var_title: str):
 
     try:
         font = ImageFont.truetype(ASSETS_FONT_TTF, 48)
-    except:
+    except Exception as e:
+        debug(f"폰트 로드 실패, 기본 폰트 사용: {e}")
         font = ImageFont.load_default()
 
     canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
@@ -173,7 +220,7 @@ def make_thumb(save_path: str, var_title: str):
     canvas.save(save_path, "PNG")
 
 # ================================
-# Drive
+# Google Drive 인증
 # ================================
 def get_drive_service():
     creds = None
@@ -191,6 +238,9 @@ def get_drive_service():
 
     return build("drive", "v3", credentials=creds)
 
+# ================================
+# Google Drive 업로드
+# ================================
 def upload_to_drive(file_path, file_name):
     try:
         drive_service = get_drive_service()
@@ -221,7 +271,7 @@ def upload_to_drive(file_path, file_name):
         raise
 
 # ================================
-# Blogger
+# Blogger 인증
 # ================================
 def get_blogger_service():
     try:
@@ -238,39 +288,20 @@ def get_blogger_service():
 blog_handler = get_blogger_service()
 log_step("5단계: Blogger 인증 성공")
 
-def publish_blogger_post(blog_id, post_body):
-    try:
-        req = blog_handler.posts().insert(
-            blogId=blog_id,
-            body=post_body,
-            isDraft=False,
-            fetchImages=True
-        )
-        res = req.execute()
-        if not isinstance(res, dict):
-            raise RuntimeError(f"Blogger 응답 형식 이상: {type(res)}")
-        if not res.get("url"):
-            raise RuntimeError(f"Blogger 응답에 url 없음: {res}")
-        return res
-    except Exception as e:
-        raise RuntimeError(f"Blogger 게시 실패: {e}")
-
 # ================================
-# 복지 데이터
+# 복지 데이터 가져오기
 # ================================
 def fetch_welfare_info(wlfareInfoId):
     url = f"https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId={wlfareInfoId}&wlfareInfoReldBztpCd=01"
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0"
-        }
+        headers = {"User-Agent": "Mozilla/5.0"}
         resp = requests.get(url, timeout=20, headers=headers)
         resp.raise_for_status()
         resp.encoding = "utf-8"
         html = resp.text
         outer_match = re.search(r'initParameter\((\{.*?\})\);', html, re.S)
         if not outer_match:
-            raise ValueError("initParameter JSON 을 찾지 못했습니다.")
+            raise ValueError("initParameter JSON을 찾지 못했습니다.")
         return json.loads(json.loads(outer_match.group(1))["initValue"]["dmWlfareInfo"])
     except Exception as e:
         raise RuntimeError(f"복지로 데이터 가져오기 실패: {e}")
@@ -279,7 +310,7 @@ def clean_html(raw_html):
     return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
 
 # ================================
-# AI
+# AI REVIEW (5 차 시도 폴백)
 # ================================
 def generate_ai_review(prompt):
     if genai_client:
@@ -388,7 +419,7 @@ def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
     rewritten = generate_ai_review(prompt)
     rewritten = rewritten.replace("<body>", "").replace("</body>", "")
     if "<p" not in rewritten:
-        rewritten = f'<p data-ke-size="size18">{rewritten}</p>'
+        rewritten = f"<p data-ke-size='size18'>{rewritten}</p>"
     return rewritten
 
 # ================================
@@ -462,11 +493,12 @@ try:
     parsed = urlparse(my_url)
     params = parse_qs(parsed.query)
     wlfareInfoId = params.get("wlfareInfoId", [""])[0]
-    if not wlfareInfoId:
-        raise RuntimeError(f"URL에서 wlfareInfoId를 찾지 못함: {my_url}")
+
+    debug(f"최종 URL: {my_url}")
+    debug(f"파싱된 파라미터: {params}")
+    debug(f"wlfareInfoId: {wlfareInfoId}")
 
     data = fetch_welfare_info(wlfareInfoId)
-
     keyword = clean_html(data.get("wlfareInfoNm", "복지 서비스")).strip()
     title = f"2025 {keyword} 지원 자격 신청방법"
     safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", keyword)
@@ -503,6 +535,7 @@ try:
             try:
                 processed = process_with_gpt(title_k, clean_html(value), keyword)
                 html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br />{processed}<br /><br />"
+                debug(f"{title_k} 변환 성공")
             except Exception as e:
                 log_step(f"본문 변환 실패({title_k}): {e}")
                 html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br /><p data-ke-size='size18'>{clean_html(value)}</p><br /><br />"
@@ -525,31 +558,39 @@ try:
         "blog": {"id": BLOG_ID}
     }
 
-    res = publish_blogger_post(BLOG_ID, post_body)
+    debug("Blogger 게시 직전")
+    res = blog_handler.posts().insert(
+        blogId=BLOG_ID,
+        body=post_body,
+        isDraft=False,
+        fetchImages=True
+    ).execute()
+
+    debug(f"Blogger 응답 원본: {res}")
 
     if not res or not res.get("url"):
         raise RuntimeError(f"Blogger 응답이 비정상입니다: {res}")
 
     ws.update_cell(target_row, 7, "완")
     ws.update_cell(target_row, 15, res["url"])
+
     final_html = res.get("content", "")
     soup = BeautifulSoup(final_html, "html.parser")
     img_tag = soup.find("img")
     final_url = img_tag["src"] if img_tag else ""
     log_step(f"7단계: 업로드 성공 → POST={res['url']} | IMG={final_url}")
-    ws.update_acell("O1", str(next_index))
 
+    ws.update_acell("O1", str(next_index))
     print(f"[완료] 블로그 포스팅: {res['url']}")
 
 except Exception as e:
     tb = traceback.format_exc().replace("\n", " | ")
+    print("❌ 최종 실패:", e)
+    print(tb)
     try:
         log_step(f"7단계: 실패: {e} | {tb}")
-        ws.update_cell(target_row, 7, "실패")
         if target_row:
-            ws.update_cell(target_row, 16, (ws.cell(target_row, 16).value or "") + f" | 실패: {e}")
+            ws.update_cell(target_row, 7, "실패")
     except Exception as inner:
         print(f"⚠️ 실패 로그 기록도 실패: {inner}")
-        print(f"원래 오류: {e}")
-        print(tb)
     raise
