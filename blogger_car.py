@@ -1,132 +1,533 @@
-<p style="margin-top:15px;">이번에는 『여름 쿨베개 추천 고민이라면? 지금 주목해야 할 TOP5』 정보에 대해 알아보는 시간 가지도록 하겠습니다.</p><p style="margin-top:15px;">수많은 제품들이 쏟아지는 요즘, 나에게 꼭 맞는 아이템을 고르는 것도 큰 일입니다. 시간과 노력을 절약해 드릴 수 있도록, 만족도가 높은 핵심 아이템 위주로 정리해 보았습니다.</p><p style="margin-top:15px;">쇼핑을 할 때마다 결정 장애로 고민하셨던 분들을 위해, 이번에는 후회 없는 선택이 될 만한 아이템들을 엄선했습니다. 본문 내용을 통해 각 제품의 장점을 확인해 보세요.</p><p style="margin-top:15px;">평소 눈여겨보던 카테고리가 있으셨나요? 기능성과 가성비를 모두 고려하여 실패 없는 선택을 하실 수 있도록, 실제 사용자들의 선호도가 높은 제품들만 꼼꼼히 선정했습니다.</p><BR><p style="text-align: center;"><a href="https://lh3.googleusercontent.com/d/1wqzbRd4G5lWliTkqtoqUPJA3jP85d2wo=s0"><img src="https://lh3.googleusercontent.com/d/1wqzbRd4G5lWliTkqtoqUPJA3jP85d2wo=s0" style="max-width: 100%;" /></a></p><BR><p style= color:#222; font-size:16px;">※ 이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.</p><hr style="border:0; border-top:1px solid #eee; margin:30px 0;"><table style="width: 100%; border-collapse: collapse; margin-top: 40px;"><tr><td style="font-size: 21px; color: #1a2a40; border-left: 10px solid #1a2a40; padding: 15px 20px 5px 20px; background-color: #f7f9fa; font-weight: bold; letter-spacing: -0.5px; line-height: 1.4; vertical-align: bottom;">1. 에어룸 수면냉감 아이쏘쿨 냉감베개 2개, 모던 그레이</td></tr></table>
-<div style="border:1px solid #eee; padding:15px; margin-top:15px;">
-    
-    <img src="https://ads-partners.coupang.com/image1/21FM7_i8tt_cmptb290bp3y2GIpEhrvYMpa7PDuHy_Ejcx76OyKWgUe5WW8SY_iz4f3mLxEaRr5c2NWwempffxiDTuna8mbo_NML3Sja72z4A0L25vh4EOesWTHA6w5Be_lyzdTiU6fk-a6qDQTWL5KZ1s3sjIQRD8ps4kiwW_mWzHa1mxfR56PMDMBNWCgCQl4-TukW0zTOEkNk4kuf29iyIDg0UF8J8k3a6AwJysvbPyzkQ3UioLoc5AQGeCMRNT1BEMh-qrALs943Xo96u6o=" style=" margin:0 0 0 0; border:1px solid #eee; box-sizing:border-box;">
-    
-    <p><b>가격:</b> 49,900원</p>
-    <p></p>
-    <p style="margin: 20px 0 5px 0; font-weight: bold; font-size: 16px;">에어룸 수면냉감 아이쏘쿨 냉감베개 2개, 모던 그레이 상세설명</p>
-    
-    <div style="margin: 5px 0 15px 0; padding: 15px; border: 1px solid #333; background-color: #f9f9f9; border-radius: 5px;">
-    밤잠 설치게 만드는 더위 때문에 매번 고생하고 계셨다면, 에어룸 수면냉감 아이쏘쿨 냉감베개가 완벽한 해결책이 될 수 있습니다. 머리와 목에 닿는 순간부터 시원함이 느껴져 잠드는 순간까지 쾌적함을 유지해주니, 뒤척임 없이 편안한 숙면을 경험할 수 있죠. 특히 두 개 세트로 구성되어 있어 커플이 함께 사용하거나, 하나는 침실에 다른 하나는 거실 소파에서 편안하게 활용하기에도 아주 좋습니다. 모던 그레이 색상은 어떤 침실 인테리어에도 자연스럽게 어우러져 세련된 분위기를 더해주며, 더 이상 베개 때문에 잠을 설치는 일 없이 매일 아침 상쾌하게 일어날 수 있을 거예요. 올여름 밤, 열대야에도 끄떡없는 시원하고 편안한 잠자리를 원한다면 에어룸 냉감베개를 꼭 경험해보세요.
+import os
+import re
+import json
+import sys
+import glob
+import random
+import textwrap
+import traceback
+import pickle
+import requests
+from urllib.parse import urlparse, parse_qs
 
-#에어룸 #냉감베개 #수면아이템 #숙면베개 #여름필수템 #모던그레이
+from bs4 import BeautifulSoup
+from PIL import Image, ImageDraw, ImageFont
+import gspread
+from google import genai
+from openai import OpenAI
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google.oauth2.service_account import Credentials
+from google.oauth2.credentials import Credentials as UserCredentials
+from google.auth.transport.requests import Request
+
+from playwright.async_api import async_playwright, TimeoutError
+import asyncio
+
+sys.stdout.reconfigure(encoding="utf-8")
+
+DEBUG_MODE = True
+
+def debug(msg: str):
+    if DEBUG_MODE:
+        print(f"[DEBUG] {msg}")
+
+def log_step(msg: str):
+    try:
+        tr = globals().get("target_row", None)
+        if tr and "ws" in globals():
+            prev = ws.cell(tr, 16).value or ""
+            sep = " | " if prev else ""
+            ws.update_cell(tr, 16, f"{prev}{sep}{msg}")
+    except Exception as e:
+        print("⚠️ 로그 기록 실패:", e)
+    print(msg)
+
+API_KEYS_JSON = os.getenv("API_KEYS_JSON")
+if not API_KEYS_JSON:
+    raise RuntimeError("API_KEYS_JSON 환경변수가 없습니다. GitHub Secrets 를 확인하세요.")
+
+try:
+    secrets = json.loads(API_KEYS_JSON)
+except Exception as e:
+    raise RuntimeError(f"API_KEYS_JSON 파싱 실패: {e}")
+
+OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
+OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
+GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
+SHEET_ID = "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs"
+BLOG_ID = os.getenv("BLOG_ID", "5711594645656469839")
+
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+genai_client = None
+if GEMINI_API_KEY:
+    try:
+        genai_client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        debug(f"Gemini client init 실패: {e}")
+
+SERVICE_ACCOUNT_FILE = "sheetapi.json"
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+gc = gspread.authorize(creds)
+sh = gc.open_by_key(SHEET_ID)
+ws = sh.worksheet("sheet2")
+debug(f"선택된 탭: {ws.title}")
+log_step("1단계: Google Sheets 인증 성공")
+
+ASSETS_BG_DIR = "assets/backgrounds"
+ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
+THUMB_DIR = "thumbnails"
+
+def get_blogger_service():
+    if not os.path.exists("blogger_token.json"):
+        raise FileNotFoundError("blogger_token.json 파일 없음")
+    with open("blogger_token.json", "r", encoding="utf-8") as f:
+        data = json.load(f)
+    creds = UserCredentials.from_authorized_user_info(
+        data,
+        ["https://www.googleapis.com/auth/blogger"]
+    )
+    return build("blogger", "v3", credentials=creds)
+
+blog_handler = get_blogger_service()
+log_step("2단계: Blogger 인증 성공")
+
+def pick_best_from_srcset(srcset: str):
+    if not srcset:
+        return None
+    candidates = []
+    for part in srcset.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        items = part.split()
+        url = items[0].strip()
+        score = 0
+        if len(items) > 1:
+            size = items[1].strip()
+            m = re.match(r"(\d+)(w|x)", size)
+            if m:
+                val = int(m.group(1))
+                unit = m.group(2)
+                score = val if unit == "w" else val * 10000
+        candidates.append((score, url))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda x: x[0], reverse=True)
+    return candidates[0][1]
+
+def normalize_url(u):
+    if not u:
+        return None
+    u = u.strip()
+    if u.startswith("//"):
+        return "https:" + u
+    return u
+
+def is_probably_thumbnail(u: str):
+    if not u:
+        return True
+    bad_keywords = ["thumb", "thumbnail", "small", "mini", "ico_", "btn_", "banner", "logo", "spacer", "icon", "ad", "preview"]
+    lower = u.lower()
+    return any(k in lower for k in bad_keywords)
+
+def is_valid_car_image_url(u):
+    if not u:
+        return False
+    lower = u.lower()
+    if lower.startswith("data:image"):
+        return False
+    allowed_domains = ("imgauto.naver.net", "ssl.pstatic.net", "phinf.pstatic.net", "nphoto.naver.net", "search.pstatic.net")
+    if not any(domain in lower for domain in allowed_domains):
+        return False
+    if any(x in lower for x in ["ico_", "btn_", "banner", "logo", "spacer", "icon", "ad", "event"]):
+        return False
+    return True
+
+def get_ext_from_url(u):
+    try:
+        path = urlparse(u).path
+        ext = os.path.splitext(path)[1]
+        if ext and len(ext) <= 5:
+            return ext
+    except Exception:
+        pass
+    return ".jpg"
+
+def get_car_name_from_url(url):
+    parsed_url = urlparse(url)
+    params = parse_qs(parsed_url.query)
+    if "query" in params:
+        return params["query"][0].strip()
+    return "확인불가"
+
+def generate_ai_review(prompt, car_name):
+    if genai_client:
+        try:
+            response = genai_client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            return response.text.strip()
+        except Exception as e:
+            debug(f"Gemini Flash 실패: {e}")
+
+        try:
+            response = genai_client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
+            return response.text.strip()
+        except Exception as e:
+            debug(f"Gemini Flash Lite 실패: {e}")
+
+    if OPENROUTER_API_KEY:
+        try:
+            res = requests.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                json={"model": "openrouter/auto", "messages": [{"role": "user", "content": prompt}]},
+                timeout=20
+            )
+            data = res.json()
+            if data.get("choices") and data["choices"][0]["message"].get("content"):
+                return data["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            debug(f"OpenRouter 실패: {e}")
+
+    if client:
+        try:
+            res = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=650
+            )
+            return res.choices[0].message.content.strip()
+        except Exception as e:
+            debug(f"GPT 실패: {e}")
+
+    return f"{car_name}은 분석 생성에 실패했지만 기본 정보 기반으로 안정적인 성능을 가진 차량입니다."
+
+def pick_random_background() -> str:
+    files = []
+    for ext in ("*.png", "*.jpg", "*.jpeg"):
+        files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
+    return random.choice(files) if files else ""
+
+def make_thumb(save_path: str, var_title: str):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    bg_path = pick_random_background()
+    if bg_path and os.path.exists(bg_path):
+        bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
+    else:
+        bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+
+    try:
+        font = ImageFont.truetype(ASSETS_FONT_TTF, 48)
+    except Exception:
+        font = ImageFont.load_default()
+
+    canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
+    canvas.paste(bg, (0, 0))
+    rectangle = Image.new("RGBA", (500, 250), (0, 0, 0, 200))
+    canvas.paste(rectangle, (0, 125), rectangle)
+    draw = ImageDraw.Draw(canvas)
+
+    var_title_wrap = textwrap.wrap(var_title, width=12)
+    bbox = font.getbbox("가")
+    line_height = (bbox[3] - bbox[1]) + 12
+    total_text_height = len(var_title_wrap) * line_height
+    var_y_point = 500 / 2 - total_text_height / 2
+
+    for line in var_title_wrap:
+        text_bbox = draw.textbbox((0, 0), line, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        x = (500 - text_width) / 2
+        draw.text((x, var_y_point), line, "#FFEECB", font=font)
+        var_y_point += line_height
+
+    canvas = canvas.resize((400, 400))
+    canvas.save(save_path, "PNG")
+
+def get_drive_service():
+    creds = None
+    if os.path.exists("drive_token_2nd.pickle"):
+        with open("drive_token_2nd.pickle", "rb") as token:
+            creds = pickle.load(token)
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            raise RuntimeError("drive_token_2nd.pickle이 없거나 만료됨.")
+        with open("drive_token_2nd.pickle", "wb") as token:
+            pickle.dump(creds, token)
+    return build("drive", "v3", credentials=creds)
+
+def upload_to_drive(file_path, file_name):
+    drive_service = get_drive_service()
+    query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
+    results = drive_service.files().list(q=query, fields="files(id, name)").execute()
+    items = results.get("files", [])
+    if items:
+        folder_id = items[0]["id"]
+    else:
+        folder_metadata = {"name": "blogger", "mimeType": "application/vnd.google-apps.folder"}
+        folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
+        folder_id = folder.get("id")
+
+    file_metadata = {"name": file_name, "parents": [folder_id]}
+    media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
+    file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
+
+    drive_service.permissions().create(
+        fileId=file["id"],
+        body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
+    ).execute()
+
+    return f"https://lh3.googleusercontent.com/d/{file['id']}"
+
+def read_target_row():
+    rows = ws.get_all_values()
+    for i, row in enumerate(rows[1:], start=2):
+        status = row[2].strip() if len(row) > 2 and row[2] else ""
+        if status != "완":
+            return i, row
+    return None, None
+
+async def main():
+    global target_row
+    target_row, row = read_target_row()
+    if not target_row:
+        log_step("처리할 행이 없습니다.")
+        return
+
+    car_name = row[0].strip() if len(row) > 0 and row[0] else ""
+    info_url = row[1].strip() if len(row) > 1 and row[1] else ""
+    if not car_name and info_url:
+        car_name = get_car_name_from_url(info_url)
+
+    if info_url.startswith("?"):
+        info_url = "https://search.naver.com/search.naver" + info_url
+    elif not info_url.startswith("http"):
+        info_url = "https://" + info_url
+
+    spec_url = f"https://search.naver.com/search.naver?where=nexearch&query={car_name.replace(' ', '%20')}+제원"
+    photo_url = f"https://search.naver.com/search.naver?where=nexearch&query={car_name.replace(' ', '%20')}+포토"
+
+    summary_items = {}
+    extracted_specs = []
+    exterior_urls = []
+    interior_urls = []
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True)
+        page = await browser.new_page()
+
+        await page.goto(info_url, wait_until="domcontentloaded")
+        await page.wait_for_timeout(2000)
+
+        grid_items = page.locator(".grid_item")
+        grid_data = {}
+        try:
+            count = await grid_items.count()
+            for i in range(count):
+                item = grid_items.nth(i)
+                title = (await item.locator(".item_tit").inner_text()).strip()
+                info = (await item.locator(".info_text").inner_text()).strip()
+                grid_data[title] = info
+        except Exception:
+            pass
+
+        body_text = await page.locator("body").inner_text()
+        price_patterns = [
+            r"(\d{1,3},\d{3}\s*~\s*\d{1,3},\d{3}\s*만원)",
+            r"(\d{1,3}\s*~\s*\d{1,3}\s*만원)",
+            r"(\d[\d,]*\s*만원)"
+        ]
+        for pattern in price_patterns:
+            m = re.search(pattern, body_text)
+            if m:
+                summary_items["💰 판매 가격"] = m.group(1).strip()
+                break
+
+        fuel = grid_data.get("연료", "")
+        if fuel:
+            summary_items["⛽ 사용 연료"] = fuel
+        if "전기" in fuel:
+            if grid_data.get("전비"):
+                summary_items["⚡ 전비"] = grid_data["전비"]
+            if grid_data.get("용량"):
+                summary_items["🔋 배터리 용량"] = grid_data["용량"]
+        else:
+            if grid_data.get("연비"):
+                summary_items["⚡ 공인 연비"] = grid_data["연비"]
+            if grid_data.get("배기량"):
+                summary_items["🧪 엔진 배기량"] = grid_data["배기량"]
+
+        await page.goto(spec_url, wait_until="domcontentloaded")
+        await page.wait_for_timeout(3000)
+
+        try:
+            title_loc = page.locator("h2").first
+            if await title_loc.count() > 0:
+                car_name_local = (await title_loc.inner_text()).strip()
+                if car_name_local:
+                    car_name = car_name_local
+        except Exception:
+            pass
+
+        try:
+            rows = page.locator("table tbody tr")
+            row_count = await rows.count()
+            for i in range(row_count):
+                rowx = rows.nth(i)
+                if await rowx.locator("th").count() > 0 and await rowx.locator("td").count() > 0:
+                    raw_k = await rowx.locator("th").first.inner_text()
+                    k = raw_k.replace("정보확인 내용 열고 닫기", "").strip()
+                    raw_v = await rowx.locator("td").first.inner_text()
+                    v = " ".join(raw_v.split())
+                    if "배기량" in k:
+                        summary_items["🧪 엔진 배기량"] = v
+                    if k and v and (k, v) not in extracted_specs and len(extracted_specs) < 14:
+                        extracted_specs.append((k, v))
+        except Exception:
+            pass
+
+        if len(extracted_specs) == 0:
+            try:
+                groups = page.locator(".table_group")
+                count = await groups.count()
+                for i in range(count):
+                    group = groups.nth(i)
+                    title = (await group.locator(".title").inner_text()).strip()
+                    rows = group.locator("table.basic_table tbody tr")
+                    row_count = await rows.count()
+                    for j in range(row_count):
+                        r = rows.nth(j)
+                        raw_k = await r.locator("th").first.inner_text()
+                        k = raw_k.replace("정보확인 내용 열고 닫기", "").strip()
+                        v = " ".join((await r.locator("td").first.inner_text()).split())
+                        if k and v:
+                            extracted_specs.append((f"[{title}] {k}", v))
+            except Exception:
+                pass
+
+        await browser.close()
+
+    os.makedirs(THUMB_DIR, exist_ok=True)
+    title_for_post = f"{car_name} 자동차 상세정보"
+    safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", car_name)
+
+    thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
+    make_thumb(thumb_path, title_for_post)
+    thumb_url = upload_to_drive(thumb_path, f"{safe_keyword}.png")
+
+    first_img_html = f"""
+    <div style="text-align:center; margin:30px 0 40px 0; width:100%;">
+        <img src="{thumb_url}" style="width:100%; max-width:100%; height:auto; border-radius:4px;" alt="{car_name}">
+        <p style="font-size:13px; color:#777; margin-top:10px; font-weight:bold;">▲ {car_name} 썸네일</p>
     </div>
-        
-    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; text-align: center;">
-        <span style="font-size: 20px; font-weight: bold;">
-            🔗 <a href="https://link.coupang.com/re/AFFSDP?lptag=AF8413544&pageKey=8950035025&itemId=26179129723&vendorItemId=93158743322&traceid=V0-153-8c6044bbb666a302&clickBeacon=30cefb50-6d6d-11f1-852f-3db1f4074ea2%7E3&requestid=20260621213156215306402114&token=31850C%7CMIXED" target="_blank" style="text-decoration: none; color: #1a2a40;"> 쿠팡에서 최저가 확인</a>
-        </span>
-    </div>
+    """
+
+    summary_table_rows = ""
+    for title, value in summary_items.items():
+        summary_table_rows += f"""
+        <tr style="border-bottom:1px solid #eaeaea;">
+            <td style="padding:14px 16px; font-size:14px; font-weight:bold; color:#222; background-color:#fcfcfc; width:35%;">{title}</td>
+            <td style="padding:14px 16px; font-size:14px; color:#333; font-weight:bold;">{value}</td>
+        </tr>"""
+    summary_table_html = f"""
+    <table style="width:100%; border-collapse:collapse; border-top:2px solid #1a2a40; border-bottom:1px solid #1a2a40; margin:15px 0 25px 0; text-align:left;">
+        <tbody>{summary_table_rows}</tbody>
+    </table>"""
+
+    spec_table_rows = ""
+    for i in range(0, len(extracted_specs), 2):
+        item1 = extracted_specs[i]
+        item2 = extracted_specs[i + 1] if i + 1 < len(extracted_specs) else ("", "")
+        spec_table_rows += f"""
+        <tr style="border-bottom:1px solid #eaeaea;">
+            <td style="padding:12px; font-size:13px; font-weight:bold; color:#555; background-color:#f9fafb; width:20%; border-right:1px solid #eee;">{item1[0]}</td>
+            <td style="padding:12px; font-size:13px; color:#111; width:30%; border-right:1px solid #eee; font-weight:bold;">{item1[1]}</td>
+            <td style="padding:12px; font-size:13px; font-weight:bold; color:#555; background-color:#f9fafb; width:20%; border-right:1px solid #eee;">{item2[0]}</td>
+            <td style="padding:12px; font-size:13px; color:#111; width:30%; font-weight:bold;">{item2[1]}</td>
+        </tr>"""
+    spec_table_html = f"""
+    <table style="width:100%; border-collapse:collapse; border-top:2px solid #333333; border-bottom:1px solid #333333; margin:15px 0 25px 0; text-align:left;">
+        <tbody>{spec_table_rows}</tbody>
+    </table>"""
+
+    compact_specs = " ".join([f"{k}: {v}" for k, v in extracted_specs[:10]])
+    prompt = f"""
+다음 자동차 정보를 보고 종합 평가를 작성해줘.
+
+차량명: {car_name}
+판매가격: {summary_items.get('💰 판매 가격', '정보 없음')}
+사용연료: {summary_items.get('⛽ 사용 연료', '정보 없음')}
+공인연비: {summary_items.get('⚡ 공인 연비', '정보 없음')}
+배기량: {summary_items.get('🧪 엔진 배기량', '정보 없음')}
+
+제원:
+{compact_specs}
+
+조건
+- 5~8문장
+- 250자 이상
+- 자연스러운 한국어
+- 블로그 후기 스타일
+- 장점과 아쉬운점 모두 작성
+- 마지막은 추천 여부로 마무리
+- 문장을 끝까지 완성
+- HTML 금지
+"""
+    ai_review_text = generate_ai_review(prompt, car_name)
+    ai_review_html = ai_review_text.replace("\n", "<br>")
+
+    html_content = f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>{title_for_post}</title>
+</head>
+<body style="font-family:'Malgun Gothic', sans-serif; line-height:1.9; color:#444; background-color:#f5f6f8; padding:20px; margin:0;">
+<div style="background-color:#ffffff; padding:40px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.03); max-width:850px; margin:0 auto;">
+    <p style="font-size:15px; color:#4d4d4d; text-align:justify; margin-bottom:25px;">{title_for_post}</p>
+    {first_img_html}
+    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">1. {car_name} 자동차 주요 스펙 요약</h2>
+    <p style="font-size:15px; color:#555; margin-bottom:10px;">차량 검토 시 가장 기본축이 되는 <strong>{car_name}</strong> 사양의 공식 가격 및 요약 데이터 테이블입니다.</p>
+    {summary_table_html}
+    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">2. {car_name} 자동차 상세 제원 데이터 종합 테이블</h2>
+    <p style="font-size:15px; color:#555; margin-bottom:10px;">기계적인 엔진 스펙 사양 정보와 트림별 치수 규격을 체계화한 정밀 제원표입니다.</p>
+    {spec_table_html}
+    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">3. {car_name} 자동차 총평</h2>
+    <p style="font-size:15px; color:#555; margin-bottom:15px;"></p>
+    {ai_review_html}
 </div>
- <p></p><BR><BR><BR>
- <div style=" padding:15px; margin:15px 0;"></div><div style=" padding:15px; margin:15px 0;"></div>
-<table style="width: 100%; border-collapse: collapse; margin-top: 40px;"><tr><td style="font-size: 21px; color: #1a2a40; border-left: 10px solid #1a2a40; padding: 15px 20px 5px 20px; background-color: #f7f9fa; font-weight: bold; letter-spacing: -0.5px; line-height: 1.4; vertical-align: bottom;">2. 준앤종 쿨링 아이스 큐브 냉감 낮잠 메밀베개 1+1, 화이트</td></tr></table>
-<div style="border:1px solid #eee; padding:15px; margin-top:15px;">
-    
-    <img src="https://ads-partners.coupang.com/image1/pG6mSg6SjcuRSf1bpN3JYQYV9aLt5P2RJY1KiIlupYY3a7VZgIf4Fyr2g0FVTcolepAJVBj7JwsSX-clCyzEKjNQhJXsYDi4B6GWzhLEIM0YeBanKPeW4WC1hXvq7LacKE_3slrc4NrFtiqZx7TJJuhhJnxLtVxdHFU-en9ectTcI29EJ1Lya7Z-yW_Y5UOvOUw02GdI3i0h6F0snolhVsTD-Atppl8vYLu5fGK0fWfyq49keQ_svtDl9LpNwJcCrf7TTKcX2jlMMy0brFpeUFy2TL5HD-Wjh1bSJrNze3kJk4W5IbjAkqN6aExAHFVOWcJIFkUsGV8ofN5G5UUzN8H7EA4NBei3_xlC" style=" margin:0 0 0 0; border:1px solid #eee; box-sizing:border-box;">
-    
-    <p><b>가격:</b> 19,900원</p>
-    <p></p>
-    <p style="margin: 20px 0 5px 0; font-weight: bold; font-size: 16px;">준앤종 쿨링 아이스 큐브 냉감 낮잠 메밀베개 1+1, 화이트 상세설명</p>
-    
-    <div style="margin: 5px 0 15px 0; padding: 15px; border: 1px solid #333; background-color: #f9f9f9; border-radius: 5px;">
-    무더운 여름, 낮잠 시간은 누구에게나 달콤한 휴식이지만, 땀으로 찝찝한 베개 때문에 숙면을 방해받는 경우가 많습니다. 준앤종 쿨링 아이스 큐브 냉감 낮잠 메밀베개는 이러한 고민을 한 번에 해결해 줄 최고의 선택이 될 것입니다. 1+1 구성으로 더욱 만족스럽게 만나볼 수 있으며, 시원한 냉감 기능은 물론 자연 친화적인 메밀 속통이 머리를 편안하게 받쳐주어 숙면을 유도합니다.
+</body>
+</html>"""
 
-특히 아이스 큐브 기술이 적용되어 베개 표면의 온도를 즉각적으로 낮춰주어 답답함 없이 시원한 잠을 즐길 수 있습니다. 사무실에서의 짧은 낮잠이나 집에서의 휴식 시간에 활용하기 좋습니다. 통기성이 뛰어난 소재를 사용하여 습기 걱정 없이 쾌적하게 사용할 수 있으며, 가볍고 휴대하기 편리하여 어디서든 시원한 휴식을 취할 수 있습니다.
+    post_body = {
+        "title": title_for_post,
+        "content": html_content,
+        "labels": ["자동차"],
+    }
 
-여름철 더위로 잠 못 이루는 밤, 또는 낮잠 시간의 질을 높이고 싶다면 준앤종 쿨링 아이스 큐브 냉감 낮잠 메밀베개를 강력 추천합니다. 1+1 구성으로 친구나 가족과 함께 나누기에도 좋으며, 시원함과 편안함을 동시에 선사하여 올여름 최고의 꿀잠을 경험하게 해 줄 것입니다.
+    res = blog_handler.posts().insert(
+        blogId=BLOG_ID,
+        body=post_body,
+        isDraft=False,
+        fetchImages=True
+    ).execute()
 
-#준앤종 #쿨링베개 #냉감베개 #메밀베개 #낮잠베개 #여름필수템
-    </div>
-        
-    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; text-align: center;">
-        <span style="font-size: 20px; font-weight: bold;">
-            🔗 <a href="https://link.coupang.com/re/AFFSDP?lptag=AF8413544&pageKey=8915887057&itemId=26050024611&vendorItemId=93059397131&traceid=V0-153-1fdad782f54960ad&clickBeacon=30cefb50-6d6d-11f1-aea5-9f9d0695bf02%7E3&requestid=20260621213156215306402114&token=31850C%7CMIXED" target="_blank" style="text-decoration: none; color: #1a2a40;"> 쿠팡에서 최저가 확인</a>
-        </span>
-    </div>
-</div>
- <p></p><BR><BR><BR>
- <div style=" padding:15px; margin:15px 0;"></div><div style=" padding:15px; margin:15px 0;"></div>
-<table style="width: 100%; border-collapse: collapse; margin-top: 40px;"><tr><td style="font-size: 21px; color: #1a2a40; border-left: 10px solid #1a2a40; padding: 15px 20px 5px 20px; background-color: #f7f9fa; font-weight: bold; letter-spacing: -0.5px; line-height: 1.4; vertical-align: bottom;">3. KURUA 냉감 경추베개 여름 쿨베개</td></tr></table>
-<div style="border:1px solid #eee; padding:15px; margin-top:15px;">
-    
-    <img src="https://ads-partners.coupang.com/image1/MWD_Zu_guHnueYv6MQITEv5UJevXxcKriRcEQx77_i-dx-XcAMVuixcbokBVfUxd3wHYG5YbZfAF39VsQEKyGN8SVCCBNf4zkctC7VNZHpPFV3b5jxzcdvxO5oKG_-rm2W1HLEou-QkKfHhfhLHa7VS89tMXm0bO82MYQtVtUQoPLyI8DKwdVzdI-jhC9-_6ewJPcqDkbjr9PWE6D8I_nt-PjhSddiFeFrUSLd3NknxVdjrTeq1iGa5ppnOkWsLVFgpyodKAea6Urjq7DVne98MriK-NaDbGLOR94UjJ-IQF_ZmC1cfnpLmwYbMXi6pxVWJKzNk=" style=" margin:0 0 0 0; border:1px solid #eee; box-sizing:border-box;">
-    
-    <p><b>가격:</b> 12,800원</p>
-    <p></p>
-    <p style="margin: 20px 0 5px 0; font-weight: bold; font-size: 16px;">KURUA 냉감 경추베개 여름 쿨베개 상세설명</p>
-    
-    <div style="margin: 5px 0 15px 0; padding: 15px; border: 1px solid #333; background-color: #f9f9f9; border-radius: 5px;">
-    KURUA 냉감 경추베개는 여름철에 사용하기 위한 쿨베개로, 사용자의 머리와 목을 편안하게 지지하여 편안한 수면을 도와줍니다. 이 베개의 특징은 냉감 기능을 통해 더운 여름에 시원한 잠자리를 제공하는 것입니다. 또한 경추를 보호하고 안정적인 자세를 유지하도록 설계되어 있습니다. 사용자의 수면質을 향상시키고, 일상 생활의 피로를 줄여주는 데 도움이 될 수 있습니다. KURUA 냉감 경추베개의 사용 편의성과 활용성은 매우 뛰어나며, 다양한 환경에서 사용할 수 있습니다.
+    if not res or not res.get("url"):
+        raise RuntimeError(f"Blogger 응답이 비정상입니다: {res}")
 
-KURUA 냉감 경추베개의 사용자평은 대체로 매우 긍정적입니다. 많은 사용자들이 이 베개가 제공하는 냉감과 편안함에 만족하는 것으로 나타났습니다. 또한 이 베개는 다양한 사이즈와 색상으로 제공되어 사용자의 취향에 맞게 선택할 수 있습니다. 이는 사용자에게 더 많은 선택의 자유를 제공하며, 사용자 자신의 스타일에 맞는 베개를 찾을 수 있도록 도와줍니다. KURUA 냉감 경추베개는 사용자의 수면 환경을 개선하고, 일상 생활의 질을 향상시키는 데 도움을 줄 수 있습니다.
+    ws.update_cell(target_row, 3, "완")
+    ws.update_cell(target_row, 15, res["url"])
+    log_step(f"포스팅 성공: {res['url']}")
+    print(f"[완료] 블로그 포스팅: {res['url']}")
 
-KURUA 냉감 경추베개의 장점은 냉감 기능과 경추 보호 기능이 있습니다. 이 베개의 냉감 기능은 더운 여름에 시원한 잠자리를 제공하며, 경추 보호 기능은 안정적인 자세를 유지하도록 도와줍니다. 또한 이 베개의 사용 편의성과 활용성은 매우 뛰어나며, 다양한 환경에서 사용할 수 있습니다. KURUA 냉감 경추베개는 사용자의 수면質을 향상시키고, 일상 생활의 피로를 줄여주는 데 도움이 될 수 있습니다.
-
-KURUA 냉감 경추베개는 다양한 환경에서 사용할 수 있습니다. 이는 사용자의 수면 환경을 개선하고, 일상 생활의 질을 향상시키는 데 도움을 줄 수 있습니다. KURUA 냉감 경추베개의 사용 편의성과 활용성은 매우 뛰어나며, 사용자는 이 베개를 다양한 상황에서 사용할 수 있습니다. KURUA 냉감 경추베개는 사용자의 수면質을 향상시키고, 일상 생활의 피로를 줄여주는 데 도움을 줄 수 있습니다.
-
-KURUA 냉감 경추베개의 결론은 이 베개의 사용 편의성과 활용성이 매우 뛰어나며, 사용자의 수면質을 향상시키고, 일상 생활의 피로를 줄여주는 데 도움을 줄 수 있습니다. KURUA 냉감 경추베개는 다양한 환경에서 사용할 수 있으며, 사용자의 취향에 맞게 선택할 수 있습니다. KURUA 냉감 경추베
-    </div>
-        
-    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; text-align: center;">
-        <span style="font-size: 20px; font-weight: bold;">
-            🔗 <a href="https://link.coupang.com/re/AFFSDP?lptag=AF8413544&pageKey=9486908423&itemId=28251040326&vendorItemId=95487220694&traceid=V0-153-78d0627b3ad0258b&requestid=20260621213156215306402114&token=31850C%7CMIXED" target="_blank" style="text-decoration: none; color: #1a2a40;"> 쿠팡에서 최저가 확인</a>
-        </span>
-    </div>
-</div>
- <p></p><BR><BR><BR>
- <div style=" padding:15px; margin:15px 0;"></div><div style=" padding:15px; margin:15px 0;"></div>
-<table style="width: 100%; border-collapse: collapse; margin-top: 40px;"><tr><td style="font-size: 21px; color: #1a2a40; border-left: 10px solid #1a2a40; padding: 15px 20px 5px 20px; background-color: #f7f9fa; font-weight: bold; letter-spacing: -0.5px; line-height: 1.4; vertical-align: bottom;">4. NUNUHANA 여름 냉감 쿨링 베개 2개</td></tr></table>
-<div style="border:1px solid #eee; padding:15px; margin-top:15px;">
-    
-    <img src="https://ads-partners.coupang.com/image1/nvBbxhrPUSsgP9BXnrD0kxUugqpoWLBiER0r73RfUKqjgqeOY2rOH6S5tlcOg2oPCw8IWZb5x3wl9Kz4ZvDnEED10f1GkISbAyHJD92-BvhICUSgn6sMFRMIgLtlIXZsodK13DH3eMpBxTEJ58C2IwHDo9XItBu1n0uxYMkAq0UAVVTLy0ZTZt2fwcebO3oOwL7cdZ2Wy0t6id7K9_Rl1n8xb1YK-POJbSPY7O_DM7bkn1ALciyfN-IK9V0VAipkvg7mL0wkvpJP7aD0qgSU6RZEEDoqxsacp0gP0CojgTQdmTbNkrso9LUr-TpSvYmfuEr-yV8X" style=" margin:0 0 0 0; border:1px solid #eee; box-sizing:border-box;">
-    
-    <p><b>가격:</b> 16,800원</p>
-    <p></p>
-    <p style="margin: 20px 0 5px 0; font-weight: bold; font-size: 16px;">NUNUHANA 여름 냉감 쿨링 베개 2개 상세설명</p>
-    
-    <div style="margin: 5px 0 15px 0; padding: 15px; border: 1px solid #333; background-color: #f9f9f9; border-radius: 5px;">
-    무더운 여름 밤, 뒤척임 없이 시원하게 숙면을 취하고 싶으시다면 NUNUHANA 여름 냉감 쿨링 베개가 정답입니다. 이 쿨링 베개는 특별한 냉감 소재를 사용하여 닿는 순간 시원함을 선사하며, 잠자는 동안에도 쾌적함을 유지시켜 줍니다. 2개 세트로 구성되어 있어 침대 양쪽에 두고 사용하거나, 하나는 베개로, 다른 하나는 등받이 쿠션으로 활용하는 등 다양한 방법으로 활용할 수 있습니다. 통기성이 뛰어나 땀이나 습기를 빠르게 흡수하고 배출하여 끈적임 없이 산뜻한 수면 환경을 만들어 줍니다. 또한, 부드러운 촉감과 적절한 높이감으로 편안한 자세를 유지하도록 도와주어 숙면을 돕습니다. 여름철 더위로 잠 못 이루는 밤, NUNUHANA 쿨링 베개와 함께 시원하고 개운한 여름밤을 맞이하세요.
-
-#여름필수템 #냉감베개 #쿨링베개 #숙면 #꿀잠 #시원한여름
-    </div>
-        
-    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; text-align: center;">
-        <span style="font-size: 20px; font-weight: bold;">
-            🔗 <a href="https://link.coupang.com/re/AFFSDP?lptag=AF8413544&pageKey=9446034182&itemId=28097995492&vendorItemId=95516049474&traceid=V0-153-58642ede28466f1d&requestid=20260621213156215306402114&token=31850C%7CMIXED" target="_blank" style="text-decoration: none; color: #1a2a40;"> 쿠팡에서 최저가 확인</a>
-        </span>
-    </div>
-</div>
- <p></p><BR><BR><BR>
- <div style=" padding:15px; margin:15px 0;"></div><div style=" padding:15px; margin:15px 0;"></div>
-<table style="width: 100%; border-collapse: collapse; margin-top: 40px;"><tr><td style="font-size: 21px; color: #1a2a40; border-left: 10px solid #1a2a40; padding: 15px 20px 5px 20px; background-color: #f7f9fa; font-weight: bold; letter-spacing: -0.5px; line-height: 1.4; vertical-align: bottom;">5. 100% 국내생산 ! 인견 쿨매트 쿨베개 1+1 냉베개</td></tr></table>
-<div style="border:1px solid #eee; padding:15px; margin-top:15px;">
-    
-    <img src="https://ads-partners.coupang.com/image1/LdGT6PlgSSEyjJMELWn_Dw6PpuVQzWpnw2Tt1sWFh1iEWoVhcoDIGfghNzcxFKhloGgdET9etl4kpipg55WzVcUOntbOV-SMYdeorHO4_sG_zvz9jhfJVmeE4rMRpNh0EoQP7TH20K3phbVL24l0sULmfreOHDLIYCXaf7AHsvJMBdSZVa0TdKp-fqSX5oWChU6BWJ7WTO8_KB26ePxoOy53nEJdkZ0MGdHn1BR8drvjaN_BZaJ-TNAfF6ILnyYOy61ahUNFwX4c101VTW2qR52rvsiNcbnYrKFuKN7YlUAQ3fBkTm5KXB5mgmAO-B5w5421o-EU" style=" margin:0 0 0 0; border:1px solid #eee; box-sizing:border-box;">
-    
-    <p><b>가격:</b> 9,900원</p>
-    <p></p>
-    <p style="margin: 20px 0 5px 0; font-weight: bold; font-size: 16px;">100% 국내생산 ! 인견 쿨매트 쿨베개 1+1 냉베개 상세설명</p>
-    
-    <div style="margin: 5px 0 15px 0; padding: 15px; border: 1px solid #333; background-color: #f9f9f9; border-radius: 5px;">
-    무더운 여름, 시원하게 잠들고 싶다면 100% 국내산 인견 쿨매트와 쿨베개 세트가 정답이에요. 통기성이 뛰어난 인견 소재로 만들어져 땀이나 습기를 빠르게 흡수하고 배출해 주니, 한여름 밤에도 쾌적함을 유지할 수 있답니다. 1+1 구성으로 매트와 베개를 함께 사용하면 더욱 시원한 침실 환경을 만들 수 있어요.
-
-특히 아이가 있는 집이나 더위에 민감하신 부모님께 선물하기에도 안성맞춤이랍니다. 인견 특유의 부드러운 촉감이 피부에 닿는 느낌이 좋아 편안한 숙면을 도와줄 거예요. 올여름, 이 쿨매트와 쿨베개 세트로 숙면의 질을 높여보세요.
-
-#인견쿨매트 #쿨베개 #여름필수템 #국내생산 #시원한잠 #가성비세트
-    </div>
-        
-    <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; text-align: center;">
-        <span style="font-size: 20px; font-weight: bold;">
-            🔗 <a href="https://link.coupang.com/re/AFFSDP?lptag=AF8413544&pageKey=9527680186&itemId=28409820561&vendorItemId=95361016091&traceid=V0-153-ecfa504af57aa04f&requestid=20260621213156215306402114&token=31850C%7CMIXED" target="_blank" style="text-decoration: none; color: #1a2a40;"> 쿠팡에서 최저가 확인</a>
-        </span>
-    </div>
-</div>
- <p></p><BR><BR><BR>
- <div style=" padding:15px; margin:15px 0;"></div><div style=" padding:15px; margin:15px 0;"></div>
-<p style="margin-top:15px;">오늘 추천해 드린 아이템들 중에서 여러분의 마음을 사로잡은 제품이 있기를 바랍니다. 모두 성공적인 쇼핑 되시길 응원하겠습니다!</p><p style="margin-top:15px;">다양한 제품들 사이에서 헤매지 않도록 핵심 정보만 담아보았습니다. 좋은 아이템 하나로 일상의 효율을 확실하게 높여보시는 건 어떨까요?</p><p style="margin-top:15px;">지금까지 여러분의 소중한 쇼핑 시간을 줄여줄 베스트 아이템들을 살펴보았습니다. 합리적인 선택을 통해 더 즐거운 일상을 누리시길 바랍니다.</p><p style="margin-top:15px;">오늘 소개해 드린 정보가 제품 선택의 고민을 해결하는 데 도움이 되셨나요? 꼼꼼히 비교해 보시고 본인에게 가장 잘 맞는 제품을 찾아보시기 바랍니다.</p>
-<hr style="border:0; border-top:1px solid #eee; margin:30px 0;">
-<p style="text-align:center; color:#222; font-size:16px;">
-※ 이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.
-</p>
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        tb = traceback.format_exc()
+        print("❌ 최종 실패:", e)
+        print(tb)
+        raise
