@@ -57,7 +57,7 @@ OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
 SHEET_ID = "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs"
-BLOG_ID = "5711594645656469839"  # 고정
+BLOG_ID = "4737456424227083027"
 
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 genai_client = None
@@ -217,6 +217,22 @@ def sanitize_filename(filename: str) -> str:
     filename = re.sub(r'_+', '_', filename)
     filename = filename.strip('_ ').strip()
     return filename
+
+def make_random_title(car_name):
+    # 랜덤 조합 용도어
+    parts = {
+        "prefix": ["상세", "완전", "팩트", "핵심", "최신", "정밀", "꼼꼼한"],
+        "mid": ["제원+", "색상+", "디자인+", "스펙+", "옵션+", "트림+"],
+        "suffix": ["총평", "분석", "리포트", "가이드", "정보", "한눈에", "모든 것"]
+    }
+    
+    prefix = random.choice(parts["prefix"])
+    mid = random.choice(parts["mid"])
+    suffix = random.choice(parts["suffix"])
+    
+    # 자동차 이름 + 랜덤 조합
+    title = f"{car_name} {prefix} {mid} {suffix}"
+    return title
 
 async def close_popup(page):
     try:
@@ -485,7 +501,8 @@ async def main():
     if not extracted_specs:
         extracted_specs = [("정보", "추출 실패")]
 
-    title_for_post = f"{car_name} 자동차 상세정보"
+    # 랜덤 제목 생성 (자동차 이름 포함)
+    title_for_post = make_random_title(car_name)
 
     # 이미지 갤러리 HTML
     first_img_html = ""
@@ -571,46 +588,38 @@ async def main():
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>{title_for_post}</title>
 </head>
-<body style="font-family:'Malgun Gothic', sans-serif; line-height:1.9; color:#444; background-color:#f5f6f8; padding:20px; margin:0;">
-<div style="background-color:#ffffff; padding:40px; border-radius:8px; box-shadow:0 2px 10px rgba(0,0,0,0.03); max-width:850px; margin:0 auto;">
-    <p style="font-size:15px; color:#4d4d4d; text-align:justify; margin-bottom:25px;">{title_for_post}</p>
+<body>
+    <p style="font-size:18px;">{title_for_post}</p>
     {first_img_html}
-    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">1. {car_name} 자동차 주요 스펙 요약</h2>
-    <p style="font-size:15px; color:#555; margin-bottom:10px;">차량 검토 시 가장 기본축이 되는 <strong>{car_name}</strong> 사양의 공식 가격 및 요약 데이터 테이블입니다.</p>
+    <h2 style="font-size:20px;">1. {car_name} 자동차 주요 스펙 요약</h2>
+    <p style="font-size:15px;">차량 검토 시 가장 기본축이 되는 {car_name} 사양의 공식 가격 및 요약 데이터 테이블입니다.</p>
     {summary_table_html}
-    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">2. {car_name} 자동차 상세 제원 데이터 종합 테이블</h2>
-    <p style="font-size:15px; color:#555; margin-bottom:10px;">기계적인 엔진 스펙 사양 정보와 트림별 치수 규격을 체계화한 정밀 제원표입니다.</p>
+    <h2 style="font-size:20px;">2. {car_name} 자동차 상세 제원 데이터 종합 테이블</h2>
+    <p style="font-size:15px;">기계적인 엔진 스펙 사양 정보와 트림별 치수 규격을 체계화한 정밀 제원표입니다.</p>
     {spec_table_html}
     <br><br>
     <div style="margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; text-align: center;">
         <span style="font-size: 20px; font-weight: bold;">
-            🔗 <a href="{info_url}" target="_blank" style="text-decoration: none; color: #1a2a40;">더 자세한 내용은 여기를 클릭하세요!!</a>
+            🔗 <a href="{info_url}" target="_blank">더 자세한 내용은 여기를 클릭하세요!!</a>
         </span>
     </div>
     <br><br>
-    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">3. {car_name} 자동차 실물 디자인 외관 사진</h2>
-    <p style="font-size:15px; color:#555; margin-bottom:15px;">외관의 강인한 디자인과 디테일을 생생하게 확인할 수 있는 {car_name} 공식 익스테리어 포토 갤러리입니다.</p>
+    <h2 style="font-size:20px;">3. {car_name} 자동차 실물 디자인 외관 사진</h2>
+    <p style="font-size:15px;">외관의 강인한 디자인과 디테일을 생생하게 확인할 수 있는 {car_name} 공식 익스테리어 포토 갤러리입니다.</p>
     <div style="margin: 20px 0; width: 100%;">
         {gallery_exterior_html if exterior_urls else "<p>익스테리어 이미지를 불러오지 못했습니다.</p>"}
     </div>
     <br><br>
-    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">4. {car_name} 자동차 실물 디자인 내부 사진</h2>
-    <p style="font-size:15px; color:#555; margin-bottom:15px;">실내의 고급스러운 인테리어와 편의사양을 자세히 살펴볼 수 있는 {car_name} 공식 인테리어 포토 갤러리입니다.</p>
+    <h2 style="font-size:20px;">4. {car_name} 자동차 실물 디자인 내부 사진</h2>
+    <p style="font-size:15px;">실내의 고급스러운 인테리어와 편의사양을 자세히 살펴볼 수 있는 {car_name} 공식 인테리어 포토 갤러리입니다.</p>
     <div style="margin: 20px 0; width: 100%;">
         {gallery_interior_html if interior_urls else "<p>인테리어 이미지를 불러오지 못했습니다.</p>"}
     </div>
     <br><br>
-    <h2 style="font-size:21px; color:#1a2a40; border-left:10px solid #1a2a40; padding:15px 20px 5px 20px; background-color:#f7f9fa; font-weight:bold;">5. {car_name} 자동차 총평</h2>
-    <p style="font-size:15px; color:#555; margin-bottom:15px;"></p>
+    <h2 style="font-size:20px;">5. {car_name} 자동차 총평</h2>
+    <p style="font-size:15px;"></p>
     {ai_review_html}
-</div>
-<br><br>
-<div style="margin-top: 30px; font-size: 14px; color: #888;">
-    {' '.join(['#' + word for word in title_for_post.split()])}
-</div>
-<br><br>
 </body>
 </html>"""
 
@@ -635,6 +644,7 @@ async def main():
     log_step(f"포스팅 성공: {res['url']}")
     print(f"[완료] 블로그 포스팅: {res['url']}")
     print(f"📸 이미지: 익스테리어 {len(exterior_urls)}개 + 인테리어 {len(interior_urls)}개 = 총 {len(web_image_urls)}개")
+    print(f"📝 제목: {title_for_post}")
 
 if __name__ == "__main__":
     try:
