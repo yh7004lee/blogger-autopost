@@ -1,5 +1,5 @@
 from urllib.parse import urlparse, parse_qs
-import re, json, requests, random, os, textwrap, glob, sys, traceback, pickle
+import re, json, requests, random, os, textwrap, glob, sys, traceback, pickle, time
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 from googleapiclient.discovery import build
@@ -9,7 +9,6 @@ from google.oauth2.service_account import Credentials
 from openai import OpenAI
 from google.oauth2.credentials import Credentials as UserCredentials
 from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import InstalledAppFlow
 
 # ================================
 # 출력 한글 깨짐 방지
@@ -133,12 +132,12 @@ rows = ws.get_all_values()
 
 for i, row in enumerate(rows[1:], start=2):
     url_cell = row[4].strip() if len(row) > 4 and row[4] else ""    # E열
-    status_cell = row[6].strip() if len(row) > 6 and row[6] else ""  # G열
+    statuscell = row[6].strip() if len(row) > 6 and row[6] else ""  # G열
 
-    debug(f"검사중 {i}행 -> URL='{url_cell}', STATUS='{status_cell}'")
+    debug(f"검사중 {i}행 -> URL='{urlcell}', STATUS='{statuscell}'")
 
-    if url_cell and status_cell != "완":
-        my_url, target_row = url_cell, i
+    if urlcell and statuscell != "완":
+        my_url, target_row = urlcell, i
         break
 
 if not my_url:
@@ -178,7 +177,7 @@ def pick_random_background() -> str:
     return random.choice(files) if files else ""
 
 # ================================
-# 썸네일 생성
+# 썸네일 생성 및 WebP 변환
 # ================================
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -212,11 +211,21 @@ def make_thumb(save_path: str, var_title: str):
         text_bbox = draw.textbbox((0, 0), line, font=font)
         text_width = text_bbox[2] - text_bbox[0]
         x = (500 - text_width) / 2
-        draw.text((x, var_ypoint), line, "#FFEECB", font=font)
-        var_ypoint += line_height
+        draw.text((x, var_y_point), line, "#FFEECB", font=font)
+        var_y_point += line_height
 
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
+    to_webp(save_path)
+
+def to_webp(file_path):
+    try:
+        img = Image.open(file_path)
+        webp_path = file_path.replace('.png', '.webp')
+        img.save(webp_path, 'WEBP')
+        debug(f"WebP 변환 완료: {webp_path}")
+    except Exception as e:
+        debug(f"⚠️ WebP 변환 실패: {e}")
 
 # ================================
 # Google Drive 인증
@@ -288,53 +297,51 @@ blog_handler = get_blogger_service()
 log_step("5단계: Blogger 인증 성공")
 
 # ================================
-# 복지 데이터 가져오기 (API 에러 방어로직 적용)
+# 복지 데이터 가져오기 (네이버 파싱 방식 도입, 5회 재시도 적용)
 # ================================
 def fetch_welfare_info(wlfareInfoId):
-    """
-    기존의 깨지기 쉬운 정규식 파싱 대신, 복지로 표준 API 엔드포인트를 호출하여
-    안정적으로 JSON 데이터를 수신하도록 변경된 함수입니다.
-    """
-    api_url = "https://www.bokjiro.go.kr/ssis-tbu/wlfareInfo/wlfareInfoMng.do"
-    
+    url = f"https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId={wlfareInfoId}&wlfareInfoReldBztpCd=01"
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept": "application/json, text/javascript, */*; q=0.01",
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-        "Referer": "https://www.bokjiro.go.kr/"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Referer": "https://www.bokjiro.go.kr/",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1"
     }
     
-    payload = {
-        "wlfareInfoId": wlfareInfoId,
-        "wlfareInfoReldBztpCd": "01"
-    }
-    
-    try:
-        debug(f"API 호출 시도 URL: {api_url}, ID: {wlfareInfoId}")
-        resp = requests.post(api_url, data=payload, headers=headers, timeout=20)
-        resp.raise_for_status()
-        resp.encoding = "utf-8"
-        
-        res_data = resp.json()
-        
-        if "result" in res_data and "dmWlfareInfo" in res_data["result"]:
-            return res_data["result"]["dmWlfareInfo"]
-        elif "dmWlfareInfo" in res_data:
-            return res_data["dmWlfareInfo"]
-        else:
-            return res_data
+    for attempt in range(5):
+        try:
+            time.sleep(random.uniform(5, 10))  # 5~10초 대기열
+            debug(f"복지로 데이터 호출 시도 URL: {url}, 회차: {attempt+1}/5")
             
-    except json.JSONDecodeError as je:
-        debug(f"JSON 디코딩 에러 발생 (HTML 페이지 반환 등): {je}")
-        raise RuntimeError("복지로 API 응답 형식이 일치하지 않거나 서버 에러가 발생했습니다.")
-    except Exception as e:
-        raise RuntimeError(f"복지로 데이터 가져오기 실패: {e}")
+            resp = requests.get(url, headers=headers, timeout=30)
+            resp.encoding = "utf-8"
+            
+            if resp.status_code == 200:
+                html = resp.text
+                outer_match = re.search(r'initParameter\((\{.*?\})\);', html, re.S)
+                if not outer_match:
+                    raise ValueError("initParameter JSON 을 찾지 못했습니다.")
+                return json.loads(json.loads(outer_match.group(1))["initValue"]["dmWlfareInfo"])
+            else:
+                debug(f"⚠️ 상태 코드 {resp.status_code} - 재시도 ({attempt + 1}/5)")
+                time.sleep(3)
+                
+        except Exception as e:
+            debug(f"⚠️ 연결 실패 ({attempt + 1}/5): {e}")
+            if attempt < 4:
+                time.sleep(5)
+            else:
+                raise
+                
+    raise ValueError("최대 재시도 횟수 초과")
 
 def clean_html(raw_html):
     return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
 
 # ================================
-# AI REVIEW (5 차 시도 폴백)
+# AI REVIEW (5차 시도 폴백)
 # ================================
 def generate_ai_review(prompt):
     if genai_client:
@@ -479,7 +486,7 @@ def make_last(keyword):
         "앞으로도 다양한 복지 정보를 전해드리겠습니다.",
         "댓글과 의견도 남겨주시면 큰 힘이 됩니다.",
         "끝까지 읽으셔서 감사드리며, 다음 글도 기대해 주세요.",
-        "여러분의 생활이 더 나아지길 바라며 글을 마칩니다.",
+        "여러분의 생활이 더 나아지길 바라며 글을 마칠게요.",
     ]
     return " ".join(parts)
 
@@ -511,7 +518,7 @@ def get_related_posts(blog_id, count=4):
     return html_box
 
 # ================================
-# 본문 생성 + 포스팅
+# 본문 생성 + 포스팅 (깔끔한 요약 테이블 적용)
 # ================================
 try:
     parsed = urlparse(my_url)
@@ -524,26 +531,19 @@ try:
 
     data = fetch_welfare_info(wlfareInfoId)
     keyword = clean_html(data.get("wlfareInfoNm", "복지 서비스")).strip()
-    title = f"2025 {keyword} 지원 자격 신청방법"
+    title = f"2026 {keyword} 지원 자격 신청방법"
     safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", keyword)
 
     os.makedirs(THUMB_DIR, exist_ok=True)
     thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
     make_thumb(thumb_path, title)
-    log_step("6단계: 썸네일 생성 성공")
-    img_url = upload_to_drive(thumb_path, f"{safe_keyword}.png")
+    log_step("6단계: 썸네일(WebP 변환포함) 생성 성공")
+    
+    # 드라이브 링크는 확장자 .webp로 변경
+    img_url = upload_to_drive(thumb_path.replace('.png', '.webp'), f"{safe_keyword}.webp")
 
     intro = make_intro(keyword)
     last = make_last(keyword)
-
-    html = f"""
-<div id="jm"> </div>
-<p data-ke-size="size18">{intro}</p><br />
-<p style="text-align:center;">
-  <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
-</p>
-<span></span><br />
-"""
 
     fields = {
         "개요": "wlfareInfoOutlCn",
@@ -553,6 +553,38 @@ try:
         "추가정보": "etct"
     }
 
+    # 1. 요약 테이블 (Summary Table) HTML 구성
+    summary_table_rows = ""
+    for title_k, key in fields.items():
+        val_text = clean_html(data.get(key, ""))
+        if val_text and val_text.strip() not in ["", "정보 없음"]:
+            summary_table_rows += f"""
+            <tr style="border-bottom: 1px solid #eaeaea;">
+                <td style="padding: 14px 16px; font-size: 15px; font-weight: bold; color: #222; background-color: #fcfcfc; width: 25%; text-align: center;">{title_k}</td>
+                <td style="padding: 14px 16px; font-size: 15px; color: #333; font-weight: bold; text-align: justify;">{val_text}</td>
+            </tr>"""
+            
+    summary_table_html = f"""
+    <table style="width: 100%; border-collapse: collapse; border-top: 2px solid #1a2a40; border-bottom: 1px solid #1a2a40; margin: 20px 0 35px 0; text-align: left;">
+        <tbody>{summary_table_rows}</tbody>
+    </table>"""
+
+    # 기본 본문 구성 (인트로 + 썸네일 + 요약테이블)
+    html = f"""
+<div id="jm"> </div>
+<p data-ke-size="size18">{intro}</p><br />
+<p style="text-align:center;">
+  <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
+</p>
+<span></span><br />
+
+<br /><h2 data-ke-size='size26' style="border-left: 8px solid #1a2a40; padding-left: 10px;">{keyword} 주요 정보 요약</h2><br />
+<p data-ke-size='size18'>정책 검토 시 기준이 되는 <b>{keyword}</b>의 핵심 요약 데이터 표입니다.</p>
+{summary_table_html}
+<br />
+"""
+
+    # 2. 본문 상세 섹션 추가
     for title_k, key in fields.items():
         value = data.get(key, "")
         if value and value.strip() not in ["", "정보 없음"]:
@@ -614,8 +646,7 @@ except Exception as e:
     try:
         log_step(f"7단계: 실패: {e} | {tb}")
         if target_row:
-            ws.update_cell(target_row, 7, "실패")
+            ws.update_cell(target_row, 7, "실폐")
     except Exception as inner:
         print(f"⚠️ 실패 로그 기록도 실패: {inner}")
     raise
-
