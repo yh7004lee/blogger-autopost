@@ -1,5 +1,5 @@
 from urllib.parse import urlparse, parse_qs
-import re, json, requests, random, os, textwrap, glob, sys, traceback, pickle
+import re, json, requests, random, os, textwrap, glob, sys, traceback, pickle, time
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 from googleapiclient.discovery import build
@@ -20,21 +20,18 @@ sys.stdout.reconfigure(encoding="utf-8")
 # 단계별 로그 기록 함수 (P열, 한 줄 유지)
 # ================================
 def log_step(msg: str):
-    """단계별 로그를 구글시트 P열(16)에 누적 기록. 줄바꿈 대신 ' | ' 사용."""
     try:
         tr = globals().get("target_row", None)
-        if tr:
+        if tr and "ws" in globals():
             prev = ws.cell(tr, 16).value or ""
             sep = " | " if prev else ""
             ws.update_cell(tr, 16, f"{prev}{sep}{msg}")
+        print(msg)
     except Exception as e:
-        print("⚠️ 로그 기록 실패:", e)
+        print(f"⚠️ 로그 기록 실패: {e} / 원문: {msg}")
 
 # ================================
-# OpenAI 키 로드 (선택)
-# ================================
-# ================================
-# API 키 - GitHub Secrets 에서 읽기 (기존 OpenAI 키 로드 부분 전체 교체)
+# API 키 - GitHub Secrets 에서 읽기
 # ================================
 API_KEYS_JSON = os.getenv("API_KEYS_JSON")
 
@@ -46,7 +43,6 @@ try:
 except Exception as e:
     raise RuntimeError(f"API_KEYS_JSON 파싱 실패: {e}")
 
-# 키 가져오기
 OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
@@ -57,7 +53,6 @@ DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 GCS_API_KEY = secrets.get("GCS_API_KEY", "")
 GCS_CX = secrets.get("GCS_CX", "")
 
-# OpenAI 클라이언트
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 genai_client = None
 if GEMINI_API_KEY:
@@ -75,7 +70,6 @@ try:
     SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
-    ("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
     ws = gc.open_by_key(SHEET_ID).sheet1
     log_step("1단계: Google Sheets 인증 성공")
 except Exception as e:
@@ -90,7 +84,7 @@ ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
 THUMB_DIR = "thumbnails"
 
 # ================================
-# 블로그 ID 로테이션 (3개)
+# 블로그 ID 로테이션
 # ================================
 BLOG_IDS = [
     "5711594645656469839",
@@ -99,23 +93,25 @@ BLOG_IDS = [
 ]
 
 # ================================
-# Google Sheet에서 처리할 URL 찾기 (E열=URL, G열='완' 체크)
+# 대상 URL 찾기
 # ================================
 target_row, my_url = None, None
 rows = ws.get_all_values()
 for i, row in enumerate(rows[1:], start=2):
-    url_cell = row[4] if len(row) > 4 else ""   # E열
-    status_cell = row[6] if len(row) > 6 else ""  # G열
+    url_cell = row[4] if len(row) > 4 else ""
+    status_cell = row[6] if len(row) > 6 else ""
     if url_cell and (not status_cell or status_cell.strip() != "완"):
         my_url, target_row = url_cell, i
         break
+
 if not my_url:
     log_step("2단계: 처리할 URL 없음 (모든 행 완료)")
     sys.exit(0)
+
 log_step(f"2단계: URL 추출 성공 ({my_url})")
 
 # ================================
-# 로테이션 인덱스 읽기 (O1)
+# 로테이션 인덱스 읽기
 # ================================
 def read_rotation_index():
     try:
@@ -133,10 +129,7 @@ BLOG_ID = BLOG_IDS[next_index]
 log_step(f"회전 인덱스: last={last_index} -> next={next_index} (BLOG_ID={BLOG_ID})")
 
 # ================================
-# 썸네일 생성 (랜덤 배경)
-# ================================
-# ================================
-# 배경 이미지 랜덤 선택
+# 썸네일
 # ================================
 def pick_random_background() -> str:
     files = []
@@ -144,15 +137,9 @@ def pick_random_background() -> str:
         files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
     return random.choice(files) if files else ""
 
-
-# ================================
-# 썸네일 생성
-# ================================
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     bg_path = pick_random_background()
-
-    # 배경 불러오기 (없으면 흰색 캔버스)
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
     else:
@@ -165,38 +152,28 @@ def make_thumb(save_path: str, var_title: str):
 
     canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
     canvas.paste(bg, (0, 0))
-
-    # 검은 반투명 박스
     rectangle = Image.new("RGBA", (500, 250), (0, 0, 0, 200))
     canvas.paste(rectangle, (0, 125), rectangle)
-
     draw = ImageDraw.Draw(canvas)
 
-    # 글자 줄바꿈 처리
     var_title_wrap = textwrap.wrap(var_title, width=12)
-
-    # 줄 간격 계산
     bbox = font.getbbox("가")
     line_height = (bbox[3] - bbox[1]) + 12
     total_text_height = len(var_title_wrap) * line_height
     var_y_point = 500 / 2 - total_text_height / 2
 
     for line in var_title_wrap:
-        # 텍스트 폭 계산 후 중앙 정렬
         text_bbox = draw.textbbox((0, 0), line, font=font)
         text_width = text_bbox[2] - text_bbox[0]
-        x = (500 - text_width) / 2  # 가운데 정렬 좌표
+        x = (500 - text_width) / 2
         draw.text((x, var_y_point), line, "#FFEECB", font=font)
         var_y_point += line_height
 
-    # 최종 크기 조정
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
 
-
-
 # ================================
-# Google Drive 인증 (OAuth: 2nd.json + drive_token_2nd.pickle)
+# Drive
 # ================================
 def get_drive_service():
     creds = None
@@ -208,20 +185,15 @@ def get_drive_service():
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
-            # 액션 환경에서는 토큰을 사전 복원해야 함 (로컬서버 불가)
             raise RuntimeError("drive_token_2nd.pickle이 없거나 만료됨. GitHub Secrets에서 복원 필요.")
         with open("drive_token_2nd.pickle", "wb") as token:
             pickle.dump(creds, token)
 
     return build("drive", "v3", credentials=creds)
 
-# ================================
-# Google Drive 업로드 (blogger 폴더)
-# ================================
 def upload_to_drive(file_path, file_name):
     try:
         drive_service = get_drive_service()
-        # blogger 폴더 확인/생성
         query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
         results = drive_service.files().list(q=query, fields="files(id, name)").execute()
         items = results.get("files", [])
@@ -236,7 +208,6 @@ def upload_to_drive(file_path, file_name):
         media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
         file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
 
-        # anyone 읽기 권한
         drive_service.permissions().create(
             fileId=file["id"],
             body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
@@ -250,7 +221,7 @@ def upload_to_drive(file_path, file_name):
         raise
 
 # ================================
-# Blogger 인증 (refresh_token JSON)
+# Blogger
 # ================================
 def get_blogger_service():
     try:
@@ -267,74 +238,71 @@ def get_blogger_service():
 blog_handler = get_blogger_service()
 log_step("5단계: Blogger 인증 성공")
 
+def publish_blogger_post(blog_id, post_body):
+    try:
+        req = blog_handler.posts().insert(
+            blogId=blog_id,
+            body=post_body,
+            isDraft=False,
+            fetchImages=True
+        )
+        res = req.execute()
+        if not isinstance(res, dict):
+            raise RuntimeError(f"Blogger 응답 형식 이상: {type(res)}")
+        if not res.get("url"):
+            raise RuntimeError(f"Blogger 응답에 url 없음: {res}")
+        return res
+    except Exception as e:
+        raise RuntimeError(f"Blogger 게시 실패: {e}")
+
 # ================================
-# 복지 데이터 가져오기
-# ================================
-# ================================
-# 복지 데이터 가져오기 (timeout + 에러 핸들링 추가)
+# 복지 데이터
 # ================================
 def fetch_welfare_info(wlfareInfoId):
     url = f"https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId={wlfareInfoId}&wlfareInfoReldBztpCd=01"
-    
     try:
-        resp = requests.get(url, timeout=20)  # 20 초 타임아웃 추가
+        headers = {
+            "User-Agent": "Mozilla/5.0"
+        }
+        resp = requests.get(url, timeout=20, headers=headers)
+        resp.raise_for_status()
         resp.encoding = "utf-8"
         html = resp.text
         outer_match = re.search(r'initParameter\((\{.*?\})\);', html, re.S)
         if not outer_match:
             raise ValueError("initParameter JSON 을 찾지 못했습니다.")
         return json.loads(json.loads(outer_match.group(1))["initValue"]["dmWlfareInfo"])
-    except requests.exceptions.ConnectTimeout:
-        log_step(f"복지로 연결 시간 초과 (wlfareInfoId={wlfareInfoId})")
-        raise RuntimeError(f"복지로 연결 실패: 시간 초과 (wlfareInfoId={wlfareInfoId})")
-    except requests.exceptions.RequestException as e:
-        log_step(f"복지로 요청 오류 (wlfareInfoId={wlfareInfoId}): {e}")
-        raise RuntimeError(f"복지로 연결 실패: {e}")
+    except Exception as e:
+        raise RuntimeError(f"복지로 데이터 가져오기 실패: {e}")
 
 def clean_html(raw_html):
     return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
 
 # ================================
-# ChatGPT API로 본문 가공 (요약 + 3~4문단, <p size18> 강제)
-# ================================
-# ================================
-# AI REVIEW (5 차 시도 폴백)
+# AI
 # ================================
 def generate_ai_review(prompt):
-    # 1. Gemini Flash
     if genai_client:
         try:
-            response = genai_client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
+            response = genai_client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
             print("✅ AI 성공: Gemini Flash")
             return response.text.strip()
         except Exception as e:
             print("⚠️ Gemini Flash 실패:", e)
 
-    # 2. Gemini Flash Lite
     if genai_client:
         try:
-            response = genai_client.models.generate_content(
-                model="gemini-2.5-flash-lite",
-                contents=prompt
-            )
+            response = genai_client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
             print("✅ AI 성공: Gemini Flash Lite")
             return response.text.strip()
         except Exception as e:
             print("⚠️ Gemini Flash Lite 실패:", e)
 
-    # 3. Groq
     if GROQ_API_KEY:
         try:
-            print("🚀 [3 차 시도] Groq")
             res = requests.post(
                 "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {GROQ_API_KEY}",
-                    "Content-Type": "application/json"
-                },
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"},
                 json={
                     "model": "llama-3.3-70b-versatile",
                     "messages": [
@@ -347,20 +315,16 @@ def generate_ai_review(prompt):
                 timeout=20
             )
             data = res.json()
-            if res.status_code != 200:
-                print("⚠️ Groq API 오류:", data)
-            if "choices" in data and data["choices"] and data["choices"][0]["message"].get("content"):
-                text = data["choices"][0]["message"]["content"]
-                print("✅ AI 성공: Groq")
-                return text.strip()
-            print("⚠️ Groq 응답 없음")
+            if res.status_code == 200 and data.get("choices"):
+                text = data["choices"][0]["message"].get("content", "")
+                if text.strip():
+                    print("✅ AI 성공: Groq")
+                    return text.strip()
         except Exception as e:
             print("⚠️ Groq 실패:", e)
 
-    # 4. OpenRouter
     if OPENROUTER_API_KEY:
         try:
-            print("🚀 [4 차 시도] OpenRouter")
             res = requests.post(
                 "https://openrouter.ai/api/v1/chat/completions",
                 headers={
@@ -376,46 +340,38 @@ def generate_ai_review(prompt):
                 timeout=20
             )
             data = res.json()
-            if res.status_code != 200:
-                print("⚠️ OpenRouter API 오류:", data)
-            if "choices" in data and data["choices"] and data["choices"][0]["message"].get("content"):
-                text = data["choices"][0]["message"]["content"]
-                print("✅ AI 성공: OpenRouter")
-                return text.strip()
-            print("⚠️ OpenRouter 응답 없음")
+            if res.status_code == 200 and data.get("choices"):
+                text = data["choices"][0]["message"].get("content", "")
+                if text.strip():
+                    print("✅ AI 성공: OpenRouter")
+                    return text.strip()
         except Exception as e:
             print("⚠️ OpenRouter 실패:", e)
 
-    # 5. GPT-4o-mini
     if client:
         try:
-            print("🚀 [5 차 시도] GPT-4o-mini")
             res = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.7,
                 max_tokens=650
             )
+            text = res.choices[0].message.content.strip()
             print("✅ AI 성공: GPT-4o-mini")
-            return res.choices[0].message.content.strip()
+            return text
         except Exception as e:
             print("❌ 모든 AI 실패:", e)
 
-    return f"설명 정보입니다. 실패"
+    return "설명 정보입니다. 실패"
 
-
-# ================================
-# process_with_gpt (본문 생성용 AI 가공, 5 차 시도 풀백 적용)
-# ================================
 def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
-    # AI 가 없으면 간단한 HTML 로 반환
     if not (genai_client or GROQ_API_KEY or OPENROUTER_API_KEY or client):
         return f"<p data-ke-size='size18'><b>{keyword} {section_title}</b></p><p data-ke-size='size18'>{clean_html(raw_text)}</p>"
 
     prompt = f"""
 너는 한국어 블로그 글을 쓰는 카피라이터야.
 주제는 정부 복지서비스이고, 주어진 원문을
-1) 먼저 <b>태그로 굵게 요약 (한두 문장)>,
+1) 먼저 <b>태그로 굵게 요약 (한두 문장),
 2) 그 아래에 친절하고 자세한 설명을 붙이는 형태로 가공해.
 출력은 반드시 3~4 개의 문단으로 나눠서 작성하되,
 각 문단 사이에는 <p data-ke-size="size18"> 태그를 사용하고
@@ -429,7 +385,6 @@ def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
 [원문]
 {raw_text}
 """
-
     rewritten = generate_ai_review(prompt)
     rewritten = rewritten.replace("<body>", "").replace("</body>", "")
     if "<p" not in rewritten:
@@ -437,7 +392,7 @@ def process_with_gpt(section_title: str, raw_text: str, keyword: str) -> str:
     return rewritten
 
 # ================================
-# 서론/마무리 7문장 랜덤
+# 서론/마무리
 # ================================
 _syn = {
     "도움": ["도움", "지원", "혜택", "보탬", "유익"],
@@ -474,7 +429,7 @@ def make_last(keyword):
     return " ".join(parts)
 
 # ================================
-# 추천글 박스 (feedparser 필요)
+# 추천글 박스
 # ================================
 def get_related_posts(blog_id, count=4):
     try:
@@ -507,24 +462,24 @@ try:
     parsed = urlparse(my_url)
     params = parse_qs(parsed.query)
     wlfareInfoId = params.get("wlfareInfoId", [""])[0]
+    if not wlfareInfoId:
+        raise RuntimeError(f"URL에서 wlfareInfoId를 찾지 못함: {my_url}")
+
     data = fetch_welfare_info(wlfareInfoId)
 
-    keyword = clean_html(data.get("wlfareInfoNm", "복지 서비스"))
+    keyword = clean_html(data.get("wlfareInfoNm", "복지 서비스")).strip()
     title = f"2025 {keyword} 지원 자격 신청방법"
     safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", keyword)
 
-    # 썸네일 생성/업로드
     os.makedirs(THUMB_DIR, exist_ok=True)
     thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
     make_thumb(thumb_path, title)
     log_step("6단계: 썸네일 생성 성공")
     img_url = upload_to_drive(thumb_path, f"{safe_keyword}.png")
 
-    # 서론/마무리
     intro = make_intro(keyword)
     last = make_last(keyword)
 
-    # HTML 조립
     html = f"""
 <div id="jm">&nbsp;</div>
 <p data-ke-size="size18">{intro}</p><br />
@@ -541,13 +496,17 @@ try:
         "신청방법": "aplyMtdDc",
         "추가정보": "etct"
     }
+
     for title_k, key in fields.items():
         value = data.get(key, "")
         if value and value.strip() not in ["", "정보 없음"]:
-            processed = process_with_gpt(title_k, clean_html(value), keyword)
-            html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br />{processed}<br /><br />"
+            try:
+                processed = process_with_gpt(title_k, clean_html(value), keyword)
+                html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br />{processed}<br /><br />"
+            except Exception as e:
+                log_step(f"본문 변환 실패({title_k}): {e}")
+                html += f"<br /><h2 data-ke-size='size26'>{keyword} {title_k}</h2><br /><p data-ke-size='size18'>{clean_html(value)}</p><br /><br />"
 
-    # CTA + 마무리 + 추천글
     related_box = get_related_posts(BLOG_ID)
     html += f"""
 <div style="margin:40px 0 20px 0;">
@@ -559,31 +518,38 @@ try:
 {related_box}
 """
 
-    # 게시
     post_body = {
         "content": html,
         "title": title,
         "labels": ["복지", "정부지원"],
         "blog": {"id": BLOG_ID}
     }
-    res = blog_handler.posts().insert(blogId=BLOG_ID, body=post_body, isDraft=False, fetchImages=True).execute()
 
-    # === 포스팅 완료 후 시트 업데이트 ===
-    ws.update_cell(target_row, 7, "완")          # G열: "완"
-    ws.update_cell(target_row, 15, res["url"])   # O열: 포스팅 URL만
+    res = publish_blogger_post(BLOG_ID, post_body)
+
+    if not res or not res.get("url"):
+        raise RuntimeError(f"Blogger 응답이 비정상입니다: {res}")
+
+    ws.update_cell(target_row, 7, "완")
+    ws.update_cell(target_row, 15, res["url"])
     final_html = res.get("content", "")
     soup = BeautifulSoup(final_html, "html.parser")
     img_tag = soup.find("img")
     final_url = img_tag["src"] if img_tag else ""
-    log_step(f"7단계: 업로드 성공 → IMG={final_url}")
-    ws.update_acell("O1", str(next_index))       # O1: 사용한 인덱스 저장
+    log_step(f"7단계: 업로드 성공 → POST={res['url']} | IMG={final_url}")
+    ws.update_acell("O1", str(next_index))
 
     print(f"[완료] 블로그 포스팅: {res['url']}")
+
 except Exception as e:
     tb = traceback.format_exc().replace("\n", " | ")
-    log_step(f"7단계: 블로그 업로드 실패: {e} | {tb}")
+    try:
+        log_step(f"7단계: 실패: {e} | {tb}")
+        ws.update_cell(target_row, 7, "실패")
+        if target_row:
+            ws.update_cell(target_row, 16, (ws.cell(target_row, 16).value or "") + f" | 실패: {e}")
+    except Exception as inner:
+        print(f"⚠️ 실패 로그 기록도 실패: {inner}")
+        print(f"원래 오류: {e}")
+        print(tb)
     raise
-
-
-
-
