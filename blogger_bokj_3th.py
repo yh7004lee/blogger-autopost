@@ -124,7 +124,7 @@ def dump_sheet_preview():
         debug(f"시트 미리보기 실패: {e}")
 
 dump_sheet_preview()
-
+SHEET_ID = secrets.get("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
 # ================================
 # Google Sheet에서 처리할 URL 찾기
 # ================================
