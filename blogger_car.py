@@ -67,13 +67,18 @@ if GEMINI_API_KEY:
         debug(f"Gemini client init 실패: {e}")
 
 SERVICE_ACCOUNT_FILE = "sheetapi.json"
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
+SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 gc = gspread.authorize(creds)
 sh = gc.open_by_key(SHEET_ID)
+debug(f"스프레드시트 제목: {sh.title}")
+
+all_sheets = sh.worksheets()
+debug(f"탭 목록: {[s.title for s in all_sheets]}")
+
 ws = sh.worksheet("Sheet2")
 debug(f"선택된 탭: {ws.title}")
-log_step("1단계: Google Sheets 인증 성공")
+log_step("1 단계: Google Sheets 인증 성공")
 
 ASSETS_BG_DIR = "assets/backgrounds"
 ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
@@ -91,7 +96,7 @@ def get_blogger_service():
     return build("blogger", "v3", credentials=creds)
 
 blog_handler = get_blogger_service()
-log_step("2단계: Blogger 인증 성공")
+log_step("2 단계: Blogger 인증 성공")
 
 def pick_best_from_srcset(srcset: str):
     if not srcset:
@@ -204,106 +209,24 @@ def generate_ai_review(prompt, car_name):
 
     return f"{car_name}은 분석 생성에 실패했지만 기본 정보 기반으로 안정적인 성능을 가진 차량입니다."
 
-def pick_random_background() -> str:
-    files = []
-    for ext in ("*.png", "*.jpg", "*.jpeg"):
-        files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
-    return random.choice(files) if files else ""
-
-def make_thumb(save_path: str, var_title: str):
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    bg_path = pick_random_background()
-    if bg_path and os.path.exists(bg_path):
-        bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
-    else:
-        bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
-
-    try:
-        font = ImageFont.truetype(ASSETS_FONT_TTF, 48)
-    except Exception:
-        font = ImageFont.load_default()
-
-    canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
-    canvas.paste(bg, (0, 0))
-    rectangle = Image.new("RGBA", (500, 250), (0, 0, 0, 200))
-    canvas.paste(rectangle, (0, 125), rectangle)
-    draw = ImageDraw.Draw(canvas)
-
-    var_title_wrap = textwrap.wrap(var_title, width=12)
-    bbox = font.getbbox("가")
-    line_height = (bbox[3] - bbox[1]) + 12
-    total_text_height = len(var_title_wrap) * line_height
-    var_y_point = 500 / 2 - total_text_height / 2
-
-    for line in var_title_wrap:
-        text_bbox = draw.textbbox((0, 0), line, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        x = (500 - text_width) / 2
-        draw.text((x, var_y_point), line, "#FFEECB", font=font)
-        var_y_point += line_height
-
-    canvas = canvas.resize((400, 400))
-    canvas.save(save_path, "PNG")
 def sanitize_filename(filename: str) -> str:
-    # 새줄바꿈, 탭 등 제어 문자 제거
     filename = re.sub(r'[\n\r\t]', '', filename)
-    # Windows 에서 파일명에 안 되는 문자 제거/대체
     filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
-    # 연속된 공백이나 특수 문자 하나로 정리
     filename = re.sub(r'_+', '_', filename)
-    # 앞뒤 공백/언더바 제거
     filename = filename.strip('_ ').strip()
     return filename
-    
-def get_drive_service():
-    creds = None
-    if os.path.exists("drive_token_2nd.pickle"):
-        with open("drive_token_2nd.pickle", "rb") as token:
-            creds = pickle.load(token)
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            raise RuntimeError("drive_token_2nd.pickle이 없거나 만료됨.")
-        with open("drive_token_2nd.pickle", "wb") as token:
-            pickle.dump(creds, token)
-    return build("drive", "v3", credentials=creds)
 
-def upload_to_drive(file_path, file_name):
-    drive_service = get_drive_service()
-    query = "mimeType='application/vnd.google-apps.folder' and name='blogger' and trashed=false"
-    results = drive_service.files().list(q=query, fields="files(id, name)").execute()
-    items = results.get("files", [])
-    if items:
-        folder_id = items[0]["id"]
-    else:
-        folder_metadata = {"name": "blogger", "mimeType": "application/vnd.google-apps.folder"}
-        folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
-        folder_id = folder.get("id")
-
-    file_metadata = {"name": file_name, "parents": [folder_id]}
-    media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
-    file = drive_service.files().create(body=file_metadata, media_body=media, fields="id").execute()
-
-    drive_service.permissions().create(
-        fileId=file["id"],
-        body={"role": "reader", "type": "anyone", "allowFileDiscovery": False}
-    ).execute()
-
-    return f"https://lh3.googleusercontent.com/d/{file['id']}"
-
-def read_target_row():
+async def main():
+    global target_row
+    target_row, row = None, None
     rows = ws.get_all_values()
     for i, row in enumerate(rows[1:], start=2):
         status = row[2].strip() if len(row) > 2 and row[2] else ""
         if status != "완":
-            return i, row
-    return None, None
+            target_row, row = i, row
+            break
 
-async def main():
-    global target_row
-    target_row, row = read_target_row()
-    if not target_row:
+    if target_row is None:
         log_step("처리할 행이 없습니다.")
         return
 
@@ -322,8 +245,6 @@ async def main():
 
     summary_items = {}
     extracted_specs = []
-    exterior_urls = []
-    interior_urls = []
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
@@ -420,20 +341,17 @@ async def main():
 
         await browser.close()
 
-    os.makedirs(THUMB_DIR, exist_ok=True)
+    if not summary_items:
+        summary_items["💰 판매 가격"] = "정보 없음"
+    if not extracted_specs:
+        extracted_specs = [("정보", "추출 실패")]
+
     title_for_post = f"{car_name} 자동차 상세정보"
-    safe_keyword = sanitize_filename(car_name)
-    if not safe_keyword:
-        safe_keyword = "car"
 
-    thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
-    make_thumb(thumb_path, title_for_post)
-    thumb_url = upload_to_drive(thumb_path, f"{safe_keyword}.png")
-
+    # 이미지 없이 텍스트만 사용
     first_img_html = f"""
     <div style="text-align:center; margin:30px 0 40px 0; width:100%;">
-        <img src="{thumb_url}" style="width:100%; max-width:100%; height:auto; border-radius:4px;" alt="{car_name}">
-        <p style="font-size:13px; color:#777; margin-top:10px; font-weight:bold;">▲ {car_name} 썸네일</p>
+        <p style="font-size:18px; color:#222; font-weight:bold;">▲ {car_name} 자동차 상세정보</p>
     </div>
     """
 
@@ -479,8 +397,8 @@ async def main():
 {compact_specs}
 
 조건
-- 5~8문장
-- 250자 이상
+- 5~8 문장
+- 250 자 이상
 - 자연스러운 한국어
 - 블로그 후기 스타일
 - 장점과 아쉬운점 모두 작성
@@ -528,7 +446,7 @@ async def main():
     ).execute()
 
     if not res or not res.get("url"):
-        raise RuntimeError(f"Blogger 응답이 비정상입니다: {res}")
+        raise RuntimeError(f"Blogger 응답이 비정상적입니다: {res}")
 
     ws.update_cell(target_row, 3, "완")
     ws.update_cell(target_row, 15, res["url"])
