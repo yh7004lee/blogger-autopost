@@ -57,7 +57,7 @@ OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
 SHEET_ID = "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs"
-BLOG_ID = "4737456424227083027"
+BLOG_ID = "5711594645656469839"
 
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 genai_client = None
