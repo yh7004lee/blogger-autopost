@@ -244,7 +244,17 @@ def make_thumb(save_path: str, var_title: str):
 
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
-
+def sanitize_filename(filename: str) -> str:
+    # 새줄바꿈, 탭 등 제어 문자 제거
+    filename = re.sub(r'[\n\r\t]', '', filename)
+    # Windows 에서 파일명에 안 되는 문자 제거/대체
+    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
+    # 연속된 공백이나 특수 문자 하나로 정리
+    filename = re.sub(r'_+', '_', filename)
+    # 앞뒤 공백/언더바 제거
+    filename = filename.strip('_ ').strip()
+    return filename
+    
 def get_drive_service():
     creds = None
     if os.path.exists("drive_token_2nd.pickle"):
@@ -412,7 +422,9 @@ async def main():
 
     os.makedirs(THUMB_DIR, exist_ok=True)
     title_for_post = f"{car_name} 자동차 상세정보"
-    safe_keyword = re.sub(r'[\\/:*?"<>|.]', "_", car_name)
+    safe_keyword = sanitize_filename(car_name)
+    if not safe_keyword:
+        safe_keyword = "car"
 
     thumb_path = os.path.join(THUMB_DIR, f"{safe_keyword}.png")
     make_thumb(thumb_path, title_for_post)
