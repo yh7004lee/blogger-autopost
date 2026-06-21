@@ -11,6 +11,9 @@ jobs:
   autopost:
     runs-on: windows-latest   # certutil 쓰려면 windows 가 안전합니다
 
+    env:
+      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
