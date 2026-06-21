@@ -52,7 +52,7 @@ OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
 GROQ_API_KEY = secrets.get("GROQ_API_KEY", "")
 CEREBRAS_API_KEY = secrets.get("CEREBRAS_API_KEY", "")
-SHEET_ID = secrets.get("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")  # 기존 SHEET_ID 로 유지
+
 DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 GCS_API_KEY = secrets.get("GCS_API_KEY", "")
 GCS_CX = secrets.get("GCS_CX", "")
