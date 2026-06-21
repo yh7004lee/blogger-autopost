@@ -57,7 +57,7 @@ OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
 GROQ_API_KEY = secrets.get("GROQ_API_KEY", "")
 CEREBRAS_API_KEY = secrets.get("CEREBRAS_API_KEY", "")
-SHEET_ID = secrets.get("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
+SHEET_ID = "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs"
 DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 GCS_API_KEY = secrets.get("GCS_API_KEY", "")
 GCS_CX = secrets.get("GCS_CX", "")
@@ -124,7 +124,7 @@ def dump_sheet_preview():
         debug(f"시트 미리보기 실패: {e}")
 
 dump_sheet_preview()
-SHEET_ID = secrets.get("SHEET_ID", "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs")
+
 # ================================
 # Google Sheet에서 처리할 URL 찾기
 # ================================
