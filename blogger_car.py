@@ -71,7 +71,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapi
 creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
 gc = gspread.authorize(creds)
 sh = gc.open_by_key(SHEET_ID)
-ws = sh.worksheet("sheet2")
+ws = sh.worksheet("Sheet2")
 debug(f"선택된 탭: {ws.title}")
 log_step("1단계: Google Sheets 인증 성공")
 
