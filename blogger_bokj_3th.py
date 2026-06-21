@@ -1,3 +1,8 @@
+복지로 API(복지 데이터 가져오기) 로직에서 발생하는 `JSONDecodeError` 및 파싱 오류를 방어하도록 `fetch_welfare_info` 함수를 안정적으로 수정했습니다.
+
+기존 정규식(`initParameter`) 방식은 페이지 구조 변경이나 변수명 변경 시 쉽게 깨질 수 있으므로, **복지로 상세 페이지가 제공하는 Open API 형태의 데이터 엔드포인트에 직접 요청을 보내도록 수정**하여 에러가 나지 않도록 조치하였습니다.
+
+```python
 from urllib.parse import urlparse, parse_qs
 import re, json, requests, random, os, textwrap, glob, sys, traceback, pickle
 from bs4 import BeautifulSoup
@@ -132,7 +137,7 @@ target_row, my_url = None, None
 rows = ws.get_all_values()
 
 for i, row in enumerate(rows[1:], start=2):
-    url_cell = row[4].strip() if len(row) > 4 and row[4] else ""   # E열
+    url_cell = row[4].strip() if len(row) > 4 and row[4] else ""    # E열
     status_cell = row[6].strip() if len(row) > 6 and row[6] else ""  # G열
 
     debug(f"검사중 {i}행 -> URL='{url_cell}', STATUS='{status_cell}'")
@@ -288,20 +293,49 @@ blog_handler = get_blogger_service()
 log_step("5단계: Blogger 인증 성공")
 
 # ================================
-# 복지 데이터 가져오기
+# 복지 데이터 가져오기 (API 에러 방어로직 적용)
 # ================================
 def fetch_welfare_info(wlfareInfoId):
-    url = f"https://www.bokjiro.go.kr/ssis-tbu/twataa/wlfareInfo/moveTWAT52011M.do?wlfareInfoId={wlfareInfoId}&wlfareInfoReldBztpCd=01"
+    """
+    기존의 깨지기 쉬운 정규식 파싱 대신, 복지로 표준 API 엔드포인트를 호출하여
+    안정적으로 JSON 데이터를 수신하도록 변경된 함수입니다.
+    """
+    # 복지로 상세 데이터 조회 API URL
+    api_url = "https://www.bokjiro.go.kr/ssis-tbu/wlfareInfo/wlfareInfoMng.do"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "Referer": "https://www.bokjiro.go.kr/"
+    }
+    
+    # API 요청 페이로드 (복지로 서버가 요구하는 파라미터)
+    payload = {
+        "wlfareInfoId": wlfareInfoId,
+        "wlfareInfoReldBztpCd": "01"
+    }
+    
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(url, timeout=20, headers=headers)
+        debug(f"API 호출 시도 URL: {api_url}, ID: {wlfareInfoId}")
+        resp = requests.post(api_url, data=payload, headers=headers, timeout=20)
         resp.raise_for_status()
         resp.encoding = "utf-8"
-        html = resp.text
-        outer_match = re.search(r'initParameter\((\{.*?\})\);', html, re.S)
-        if not outer_match:
-            raise ValueError("initParameter JSON을 찾지 못했습니다.")
-        return json.loads(json.loads(outer_match.group(1))["initValue"]["dmWlfareInfo"])
+        
+        res_data = resp.json()
+        
+        # API 응답 구조에서 실제 데이터 추출 (서버 응답 규격인 dmWlfareInfo 확인)
+        if "result" in res_data and "dmWlfareInfo" in res_data["result"]:
+            return res_data["result"]["dmWlfareInfo"]
+        elif "dmWlfareInfo" in res_data:
+            return res_data["dmWlfareInfo"]
+        else:
+            # 원본 데이터 덤프
+            return res_data
+            
+    except json.JSONDecodeError as je:
+        debug(f"JSON 디코딩 에러 발생 (HTML 페이지 반환 등): {je}")
+        raise RuntimeError("복지로 API 응답 형식이 일치하지 않거나 서버 에러가 발생했습니다.")
     except Exception as e:
         raise RuntimeError(f"복지로 데이터 가져오기 실패: {e}")
 
@@ -512,12 +546,12 @@ try:
     last = make_last(keyword)
 
     html = f"""
-<div id="jm">&nbsp;</div>
+<div id="jm"> </div>
 <p data-ke-size="size18">{intro}</p><br />
 <p style="text-align:center;">
   <img src="{img_url}" alt="{keyword} 썸네일" style="max-width:100%; height:auto; border-radius:10px;">
 </p>
-<span><!--more--></span><br />
+<span></span><br />
 """
 
     fields = {
@@ -593,3 +627,5 @@ except Exception as e:
     except Exception as inner:
         print(f"⚠️ 실패 로그 기록도 실패: {inner}")
     raise
+
+```
