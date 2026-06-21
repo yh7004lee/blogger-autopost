@@ -1,8 +1,3 @@
-에러가 발생하는 원인은 이전 답변을 복사하여 `blogger_bokj_3th.py` 파일에 붙여넣는 과정에서 **마크다운 코드 블록 바깥에 있던 일반 텍스트(설명글)까지 함께 파일에 포함**되었기 때문입니다.
-
-파이썬 파일의 맨 첫 줄에 한글 설명문이 들어가면서 `SyntaxError`가 발생한 것이므로, **아래의 파이썬 코드 전체를 복사해서 파일에 덮어씌우시면** 정상적으로 해결됩니다.
-
-```python
 from urllib.parse import urlparse, parse_qs
 import re, json, requests, random, os, textwrap, glob, sys, traceback, pickle
 from bs4 import BeautifulSoup
@@ -624,4 +619,3 @@ except Exception as e:
         print(f"⚠️ 실패 로그 기록도 실패: {inner}")
     raise
 
-```
