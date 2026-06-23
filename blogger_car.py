@@ -2,26 +2,18 @@ import os
 import re
 import json
 import sys
-import glob
 import random
-import textwrap
 import traceback
-import pickle
 import requests
 import urllib.request
 from urllib.parse import urlparse, parse_qs
 
-from bs4 import BeautifulSoup
-from PIL import Image, ImageDraw, ImageFont
 import gspread
 from google import genai
 from openai import OpenAI
 from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 from google.oauth2.service_account import Credentials
 from google.oauth2.credentials import Credentials as UserCredentials
-from google.auth.transport.requests import Request
-
 from playwright.async_api import async_playwright, TimeoutError
 import asyncio
 
@@ -81,10 +73,8 @@ ws = sh.worksheet("Sheet2")
 debug(f"선택된 탭: {ws.title}")
 log_step("1 단계: Google Sheets 인증 성공")
 
-ASSETS_BG_DIR = "assets/backgrounds"
-ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
-THUMB_DIR = "thumbnails"
 IMAGE_SAVE_DIR = "car_images"
+os.makedirs(IMAGE_SAVE_DIR, exist_ok=True)
 
 def get_blogger_service():
     if not os.path.exists("blogger_token.json"):
@@ -169,6 +159,40 @@ def get_car_name_from_url(url):
         return params["query"][0].strip()
     return "확인불가"
 
+def clean_car_name(name: str):
+    if not name:
+        return ""
+    name = re.sub(r"\s+", " ", name).strip()
+    name = re.sub(r"\bai\s*브리핑\b", "", name, flags=re.IGNORECASE).strip()
+    return name
+
+def make_clean_title(car_name):
+    car_name = clean_car_name(car_name)
+    parts = {
+        "prefix": ["상세", "완전", "팩트", "핵심", "최신", "정밀", "꼼꼼한"],
+        "mid": ["제원", "색상", "디자인", "스펙", "옵션", "트림"],
+        "suffix": ["총평", "분석", "리포트", "가이드", "정보", "한눈에", "모든 것"]
+    }
+    return f"{car_name} {random.choice(parts['prefix'])} {random.choice(parts['mid'])} {random.choice(parts['suffix'])}"
+
+async def generate_title_from_spec_page(page):
+    selectors = [
+        '#root > section > div.top_wrap > div.top_area > div > h2',
+        'xpath=//*[@id="root"]/section/div[1]/div[1]/div/h2',
+        'h2'
+    ]
+    for sel in selectors:
+        try:
+            loc = page.locator(sel).first
+            if await loc.count() > 0:
+                text = (await loc.inner_text()).strip()
+                text = clean_car_name(text)
+                if text:
+                    return text
+        except Exception:
+            pass
+    return None
+
 def generate_ai_review(prompt, car_name):
     if genai_client:
         try:
@@ -210,29 +234,6 @@ def generate_ai_review(prompt, car_name):
             debug(f"GPT 실패: {e}")
 
     return f"{car_name}은 분석 생성에 실패했지만 기본 정보 기반으로 안정적인 성능을 가진 차량입니다."
-
-def sanitize_filename(filename: str) -> str:
-    filename = re.sub(r'[\n\r\t]', '', filename)
-    filename = re.sub(r'[<>:"/\\|?*]', '_', filename)
-    filename = re.sub(r'_+', '_', filename)
-    filename = filename.strip('_ ').strip()
-    return filename
-
-def make_random_title(car_name):
-    # 랜덤 조합 용도어
-    parts = {
-        "prefix": ["상세", "완전", "팩트", "핵심", "최신", "정밀", "꼼꼼한"],
-        "mid": ["제원+", "색상+", "디자인+", "스펙+", "옵션+", "트림+"],
-        "suffix": ["총평", "분석", "리포트", "가이드", "정보", "한눈에", "모든 것"]
-    }
-    
-    prefix = random.choice(parts["prefix"])
-    mid = random.choice(parts["mid"])
-    suffix = random.choice(parts["suffix"])
-    
-    # 자동차 이름 + 랜덤 조합
-    title = f"{car_name} {prefix} {mid} {suffix}"
-    return title
 
 async def close_popup(page):
     try:
@@ -384,13 +385,10 @@ async def main():
     interior_urls = []
     web_image_urls = []
 
-    os.makedirs(IMAGE_SAVE_DIR, exist_ok=True)
-
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True)
         page = await browser.new_page()
 
-        # 1. 정보 탭
         await page.goto(info_url, wait_until="domcontentloaded")
         await page.wait_for_timeout(2000)
 
@@ -432,18 +430,12 @@ async def main():
             if grid_data.get("배기량"):
                 summary_items["🧪 엔진 배기량"] = grid_data["배기량"]
 
-        # 2. 제원 탭
         await page.goto(spec_url, wait_until="domcontentloaded")
         await page.wait_for_timeout(3000)
 
-        try:
-            title_loc = page.locator("h2").first
-            if await title_loc.count() > 0:
-                car_name_local = (await title_loc.inner_text()).strip()
-                if car_name_local:
-                    car_name = car_name_local
-        except Exception:
-            pass
+        page_car_name = await generate_title_from_spec_page(page)
+        if page_car_name:
+            car_name = page_car_name
 
         try:
             rows = page.locator("table tbody tr")
@@ -481,7 +473,6 @@ async def main():
             except Exception:
                 pass
 
-        # 3. 포토 탭 – 이미지 추출
         MAX_IMAGES_PER_SECTION = 10
         try:
             exterior_urls = await extract_images_from_section(page, "익스테리어", 1, MAX_IMAGES_PER_SECTION, photo_url)
@@ -493,7 +484,6 @@ async def main():
             pass
 
         web_image_urls = exterior_urls + interior_urls
-
         await browser.close()
 
     if not summary_items:
@@ -501,10 +491,8 @@ async def main():
     if not extracted_specs:
         extracted_specs = [("정보", "추출 실패")]
 
-    # 랜덤 제목 생성 (자동차 이름 포함)
-    title_for_post = make_random_title(car_name)
+    title_for_post = make_clean_title(car_name)
 
-    # 이미지 갤러리 HTML
     first_img_html = ""
     if len(web_image_urls) > 0:
         first_img_html = f"""
