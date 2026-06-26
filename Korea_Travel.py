@@ -70,7 +70,7 @@ if GEMINI_API_KEY and genai:
 # 기본 설정
 # =========================
 BLOG_ID = "6498243474990332474"
-SHEET_TAB_INDEX = 2  # Sheet3 = 세 번째 시트
+SHEET_TAB_INDEX = 2
 HISTORY_PATH = "processed_regions_blogger.json"
 
 ASSETS_BG_DIR = "assets/backgrounds"
@@ -167,10 +167,11 @@ def load_processed_regions():
         return []
 
 
-def save_processed_region(region):
+def save_processed_region(region, city):
     processed = load_processed_regions()
-    if region not in processed:
-        processed.append(region)
+    key = f"{region} {city}"
+    if key not in processed:
+        processed.append(key)
     with open(HISTORY_PATH, "w", encoding="utf-8") as f:
         json.dump({"regions": processed}, f, ensure_ascii=False, indent=2)
 
@@ -280,13 +281,20 @@ def generate_ai_review(prompt, keyword):
 # =========================
 # 장소 수집
 # =========================
-def get_queries(city):
+def get_queries(region, city):
     return [
+        f"{region} {city} 관광지",
+        f"{region} {city} 가볼만한곳",
+        f"{region} {city} 여행지",
+        f"{region} {city} 명소",
+        f"{region} {city} 핫플",
         f"{city} 관광지",
         f"{city} 가볼만한곳",
         f"{city} 여행지",
         f"{city} 명소",
         f"{city} 핫플",
+        f"{city} 유명 관광지",
+        f"{city} 대표 관광지",
     ]
 
 
@@ -307,7 +315,7 @@ def google_text_search(query, city="", region=""):
         status = data.get("status", "")
         print(f"   ↳ status: {status}")
         print(f"   ↳ results_count: {len(data.get('results', []))}")
-        if status in ["ZERO_RESULTS", "INVALID_REQUEST", "OVER_QUERY_LIMIT"]:
+        if status in ["ZERO_RESULTS", "INVALID_REQUEST", "OVER_QUERY_LIMIT", "REQUEST_DENIED"]:
             return []
         return data.get("results", [])
     except Exception as e:
@@ -340,6 +348,32 @@ def score_place(item):
         s += 2
     return s
 
+
+def get_fallback_places(region, city):
+    candidates = [
+        f"{city} 시청",
+        f"{city} 중앙공원",
+        f"{city} 역",
+        f"{city} 관광안내소",
+        f"{city} 박물관",
+        f"{city} 공원",
+        f"{city} 문화의거리",
+        f"{city} 전통시장",
+    ]
+    places = []
+    seen = set()
+    for name in candidates:
+        key = name.lower().strip()
+        if key in seen:
+            continue
+        seen.add(key)
+        places.append({
+            "title": name,
+            "addr": f"{region} {city}",
+            "raw": {},
+            "score": 0
+        })
+    return places
 
 
 def get_places(region, city):
@@ -690,9 +724,7 @@ def main():
 
     places = get_places(region, city)
     if not places:
-        places = get_places(city)
-    if not places:
-        raise RuntimeError("관광지 후보를 찾지 못했습니다.")
+        places = get_fallback_places(region, city)
 
     for p in places:
         p["region"] = region
