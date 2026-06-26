@@ -611,6 +611,7 @@ def build_post_html(region, city, title, places, thumb_url):
   <p data-ke-size="size18"><br /></p>
   {intro_html}
   <p style="text-align:center;">
+  <p data-ke-size="size18"><br /></p>  
     <img src="{thumb_url}" alt="{title} 썸네일" style="max-width:100%; height:auto; border-radius:8px;">
   </p>
   <p data-ke-size="size18"><br /></p>  
@@ -621,7 +622,6 @@ def build_post_html(region, city, title, places, thumb_url):
   <div class="mbtTOC"><button> 목차 </button>
   <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
   </div>
-  <p data-ke-size="size18"><br /></p>
   
   {sections_html}
   <h2 style="{H2_STYLE}">{city} 여행 총평</h2>
