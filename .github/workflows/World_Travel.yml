@@ -1,4 +1,4 @@
-name: Blogger Autopost Galaxy id
+name: 07_World_Travel
 
 on:
   workflow_dispatch: # ✅ 수동 실행 가능
@@ -62,7 +62,7 @@ jobs:
 
       # ✅ 실행할 파이썬 파일 (여기만 변경)
       - name: Run autopost script
-        run: python app_galaxy_id.py
+        run: python World_Travel.py
 
 
 
