@@ -196,39 +196,6 @@ def pick_random_background() -> str:
     return random.choice(files) if files else ""
 
 
-def make_thumb(save_path: str, var_title: str):
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    bg_path = pick_random_background()
-    if bg_path and os.path.exists(bg_path):
-        bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
-    else:
-        bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
-    try:
-        font = ImageFont.truetype(ASSETS_FONT_TTF, 48)
-    except:
-        font = ImageFont.load_default()
-    canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
-    canvas.paste(bg, (0, 0))
-    rectangle = Image.new("RGBA", (500, 250), (0, 0, 0, 200))
-    canvas.paste(rectangle, (0, 125), rectangle)
-    draw = ImageDraw.Draw(canvas)
-    var_title_wrap = []
-    for chunk in textwrap_wrap_kor(var_title, 12):
-        var_title_wrap.append(chunk)
-    bbox = font.getbbox("가")
-    line_height = (bbox[3] - bbox[1]) + 12
-    total_text_height = len(var_title_wrap) * line_height
-    var_y_point = 500 / 2 - total_text_height / 2
-    for line in var_title_wrap:
-        text_bbox = draw.textbbox((0, 0), line, font=font)
-        text_width = text_bbox[2] - text_bbox[0]
-        x = (500 - text_width) / 2
-        draw.text((x, var_y_point), line, "#FFEECB", font=font)
-        var_y_point += line_height
-    canvas = canvas.resize((400, 400))
-    canvas.save(save_path, "PNG")
-
-
 def textwrap_wrap_kor(text, width):
     if not text:
         return [""]
@@ -247,6 +214,37 @@ def textwrap_wrap_kor(text, width):
     if cur:
         lines.append(cur)
     return lines
+
+
+def make_thumb(save_path: str, var_title: str):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    bg_path = pick_random_background()
+    if bg_path and os.path.exists(bg_path):
+        bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
+    else:
+        bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+    try:
+        font = ImageFont.truetype(ASSETS_FONT_TTF, 48)
+    except:
+        font = ImageFont.load_default()
+    canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
+    canvas.paste(bg, (0, 0))
+    rectangle = Image.new("RGBA", (500, 250), (0, 0, 0, 200))
+    canvas.paste(rectangle, (0, 125), rectangle)
+    draw = ImageDraw.Draw(canvas)
+    var_title_wrap = textwrap_wrap_kor(var_title, 12)
+    bbox = font.getbbox("가")
+    line_height = (bbox[3] - bbox[1]) + 12
+    total_text_height = len(var_title_wrap) * line_height
+    var_y_point = 500 / 2 - total_text_height / 2
+    for line in var_title_wrap:
+        text_bbox = draw.textbbox((0, 0), line, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        x = (500 - text_width) / 2
+        draw.text((x, var_y_point), line, "#FFEECB", font=font)
+        var_y_point += line_height
+    canvas = canvas.resize((400, 400))
+    canvas.save(save_path, "PNG")
 
 
 # =========================
@@ -482,14 +480,14 @@ def make_section_text(region, city, title, addr, overview):
 
 # =========================
 # 시트에서 대상 행 찾기
-# A열=지역, B열=도시, C열=완
+# A열=지역, B열=도시, D열=완
 # =========================
 def find_next_row(ws):
     rows = ws.get_all_values()
     for i, row in enumerate(rows[1:], start=2):
         region = row[0].strip() if len(row) > 0 and row[0] else ""
         city = row[1].strip() if len(row) > 1 and row[1] else ""
-        status = row[2].strip() if len(row) > 2 and row[2] else ""
+        status = row[3].strip() if len(row) > 3 and row[3] else ""
         if region and city and status != "완":
             return i, region, city
     return None, None, None
@@ -504,7 +502,6 @@ def build_post_html(region, city, title, places, thumb_url):
 
     list_items = ""
     for idx, item in enumerate(places, start=1):
-        anchor_id = re.sub(r"\s+", "_", item["title"])
         list_items += (
             f"&nbsp;&nbsp;<span style='color:#676767; text-decoration:underline;'>"
             f"{idx}. {item['title']}</span><br />\n"
@@ -707,7 +704,7 @@ def main():
             fetchImages=True
         ).execute()
 
-        ws3.update_cell(row_idx, 3, "완")
+        ws3.update_cell(row_idx, 4, "완")
         try:
             ws3.update_cell(row_idx, 15, res.get("url", ""))
         except:
