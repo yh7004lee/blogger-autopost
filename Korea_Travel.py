@@ -688,7 +688,7 @@ def main():
     title = generate_random_title(region, city)
     log_step(row_idx, f"2단계: 제목 생성 ({title})")
 
-    places = get_places(f"{region} {city}")
+    places = get_places(region, city)
     if not places:
         places = get_places(city)
     if not places:
@@ -761,7 +761,7 @@ def main():
         log_step(row_idx, f"5단계: Blogger 업로드 성공 ({res.get('url', '')})")
         print(f"[완료] 블로그 포스팅: {res.get('url', '')}")
 
-        save_processed_region(f"{region} {city}")
+        save_processed_region(region, city)
 
     except Exception as e:
         tb = traceback.format_exc().replace("\n", " | ")
