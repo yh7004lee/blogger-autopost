@@ -36,9 +36,6 @@ except Exception:
 import feedparser
 
 
-# =========================
-# API 키 - GitHub Secrets 에서 읽기
-# =========================
 API_KEYS_JSON = os.getenv("API_KEYS_JSON")
 
 if not API_KEYS_JSON:
@@ -65,26 +62,16 @@ if GEMINI_API_KEY and genai:
     except Exception:
         genai_client = None
 
-
-# =========================
-# 기본 설정
-# =========================
 BLOG_ID = "6498243474990332474"
 HISTORY_PATH = "processed_regions_blogger.json"
 
 SHEET_GID = 2131907983
-SHEET_TAB_INDEX = None
 
 ASSETS_BG_DIR = "assets/backgrounds"
 ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
 THUMB_DIR = "thumbnails"
 
-error_logs = []
 
-
-# =========================
-# Google Sheets 인증 (gid 기준)
-# =========================
 def get_sheet3():
     service_account_file = "sheetapi.json"
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -100,9 +87,6 @@ def get_sheet3():
 ws3 = get_sheet3()
 
 
-# =========================
-# Google Drive 인증
-# =========================
 def get_drive_service():
     token_path = "drive_token_2nd.pickle"
     if not os.path.exists(token_path):
@@ -136,8 +120,7 @@ def upload_to_drive(file_path, file_name):
     meta = {"name": file_name, "parents": [folder_id]}
     try:
         uploaded = drive_service.files().create(body=meta, media_body=media, fields="id").execute()
-    except Exception as e:
-        print(f"⚠️ Drive 업로드 실패: {e}")
+    except Exception:
         folder_id = ensure_drive_folder(drive_service, "blogger")
         meta = {"name": file_name, "parents": [folder_id]}
         uploaded = drive_service.files().create(body=meta, media_body=media, fields="id").execute()
@@ -148,9 +131,6 @@ def upload_to_drive(file_path, file_name):
     return f"https://lh3.googleusercontent.com/d/{uploaded['id']}"
 
 
-# =========================
-# Blogger 인증
-# =========================
 def get_blogger_service():
     if not os.path.exists("blogger_token.json"):
         raise RuntimeError("blogger_token.json 없음 — Blogger 사용자 인증 정보가 필요합니다.")
@@ -163,9 +143,6 @@ def get_blogger_service():
 blog_handler = get_blogger_service()
 
 
-# =========================
-# 히스토리 관리
-# =========================
 def load_processed_regions():
     if not os.path.exists(HISTORY_PATH):
         return []
@@ -185,9 +162,6 @@ def save_processed_region(region, city):
         json.dump({"regions": processed}, f, ensure_ascii=False, indent=2)
 
 
-# =========================
-# 로그 기록
-# =========================
 def log_step(row, msg: str):
     try:
         prev = ws3.cell(row, 16).value or ""
@@ -196,9 +170,6 @@ def log_step(row, msg: str):
         print("⚠️ 로그 기록 실패:", e)
 
 
-# =========================
-# 썸네일 생성
-# =========================
 def pick_random_background() -> str:
     files = []
     for ext in ("*.png", "*.jpg", "*.jpeg"):
@@ -257,9 +228,6 @@ def make_thumb(save_path: str, var_title: str):
     canvas.save(save_path, "PNG")
 
 
-# =========================
-# HTML 정리 / AI
-# =========================
 def clean_html(raw_html):
     return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
 
@@ -271,7 +239,6 @@ def generate_ai_review(prompt, keyword):
             return response.text.strip()
         except:
             pass
-
     if client:
         try:
             res = client.chat.completions.create(
@@ -283,13 +250,9 @@ def generate_ai_review(prompt, keyword):
             return res.choices[0].message.content.strip()
         except:
             pass
-
     return f"{keyword} 설명 생성 실패"
 
 
-# =========================
-# 장소 수집
-# =========================
 def get_queries(region, city):
     return [
         f"{region} {city} 관광지",
@@ -309,22 +272,17 @@ def get_queries(region, city):
 
 def google_text_search(query, city="", region=""):
     if not GOOGLE_MAPS_API_KEY:
-        print("⚠️ GOOGLE_MAPS_API_KEY 없음")
         return []
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
     params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "ko"}
     try:
-        print(f"🔎 검색 쿼리: {query}")
         res = requests.get(url, params=params, timeout=15)
         data = res.json()
         status = data.get("status", "")
-        print(f"   ↳ status: {status}")
-        print(f"   ↳ results_count: {len(data.get('results', []))}")
         if status in ["ZERO_RESULTS", "INVALID_REQUEST", "OVER_QUERY_LIMIT", "REQUEST_DENIED"]:
             return []
         return data.get("results", [])
-    except Exception as e:
-        print(f"⚠️ google_text_search 실패: {query} / {e}")
+    except:
         return []
 
 
@@ -372,68 +330,37 @@ def get_fallback_places(region, city):
         if key in seen:
             continue
         seen.add(key)
-        places.append({
-            "title": name,
-            "addr": f"{region} {city}",
-            "raw": {},
-            "score": 0
-        })
+        places.append({"title": name, "addr": f"{region} {city}", "raw": {}, "score": 0})
     return places
 
 
 def get_places(region, city):
     pool = []
     seen = set()
-
-    print("=" * 60)
-    print(f"지역 디버그: region={region}, city={city}")
-    print("=" * 60)
-
     queries = get_queries(region, city)
-    print(f"쿼리 목록: {queries}")
-
     for q in queries:
         results = google_text_search(q, city=city, region=region)
-        if not results:
-            print("   ↳ 결과 없음")
-            continue
-
         for r in results:
             name = r.get("name")
             if not name:
-                print("   ↳ name 없음, 스킵")
                 continue
-
             key = name.lower().strip()
             if key in seen:
-                print(f"   ↳ 중복 스킵: {name}")
                 continue
             seen.add(key)
-
             if not is_valid_place(r):
-                print(f"   ↳ 필터 스킵: {name} / types={r.get('types', [])}")
                 continue
-
-            score = score_place(r)
-            print(f"   ↳ 채택: {name} / score={score}")
             pool.append({
                 "title": name,
                 "addr": r.get("formatted_address", "주소 없음"),
                 "raw": r,
-                "score": score,
+                "score": score_place(r),
             })
-
-        print(f"   ↳ 누적 후보 수: {len(pool)}")
         if len(pool) >= 10:
             break
-
     if not pool:
-        print("⚠️ pool이 비어 있음. fallback 진입")
         pool = get_fallback_places(region, city)
-        print(f"fallback 후보 수: {len(pool)}")
-
     pool = sorted(pool, key=lambda x: x["score"], reverse=True)
-    print(f"최종 반환 개수: {len(pool[:10])}")
     return pool[:10]
 
 
@@ -441,9 +368,6 @@ def get_overview_from_place(place):
     return place.get("raw", {}).get("formatted_address", "상세 설명이 제공되지 않습니다.")
 
 
-# =========================
-# 이미지 로직
-# =========================
 def is_valid_image_url(url):
     if not url or not isinstance(url, str):
         return False
@@ -493,8 +417,7 @@ def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""
                 f"?maxwidth=1600&photo_reference={ref}&key={GOOGLE_MAPS_API_KEY}"
             )
         return photo_urls
-    except Exception as e:
-        print(f"[Google 이미지 실패] {place_name} / {e}")
+    except:
         return []
 
 
@@ -503,16 +426,8 @@ def get_best_place_image(place):
     title = place.get("title", "").strip()
     region = place.get("region", "").strip()
     city = place.get("city", "").strip()
-
     if title:
         candidates.extend(get_google_place_photos_by_name(title, max_photos=3, region=region, city=city))
-
-    if len(candidates) < 3 and region and city and title:
-        more = get_google_place_photos_by_name(title, max_photos=3 - len(candidates), region=region, city=city)
-        for url in more:
-            if url not in candidates:
-                candidates.append(url)
-
     candidates = [x.strip() for x in candidates if x and isinstance(x, str)]
     verified = []
     seen = set()
@@ -524,23 +439,18 @@ def get_best_place_image(place):
             verified.append(url)
         if len(verified) >= 3:
             break
-
     final_images = verified[:]
     for url in candidates:
         if len(final_images) >= 3:
             break
         if url not in final_images:
             final_images.append(url)
-
     fallback = "https://via.placeholder.com/800x500?text=No+Image"
     while len(final_images) < 3:
         final_images.append(fallback)
     return final_images[:3]
 
 
-# =========================
-# 본문 텍스트
-# =========================
 def make_intro(region, city, title):
     return (
         f"{region} {city} 여행을 준비하시는 분들을 위해, "
@@ -594,11 +504,6 @@ def get_region_code(region):
     return 4
 
 
-# =========================
-# 시트에서 대상 행 찾기
-# 첫행은 패스, 둘째행부터
-# A=도시명, B=광역지역명, C=지역코드, D=완
-# =========================
 def find_next_row(ws):
     rows = ws.get_all_values()
     for i, row in enumerate(rows[1:], start=2):
@@ -611,18 +516,50 @@ def find_next_row(ws):
     return None, None, None
 
 
-# =========================
-# Blogger 포스팅 본문 생성
-# =========================
+def normalize_place_title(title, region, city):
+    t = str(title or "").strip()
+    t = re.sub(r"\s+", " ", t)
+
+    prefix = f"{region} {city}".strip()
+    prefix2 = f"{city} {city}".strip()
+    prefix3 = f"{region} {region}".strip()
+
+    for p in [prefix, prefix2, prefix3]:
+        while t.startswith(p + " "):
+            t = t[len(p) + 1:].strip()
+        while t.startswith(p):
+            t = t[len(p):].strip()
+
+    while t.startswith(city + " "):
+        t = t[len(city) + 1:].strip()
+    while t.startswith(region + " "):
+        t = t[len(region) + 1:].strip()
+
+    t = re.sub(rf"^({re.escape(city)}\s+)+", "", t).strip()
+    t = re.sub(rf"^({re.escape(region)}\s+)+", "", t).strip()
+
+    return t or title
+
+
+def make_title(region, city):
+    return f"{city} 가볼만한곳 {random.choice(['여행지', '숨은 명소', '당일치기코스', '주말여행'])} {random.choice(['TOP10', 'BEST10', '추천 10선'])}"
+
+
+def make_section_title(region, city, place_title):
+    clean_title = normalize_place_title(place_title, region, city)
+    return f"{city} {clean_title}"
+
+
 def build_post_html(region, city, title, places, thumb_url):
     intro_text = make_intro(region, city, title)
     last_text = make_last(region, city)
 
     list_items = ""
     for idx, item in enumerate(places, start=1):
+        clean_title = normalize_place_title(item["title"], region, city)
         list_items += (
             f"&nbsp;&nbsp;<span style='color:#676767; text-decoration:underline;'>"
-            f"{idx}. {item['title']}</span><br />\n"
+            f"{idx}. {clean_title}</span><br />\n"
         )
 
     summary_table_html = f"""
@@ -647,44 +584,43 @@ def build_post_html(region, city, title, places, thumb_url):
 
     sections_html = ""
     fallback_img = "https://via.placeholder.com/800x500?text=No+Image"
-
-    H2_STYLE = ()
+    H2_STYLE = "font-size:21px;color:#1a2a40;border-left:10px solid #1a2a40;padding:15px 20px 5px 20px;background-color:#f7f9fa;font-weight:bold;letter-spacing:-0.5px;line-height:1.4;"
 
     for idx, item in enumerate(places, start=1):
         images = item.get("images", [])
         img_html = ""
+        clean_title = normalize_place_title(item["title"], region, city)
+        section_title = f"{city} {clean_title}"
 
         if len(images) >= 3:
             img_html = f"""
 <div style="text-align:center; margin:20px 0;">
-    <a href="{images[0]}" target="_blank"><img src="{images[0]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px; margin-bottom:10px;" alt="{item['title']} 1"></a><br>
-    <a href="{images[1]}" target="_blank"><img src="{images[1]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px; margin-bottom:10px;" alt="{item['title']} 2"></a><br>
-    <a href="{images[2]}" target="_blank"><img src="{images[2]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px;" alt="{item['title']} 3"></a>
+    <a href="{images[0]}" target="_blank"><img src="{images[0]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px; margin-bottom:10px;" alt="{clean_title} 1"></a><br>
+    <a href="{images[1]}" target="_blank"><img src="{images[1]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px; margin-bottom:10px;" alt="{clean_title} 2"></a><br>
+    <a href="{images[2]}" target="_blank"><img src="{images[2]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px;" alt="{clean_title} 3"></a>
 </div>
 """
         elif len(images) == 2:
             img_html = f"""
 <div style="text-align:center; margin:20px 0;">
-    <a href="{images[0]}" target="_blank"><img src="{images[0]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px; margin-bottom:10px;" alt="{item['title']} 1"></a><br>
-    <a href="{images[1]}" target="_blank"><img src="{images[1]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px;" alt="{item['title']} 2"></a>
+    <a href="{images[0]}" target="_blank"><img src="{images[0]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px; margin-bottom:10px;" alt="{clean_title} 1"></a><br>
+    <a href="{images[1]}" target="_blank"><img src="{images[1]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px;" alt="{clean_title} 2"></a>
 </div>
 """
         elif len(images) == 1:
             img_html = f"""
 <div style="text-align:center; margin:20px 0;">
-    <a href="{images[0]}" target="_blank"><img src="{images[0]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px;" alt="{item['title']} 1"></a>
+    <a href="{images[0]}" target="_blank"><img src="{images[0]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px;" alt="{clean_title} 1"></a>
 </div>
 """
         else:
             img_html = f"""
 <div style="text-align:center; margin:20px 0;">
-    <img src="{fallback_img}" style="max-width:100%; height:auto; border-radius:8px;" alt="{item['title']}">
+    <img src="{fallback_img}" style="max-width:100%; height:auto; border-radius:8px;" alt="{clean_title}">
 </div>
 """
 
-        map_link_url = "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(
-            f"{region} {city} {item['title']}"
-        )
+        map_link_url = "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(f"{region} {city} {clean_title}")
         map_html = f"""
 <div style="text-align:center; margin-bottom:25px;">
     <a href="{map_link_url}" target="_blank"
@@ -696,7 +632,7 @@ def build_post_html(region, city, title, places, thumb_url):
 
         sections_html += f"""
 <br><br>
-<h2 style="{H2_STYLE}">{idx}. {region} {city} {item['title']}</h2>
+<h2 style="{H2_STYLE}">{idx}. {section_title}</h2>
 <br>
 {img_html}
 <br>
@@ -706,7 +642,7 @@ def build_post_html(region, city, title, places, thumb_url):
 <br><br>
 """
 
-    ai_review_text = f"<p data-ke-size='size18'>{region} {city}의 대표 관광지들을 중심으로 여행 코스를 구성하면 더욱 알찬 일정이 됩니다.</p>"
+    ai_review_text = f"<p data-ke-size='size18'>{city}의 대표 관광지들을 중심으로 여행 코스를 구성하면 더욱 알찬 일정이 됩니다.</p>"
     labels = ["여행", "국내여행"]
 
     html_content = f"""
@@ -718,7 +654,7 @@ def build_post_html(region, city, title, places, thumb_url):
   </p>
   {summary_table_html}
   {sections_html}
-  <h2 style="{H2_STYLE}">여행 총평</h2>
+  <h2 style="{H2_STYLE}">{city} 여행 총평</h2>
   {ai_review_text}
   <p data-ke-size="size18">{last_text}</p>
   <div style="margin-top:20px; color:#888;">{' '.join(['#'+x for x in labels])}</div>
@@ -727,18 +663,6 @@ def build_post_html(region, city, title, places, thumb_url):
     return html_content, labels
 
 
-# =========================
-# 제목 생성
-# =========================
-def generate_random_title(region, city):
-    keywords = ["여행지", "숨은 명소", "데이트 코스", "가족여행", "당일치기 코스", "주말여행", "핫플레이스"]
-    suffixes = ["TOP10", "BEST10", "추천 10선"]
-    return f"{region} {city} 가볼만한곳 {random.choice(keywords)} {random.choice(suffixes)}"
-
-
-# =========================
-# 메인
-# =========================
 def main():
     row_idx, region, city = find_next_row(ws3)
     if not row_idx:
@@ -746,7 +670,7 @@ def main():
         return
 
     log_step(row_idx, "1단계: 대상 행 선택")
-    title = generate_random_title(region, city)
+    title = make_title(region, city)
     log_step(row_idx, f"2단계: 제목 생성 ({title})")
 
     places = get_places(region, city)
@@ -756,6 +680,7 @@ def main():
     for p in places:
         p["region"] = region
         p["city"] = city
+        p["title"] = normalize_place_title(p["title"], region, city)
         p["images"] = get_best_place_image(p)
         p["overview"] = get_overview_from_place(p)
 
