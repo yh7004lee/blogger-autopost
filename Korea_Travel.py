@@ -52,27 +52,10 @@ except Exception as e:
 OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
-SHEET_ID = secrets.get("SHEET_ID", "6498243474990332474")
-
-DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
-
+SHEET_ID = "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs"
+DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "")
+GOOGLE_MAPS_API_KEY = "AIzaSyBiLiWI4rTtdk_IW-f26uEIkhnKjEBHI1w"
 TOUR_API_KEY = secrets.get("TOUR_API_KEY", "")
-
-import base64
-
-_a = ["dGRrX0lX", "QUl6YVN5QmlMaVdJNHJU"]
-_b = ["RUJISTF3", "LWYyNnVFSWtocktq"]
-
-_encoded = "".join([
-    _a[1],
-    _a[0],
-    _b[1],
-    _b[0],
-])
-
-GOOGLE_MAPS_API_KEY = base64.b64decode(_encoded).decode()
-
-del _a, _b, _encoded
 
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 genai_client = None
@@ -87,8 +70,10 @@ if GEMINI_API_KEY and genai:
 # 기본 설정
 # =========================
 BLOG_ID = "6498243474990332474"
-SHEET_TAB_INDEX = 2
 HISTORY_PATH = "processed_regions_blogger.json"
+
+SHEET_GID = 2131907983
+SHEET_TAB_INDEX = None
 
 ASSETS_BG_DIR = "assets/backgrounds"
 ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
@@ -98,7 +83,7 @@ error_logs = []
 
 
 # =========================
-# Google Sheets 인증 (Sheet3)
+# Google Sheets 인증 (gid 기준)
 # =========================
 def get_sheet3():
     service_account_file = "sheetapi.json"
@@ -106,11 +91,10 @@ def get_sheet3():
     creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
-    try:
-        ws3 = sh.worksheet("Sheet3")
-    except Exception:
-        ws3 = sh.get_worksheet(SHEET_TAB_INDEX)
-    return ws3
+    for ws in sh.worksheets():
+        if ws.id == SHEET_GID:
+            return ws
+    raise RuntimeError(f"gid={SHEET_GID} 시트를 찾지 못했습니다.")
 
 
 ws3 = get_sheet3()
@@ -145,10 +129,18 @@ def ensure_drive_folder(drive_service, folder_name):
 
 def upload_to_drive(file_path, file_name):
     drive_service = get_drive_service()
-    folder_id = DRIVE_FOLDER_ID or ensure_drive_folder(drive_service, "blogger")
+    folder_id = (DRIVE_FOLDER_ID or "").strip()
+    if not folder_id or folder_id == "YOUR_DRIVE_FOLDER_ID":
+        folder_id = ensure_drive_folder(drive_service, "blogger")
     media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
     meta = {"name": file_name, "parents": [folder_id]}
-    uploaded = drive_service.files().create(body=meta, media_body=media, fields="id").execute()
+    try:
+        uploaded = drive_service.files().create(body=meta, media_body=media, fields="id").execute()
+    except Exception as e:
+        print(f"⚠️ Drive 업로드 실패: {e}")
+        folder_id = ensure_drive_folder(drive_service, "blogger")
+        meta = {"name": file_name, "parents": [folder_id]}
+        uploaded = drive_service.files().create(body=meta, media_body=media, fields="id").execute()
     drive_service.permissions().create(
         fileId=uploaded["id"],
         body={"type": "anyone", "role": "reader", "allowFileDiscovery": False}
@@ -320,11 +312,7 @@ def google_text_search(query, city="", region=""):
         print("⚠️ GOOGLE_MAPS_API_KEY 없음")
         return []
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    params = {
-        "query": query,
-        "key": GOOGLE_MAPS_API_KEY,
-        "language": "ko"
-    }
+    params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "ko"}
     try:
         print(f"🔎 검색 쿼리: {query}")
         res = requests.get(url, params=params, timeout=15)
@@ -568,26 +556,57 @@ def make_last(region, city):
     )
 
 
-def make_section_text(region, city, title, addr, overview):
-    return (
-        f"<p data-ke-size='size18'><b>{title}</b>은(는) {addr}에 위치한 {region} {city}의 대표적인 관광지입니다.</p>"
-        f"<p data-ke-size='size18'>현지 분위기를 느끼기 좋고, 여행 동선에 넣기에도 부담이 적은 곳으로 많이 찾습니다.</p>"
-        f"<p data-ke-size='size18'>{clean_html(overview) if overview else '방문 시에는 주변 명소와 함께 둘러보면 더욱 좋습니다.'}</p>"
-        f"<p data-ke-size='size18'>여행 일정에 맞춰 여유롭게 방문하면 더 만족스러운 시간을 보낼 수 있습니다.</p>"
-    )
+def get_region_code(region):
+    if region == "서울":
+        return 1
+    if region == "인천":
+        return 2
+    if region == "대전":
+        return 3
+    if region == "대구":
+        return 4
+    if region == "광주":
+        return 5
+    if region == "부산":
+        return 6
+    if region == "울산":
+        return 7
+    if region == "세종":
+        return 8
+    if region == "경기":
+        return 31
+    if region == "강원":
+        return 32
+    if region == "충북":
+        return 33
+    if region == "충남":
+        return 34
+    if region == "경북":
+        return 35
+    if region == "경남":
+        return 36
+    if region == "전북":
+        return 37
+    if region == "전남":
+        return 38
+    if region == "제주":
+        return 39
+    return 4
 
 
 # =========================
 # 시트에서 대상 행 찾기
-# A열=지역, B열=도시, D열=완
+# 첫행은 패스, 둘째행부터
+# A=도시명, B=광역지역명, C=지역코드, D=완
 # =========================
 def find_next_row(ws):
     rows = ws.get_all_values()
     for i, row in enumerate(rows[1:], start=2):
-        region = row[0].strip() if len(row) > 0 and row[0] else ""
-        city = row[1].strip() if len(row) > 1 and row[1] else ""
+        city = row[0].strip() if len(row) > 0 and row[0] else ""
+        region = row[1].strip() if len(row) > 1 and row[1] else ""
+        code = row[2].strip() if len(row) > 2 and row[2] else ""
         status = row[3].strip() if len(row) > 3 and row[3] else ""
-        if region and city and status != "완":
+        if city and region and code and status != "완":
             return i, region, city
     return None, None, None
 
