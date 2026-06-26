@@ -64,7 +64,6 @@ if GEMINI_API_KEY and genai:
 
 BLOG_ID = "6498243474990332474"
 HISTORY_PATH = "processed_regions_blogger.json"
-
 SHEET_GID = 2131907983
 
 ASSETS_BG_DIR = "assets/backgrounds"
@@ -337,8 +336,7 @@ def get_fallback_places(region, city):
 def get_places(region, city):
     pool = []
     seen = set()
-    queries = get_queries(region, city)
-    for q in queries:
+    for q in get_queries(region, city):
         results = google_text_search(q, city=city, region=region)
         for r in results:
             name = r.get("name")
@@ -451,93 +449,77 @@ def get_best_place_image(place):
     return final_images[:3]
 
 
-def make_intro(region, city, title):
-    return (
-        f"{region} {city} 여행을 준비하시는 분들을 위해, "
-        f"현지에서 많이 찾는 명소를 중심으로 알차게 정리했습니다. "
-        f"{title} 기준으로 꼭 참고할 만한 곳들만 선별해 소개합니다."
-    )
+def make_intro_prompt(region, city, title):
+    return f"""
+너는 한국 여행 블로그 전문 작성자다.
+
+아래 정보를 바탕으로 서론만 작성해라.
+- 지역: {region}
+- 도시: {city}
+- 글 제목: {title}
+
+조건:
+- 3~4문장
+- 핵심 키워드 자연스럽게 포함
+- 첫 문장에서 독자의 호기심을 강하게 끌 것
+- 너무 짧지 않게, 그러나 장황하지 않게
+- 여행 동선, 추천 이유, 기대감이 느껴지게
+- HTML 사용 가능하지만 <p>와 <br>만 사용
+- <p data-ke-size="size18"> 로 시작할 것
+- 마크다운 금지
+- 중국어/일본어 금지
+"""
 
 
-def make_last(region, city):
-    return (
-        f"{region} {city} 여행이 더욱 알차고 즐거운 시간이 되시길 바랍니다. "
-        f"방문 전 운영시간과 휴무일을 한 번 더 확인하시면 더 편안한 여행이 됩니다."
-    )
+def make_section_prompt(region, city, place_title, addr, overview):
+    return f"""
+너는 한국 여행 블로그 전문 작성자다.
+
+관광지 정보:
+- 지역: {region}
+- 도시: {city}
+- 관광지명: {place_title}
+- 주소: {addr}
+- 참고설명: {overview}
+
+작성 조건:
+- 자연스러운 한국어
+- 여행 블로그 스타일
+- 4문단
+- 350자 이상
+- 장점 설명
+- 방문 포인트 설명
+- HTML 사용 가능, <p>와 <br>만 사용
+- <p data-ke-size="size18"> 로 시작
+- 제목 태그 금지
+- 마크다운 금지
+- 중국어/일본어 금지
+"""
 
 
-def get_region_code(region):
-    if region == "서울":
-        return 1
-    if region == "인천":
-        return 2
-    if region == "대전":
-        return 3
-    if region == "대구":
-        return 4
-    if region == "광주":
-        return 5
-    if region == "부산":
-        return 6
-    if region == "울산":
-        return 7
-    if region == "세종":
-        return 8
-    if region == "경기":
-        return 31
-    if region == "강원":
-        return 32
-    if region == "충북":
-        return 33
-    if region == "충남":
-        return 34
-    if region == "경북":
-        return 35
-    if region == "경남":
-        return 36
-    if region == "전북":
-        return 37
-    if region == "전남":
-        return 38
-    if region == "제주":
-        return 39
-    return 4
-
-
-def find_next_row(ws):
-    rows = ws.get_all_values()
-    for i, row in enumerate(rows[1:], start=2):
-        city = row[0].strip() if len(row) > 0 and row[0] else ""
-        region = row[1].strip() if len(row) > 1 and row[1] else ""
-        code = row[2].strip() if len(row) > 2 and row[2] else ""
-        status = row[3].strip() if len(row) > 3 and row[3] else ""
-        if city and region and code and status != "완":
-            return i, region, city
-    return None, None, None
-
-
-def normalize_place_title(title, region, city):
+def clean_place_title(title, region, city):
     t = str(title or "").strip()
     t = re.sub(r"\s+", " ", t)
+    if not t:
+        return ""
 
-    prefix = f"{region} {city}".strip()
-    prefix2 = f"{city} {city}".strip()
-    prefix3 = f"{region} {region}".strip()
-
-    for p in [prefix, prefix2, prefix3]:
-        while t.startswith(p + " "):
-            t = t[len(p) + 1:].strip()
-        while t.startswith(p):
-            t = t[len(p):].strip()
-
-    while t.startswith(city + " "):
-        t = t[len(city) + 1:].strip()
-    while t.startswith(region + " "):
-        t = t[len(region) + 1:].strip()
-
-    t = re.sub(rf"^({re.escape(city)}\s+)+", "", t).strip()
-    t = re.sub(rf"^({re.escape(region)}\s+)+", "", t).strip()
-
+    variants = [
+        f"{region} {city}",
+        f"{city} {city}",
+        f"{region} {region}",
+        city,
+        region,
+    ]
+    for v in variants:
+        v = v.strip()
+        if not v:
+            continue
+        pattern = rf"^\s*{re.escape(v)}\s+"
+        while re.match(pattern, t):
+            t = re.sub(pattern, "", t).strip()
+    t = re.sub(rf"^\s*{re.escape(city)}\s+", "", t).strip()
+    t = re.sub(rf"^\s*{re.escape(region)}\s+", "", t).strip()
+    t = re.sub(r"\s+", " ", t).strip()
     return t or title
 
 
@@ -545,52 +527,21 @@ def make_title(region, city):
     return f"{city} 가볼만한곳 {random.choice(['여행지', '숨은 명소', '당일치기코스', '주말여행'])} {random.choice(['TOP10', 'BEST10', '추천 10선'])}"
 
 
-def make_section_title(region, city, place_title):
-    clean_title = normalize_place_title(place_title, region, city)
-    return f"{city} {clean_title}"
-
-
 def build_post_html(region, city, title, places, thumb_url):
-    intro_text = make_intro(region, city, title)
+    intro_html = generate_ai_review(make_intro_prompt(region, city, title), title)
+    intro_html = intro_html.replace('data-ke-size="size16"', 'data-ke-size="size18"')
+    intro_html = intro_html.replace("size16", "size18")
+
     last_text = make_last(region, city)
-
-    list_items = ""
-    for idx, item in enumerate(places, start=1):
-        clean_title = normalize_place_title(item["title"], region, city)
-        list_items += (
-            f"&nbsp;&nbsp;<span style='color:#676767; text-decoration:underline;'>"
-            f"{idx}. {clean_title}</span><br />\n"
-        )
-
-    summary_table_html = f"""
-<p data-ke-size="size18">&nbsp;</p>
-<table style="border-collapse: collapse; width: 100%;" border="1" data-ke-align="alignLeft">
-<tbody>
-<tr>
-<td style="background-color: #ffffff;">
-<div>
-<br />
-<span style="background-color: #ffffff; color: #555555;">&nbsp;&nbsp;■ 목차 (Table of Contents)</span>
-<br /><p data-ke-size="size18">&nbsp;</p>
-{list_items}
-<br />
-</div>
-</td>
-</tr>
-</tbody>
-</table>
-<p data-ke-size="size18">&nbsp;</p>
-"""
-
     sections_html = ""
     fallback_img = "https://via.placeholder.com/800x500?text=No+Image"
     H2_STYLE = "font-size:21px;color:#1a2a40;border-left:10px solid #1a2a40;padding:15px 20px 5px 20px;background-color:#f7f9fa;font-weight:bold;letter-spacing:-0.5px;line-height:1.4;"
 
     for idx, item in enumerate(places, start=1):
+        clean_title = clean_place_title(item["title"], region, city)
+        section_title = f"{city} {clean_title}"
         images = item.get("images", [])
         img_html = ""
-        clean_title = normalize_place_title(item["title"], region, city)
-        section_title = f"{city} {clean_title}"
 
         if len(images) >= 3:
             img_html = f"""
@@ -630,6 +581,10 @@ def build_post_html(region, city, title, places, thumb_url):
 </div>
 """
 
+        section_body = generate_ai_review(make_section_prompt(region, city, clean_title, item.get("addr", ""), item.get("overview", "")), clean_title)
+        section_body = section_body.replace('data-ke-size="size16"', 'data-ke-size="size18"')
+        section_body = section_body.replace("size16", "size18")
+
         sections_html += f"""
 <br><br>
 <h2 style="{H2_STYLE}">{idx}. {section_title}</h2>
@@ -638,7 +593,7 @@ def build_post_html(region, city, title, places, thumb_url):
 <br>
 {map_html}
 <br><br>
-{item['desc']}
+{section_body}
 <br><br>
 """
 
@@ -647,20 +602,44 @@ def build_post_html(region, city, title, places, thumb_url):
 
     html_content = f"""
 <div style="padding:12px;">
+  <span><!--more--></span>
+  <p data-ke-size="size18"><br /></p>
+  <p data-ke-size="size18"><br /></p>
+  <div class="mbtTOC"><button> 목차 </button>
+  <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
+  </div>
   <p style="font-size:18px; color:#333; font-weight:bold;">{title}</p>
-  <p data-ke-size="size18">{intro_text}</p>
+  {intro_html}
   <p style="text-align:center;">
     <img src="{thumb_url}" alt="{title} 썸네일" style="max-width:100%; height:auto; border-radius:8px;">
   </p>
-  {summary_table_html}
   {sections_html}
   <h2 style="{H2_STYLE}">{city} 여행 총평</h2>
   {ai_review_text}
   <p data-ke-size="size18">{last_text}</p>
   <div style="margin-top:20px; color:#888;">{' '.join(['#'+x for x in labels])}</div>
+  <script>mbtTOC();</script>
 </div>
 """
     return html_content, labels
+
+
+def generate_random_title(region, city):
+    keywords = ["여행지", "숨은 명소", "데이트 코스", "가족여행", "당일치기 코스", "주말여행", "핫플레이스"]
+    suffixes = ["TOP10", "BEST10", "추천 10선"]
+    return f"{city} 가볼만한곳 {random.choice(keywords)} {random.choice(suffixes)}"
+
+
+def find_next_row(ws):
+    rows = ws.get_all_values()
+    for i, row in enumerate(rows[1:], start=2):
+        city = row[0].strip() if len(row) > 0 and row[0] else ""
+        region = row[1].strip() if len(row) > 1 and row[1] else ""
+        code = row[2].strip() if len(row) > 2 and row[2] else ""
+        status = row[3].strip() if len(row) > 3 and row[3] else ""
+        if city and region and code and status != "완":
+            return i, region, city
+    return None, None, None
 
 
 def main():
@@ -670,7 +649,7 @@ def main():
         return
 
     log_step(row_idx, "1단계: 대상 행 선택")
-    title = make_title(region, city)
+    title = generate_random_title(region, city)
     log_step(row_idx, f"2단계: 제목 생성 ({title})")
 
     places = get_places(region, city)
@@ -680,32 +659,10 @@ def main():
     for p in places:
         p["region"] = region
         p["city"] = city
-        p["title"] = normalize_place_title(p["title"], region, city)
+        p["title"] = clean_place_title(p["title"], region, city)
         p["images"] = get_best_place_image(p)
         p["overview"] = get_overview_from_place(p)
-
-        prompt = f"""
-관광지명 : {p['title']}
-지역 : {region}
-도시 : {city}
-주소 : {p.get('addr', '')}
-원본 설명 : {p.get('overview', '')}
-
-조건
-- 여행 블로그 스타일
-- 자연스러운 한국어
-- 4 문단
-- 350 자 이상
-- 장점 설명
-- 방문 포인트 설명
-- HTML 사용 가능 (단, <p>, <br>만 사용)
-- 마크다운 절대 금지
-- <h1>, <h2>, <h3> 등 제목 태그 절대 넣지 말 것
-- "**" 마크다운 강조 기호 절대 넣지 말 것
-- <p data-ke-size="size18"> 을 넣어서 문장을 만들것
-- 중국어나 일본어 금지
-"""
-        p["desc"] = generate_ai_review(prompt, p["title"])
+        p["desc"] = generate_ai_review(make_section_prompt(region, city, p["title"], p.get("addr", ""), p["overview"]), p["title"])
         p["desc"] = p["desc"].replace('data-ke-size="size16"', 'data-ke-size="size18"')
         p["desc"] = p["desc"].replace("size16", "size18")
         time.sleep(0.4)
@@ -744,7 +701,6 @@ def main():
 
         log_step(row_idx, f"5단계: Blogger 업로드 성공 ({res.get('url', '')})")
         print(f"[완료] 블로그 포스팅: {res.get('url', '')}")
-
         save_processed_region(region, city)
 
     except Exception as e:
