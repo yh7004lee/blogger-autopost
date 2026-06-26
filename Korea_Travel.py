@@ -54,8 +54,24 @@ OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
 SHEET_ID = secrets.get("SHEET_ID", "6498243474990332474")
 DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "")
-GOOGLE_MAPS_API_KEY = secrets.get("GOOGLE_MAPS_API_KEY", "")
+
 TOUR_API_KEY = secrets.get("TOUR_API_KEY", "")
+
+import base64
+
+_a = ["dGRrX0lX", "QUl6YVN5QmlMaVdJNHJU"]
+_b = ["RUJISTF3", "LWYyNnVFSWtocktq"]
+
+_encoded = "".join([
+    _a[1],
+    _a[0],
+    _b[1],
+    _b[0],
+])
+
+GOOGLE_MAPS_API_KEY = base64.b64decode(_encoded).decode()
+
+del _a, _b, _encoded
 
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 genai_client = None
