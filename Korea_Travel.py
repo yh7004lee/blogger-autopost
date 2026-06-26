@@ -460,7 +460,7 @@ def make_intro_prompt(region, city, title):
 - 글 제목: {title}
 
 조건:
-- 3~4문장
+- 5 문장
 - 핵심 키워드 자연스럽게 포함
 - 첫 문장에서 독자의 호기심을 강하게 끌 것
 - 너무 짧지 않게, 그러나 장황하지 않게
@@ -542,7 +542,7 @@ def build_post_html(region, city, title, places, thumb_url):
     last_text = make_last(region, city)
     sections_html = ""
     fallback_img = "https://via.placeholder.com/800x500?text=No+Image"
-    H2_STYLE = "font-size:21px;color:#1a2a40;border-left:10px solid #1a2a40;padding:15px 20px 5px 20px;background-color:#f7f9fa;font-weight:bold;letter-spacing:-0.5px;line-height:1.4;"
+    H2_STYLE = ""
 
     for idx, item in enumerate(places, start=1):
         clean_title = clean_place_title(item["title"], region, city)
@@ -608,18 +608,21 @@ def build_post_html(region, city, title, places, thumb_url):
     labels = ["여행", "국내여행"]
 
     html_content = f"""
-<div style="padding:12px;">
+  <p data-ke-size="size18"><br /></p>
+  {intro_html}
+  <p style="text-align:center;">
+    <img src="{thumb_url}" alt="{title} 썸네일" style="max-width:100%; height:auto; border-radius:8px;">
+  </p>
+  <p data-ke-size="size18"><br /></p>  
+  <div style="padding:12px;">
   <span><!--more--></span>
   <p data-ke-size="size18"><br /></p>
   <p data-ke-size="size18"><br /></p>
   <div class="mbtTOC"><button> 목차 </button>
   <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
   </div>
-  <p style="font-size:18px; color:#333; font-weight:bold;">{title}</p>
-  {intro_html}
-  <p style="text-align:center;">
-    <img src="{thumb_url}" alt="{title} 썸네일" style="max-width:100%; height:auto; border-radius:8px;">
-  </p>
+  <p data-ke-size="size18"><br /></p>
+  
   {sections_html}
   <h2 style="{H2_STYLE}">{city} 여행 총평</h2>
   {ai_review_text}
