@@ -648,16 +648,7 @@ def build_post_html(region, city, title, places, thumb_url):
     sections_html = ""
     fallback_img = "https://via.placeholder.com/800x500?text=No+Image"
 
-    H2_STYLE = (
-        "font-size:21px;"
-        "color:#1a2a40;"
-        "border-left:10px solid #1a2a40;"
-        "padding:15px 20px 5px 20px;"
-        "background-color:#f7f9fa;"
-        "font-weight:bold;"
-        "letter-spacing:-0.5px;"
-        "line-height:1.4;"
-    )
+    H2_STYLE = ()
 
     for idx, item in enumerate(places, start=1):
         images = item.get("images", [])
@@ -716,7 +707,7 @@ def build_post_html(region, city, title, places, thumb_url):
 """
 
     ai_review_text = f"<p data-ke-size='size18'>{region} {city}의 대표 관광지들을 중심으로 여행 코스를 구성하면 더욱 알찬 일정이 됩니다.</p>"
-    labels = ["여행", "국내여행", region, city]
+    labels = ["여행", "국내여행"]
 
     html_content = f"""
 <div style="padding:12px;">
