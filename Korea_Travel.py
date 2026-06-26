@@ -53,7 +53,8 @@ OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
 SHEET_ID = secrets.get("SHEET_ID", "6498243474990332474")
-DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "")
+
+DRIVE_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID", "YOUR_DRIVE_FOLDER_ID")
 
 TOUR_API_KEY = secrets.get("TOUR_API_KEY", "")
 
