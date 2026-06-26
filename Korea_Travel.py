@@ -290,13 +290,29 @@ def get_queries(city):
     ]
 
 
-def google_text_search(query):
+def google_text_search(query, city="", region=""):
     if not GOOGLE_MAPS_API_KEY:
+        print("⚠️ GOOGLE_MAPS_API_KEY 없음")
         return []
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "ko"}
-    res = requests.get(url, params=params, timeout=15)
-    return res.json().get("results", [])
+    params = {
+        "query": query,
+        "key": GOOGLE_MAPS_API_KEY,
+        "language": "ko"
+    }
+    try:
+        print(f"🔎 검색 쿼리: {query}")
+        res = requests.get(url, params=params, timeout=15)
+        data = res.json()
+        status = data.get("status", "")
+        print(f"   ↳ status: {status}")
+        print(f"   ↳ results_count: {len(data.get('results', []))}")
+        if status in ["ZERO_RESULTS", "INVALID_REQUEST", "OVER_QUERY_LIMIT"]:
+            return []
+        return data.get("results", [])
+    except Exception as e:
+        print(f"⚠️ google_text_search 실패: {query} / {e}")
+        return []
 
 
 def is_valid_place(place):
@@ -325,28 +341,60 @@ def score_place(item):
     return s
 
 
-def get_places(region):
+
+def get_places(region, city):
     pool = []
     seen = set()
-    for q in get_queries(region):
-        results = google_text_search(q)
+
+    print("=" * 60)
+    print(f"지역 디버그: region={region}, city={city}")
+    print("=" * 60)
+
+    queries = get_queries(region, city)
+    print(f"쿼리 목록: {queries}")
+
+    for q in queries:
+        results = google_text_search(q, city=city, region=region)
+        if not results:
+            print("   ↳ 결과 없음")
+            continue
+
         for r in results:
             name = r.get("name")
             if not name:
+                print("   ↳ name 없음, 스킵")
                 continue
-            key = name.lower()
+
+            key = name.lower().strip()
             if key in seen:
+                print(f"   ↳ 중복 스킵: {name}")
                 continue
             seen.add(key)
+
             if not is_valid_place(r):
+                print(f"   ↳ 필터 스킵: {name} / types={r.get('types', [])}")
                 continue
+
+            score = score_place(r)
+            print(f"   ↳ 채택: {name} / score={score}")
             pool.append({
                 "title": name,
                 "addr": r.get("formatted_address", "주소 없음"),
                 "raw": r,
-                "score": score_place(r),
+                "score": score,
             })
+
+        print(f"   ↳ 누적 후보 수: {len(pool)}")
+        if len(pool) >= 10:
+            break
+
+    if not pool:
+        print("⚠️ pool이 비어 있음. fallback 진입")
+        pool = get_fallback_places(region, city)
+        print(f"fallback 후보 수: {len(pool)}")
+
     pool = sorted(pool, key=lambda x: x["score"], reverse=True)
+    print(f"최종 반환 개수: {len(pool[:10])}")
     return pool[:10]
 
 
