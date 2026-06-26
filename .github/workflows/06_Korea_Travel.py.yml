@@ -1,4 +1,4 @@
-name: Blogger Autopost Galaxy ar
+name: 06_Korea_Travel.py
 
 on:
   workflow_dispatch:        # ✅ 수동 실행 가능
