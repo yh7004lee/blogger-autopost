@@ -174,6 +174,7 @@ def pick_random_background() -> str:
     for ext in ("*.png", "*.jpg", "*.jpeg"):
         files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
     return random.choice(files) if files else ""
+    
 
 
 def textwrap_wrap_kor(text, width):
@@ -525,7 +526,13 @@ def clean_place_title(title, region, city):
 
 def make_title(region, city):
     return f"{city} 가볼만한곳 {random.choice(['여행지', '숨은 명소', '당일치기코스', '주말여행'])} {random.choice(['TOP10', 'BEST10', '추천 10선'])}"
-
+    
+def make_last(region, city):
+    return (
+        f"{city} 여행은 생각보다 동선이 중요해서, 미리 핵심 명소를 정리해두면 훨씬 편하게 움직일 수 있습니다. "
+        f"이번 글에서 소개한 곳들은 {city}의 분위기와 매력을 함께 느끼기 좋은 곳들로 구성했습니다. "
+        f"일정이 짧아도 충분히 알차게 둘러볼 수 있으니, 취향에 맞게 코스를 조합해 보시면 좋습니다."
+    )
 
 def build_post_html(region, city, title, places, thumb_url):
     intro_html = generate_ai_review(make_intro_prompt(region, city, title), title)
