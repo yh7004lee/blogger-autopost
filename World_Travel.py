@@ -757,18 +757,20 @@ def build_post_html(country, city, title, places, thumb_url):
     ai_review_text = f"<p data-ke-size='size18'>{country} {city}의 대표 관광지들을 중심으로 여행 코스를 구성하면 더욱 알찬 일정이 됩니다.</p>"
 
     html_content = f"""
-<div style="padding:12px;">
-  <span><!--more--></span>
-  <p data-ke-size="size18"><br /></p>
+
+  
+  {intro_html}
+  <p style="text-align:center;">
+  p data-ke-size="size18"><br /></p>
+  p data-ke-size="size18"><br /></p>
+    <img src="{thumb_url}" alt="{title} 썸네일" style="max-width:100%; height:auto; border-radius:8px;">
+  </p>
+  <div style="padding:12px;">
+  <span><!--more--></span>  
   <p data-ke-size="size18"><br /></p>
   <div class="mbtTOC"><button> 목차 </button>
   <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
   </div>
-  <p style="font-size:18px; color:#333; font-weight:bold;">{title}</p>
-  {intro_html}
-  <p style="text-align:center;">
-    <img src="{thumb_url}" alt="{title} 썸네일" style="max-width:100%; height:auto; border-radius:8px;">
-  </p>
   {sections_html}
   <h2>{city} 여행 총평</h2>
   {ai_review_text}
