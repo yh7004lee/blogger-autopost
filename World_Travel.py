@@ -504,19 +504,17 @@ def normalize_place_title(title):
     return title
 
 def get_places(country, city):
-    debug("장소 수집 시작")
+    naver_places = get_naver_places(country, city)
     results = []
     seen = set()
 
-    naver_places = get_naver_places(country, city)
-    debug(f"네이버 장소 수집 개수: {len(naver_places)}")
     for name in naver_places:
         name = normalize_place_title(name)
         if not name:
             continue
-        if name in seen:
+        if name.lower() in seen:
             continue
-        seen.add(name)
+        seen.add(name.lower())
         results.append({
             "contentId": "",
             "title": name,
@@ -524,20 +522,29 @@ def get_places(country, city):
             "raw": {},
             "score": 0
         })
+        if len(results) >= 10:
+            return results[:10]
 
     if len(results) < 10:
-        raw_places = serper_places_search(country, city)
-        debug(f"Serper 장소 수집 개수: {len(raw_places)}")
+        try:
+            raw_places = serper_places_search(country, city)
+        except Exception as e:
+            print(f"⚠️ Serper 장소 검색 실패: {e}")
+            raw_places = []
+
         for item in raw_places:
             title = normalize_place_title(item.get("title", ""))
             addr = item.get("address", "").strip()
+
             if not title:
                 continue
             if title.lower() in seen:
                 continue
             seen.add(title.lower())
+
             if addr and not is_valid_address(addr):
                 addr = ""
+
             results.append({
                 "contentId": item.get("contentId", "") or "",
                 "title": title,
@@ -545,19 +552,10 @@ def get_places(country, city):
                 "raw": item,
                 "score": score_place(item)
             })
-            if len(results) >= 10:
-                break
 
-    if len(results) < 10:
-        debug("fallback 장소 사용")
-        fallback = get_default_places(country, city)
-        for p in fallback:
             if len(results) >= 10:
-                break
-            if p["title"].lower() not in seen:
-                results.append(p)
+                return results[:10]
 
-    debug(f"최종 장소 수: {len(results)}")
     return results[:10]
 
 def get_place_address_via_tour_api(country, city, place_name):
