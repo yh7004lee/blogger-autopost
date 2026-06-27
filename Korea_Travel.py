@@ -690,7 +690,7 @@ def build_post_html(region, city, title, places, thumb_url):
   <span><!--more--></span>
   <p data-ke-size="size18"><br /></p>
   <p data-ke-size="size18"><br /></p>
-  <div class="mbtTOC"><button> 목차 </button>
+  <div class="mbtTOC"><button>  목차 </button>
   <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
   </div>
   
