@@ -74,7 +74,7 @@ HISTORY_PATH = "processed_overseas_blogger.json"
 BLOG_ID = "8582128276301125850"
 
 ASSETS_BG_DIR = "assets/backgrounds"
-ASSETS_FONT_TTF = os.path.join("assets", "fonts", "NotoSansJP-VariableFont_wght.ttf")
+ASSETS_FONT_TTF = os.path.join("assets", "fonts", "PlusJakartaSans-SemiBoldItalic.ttf")
 THUMB_DIR = "thumbnails"
 
 LABELS = ["viajes", "turismo"]
