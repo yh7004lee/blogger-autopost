@@ -10,7 +10,7 @@ import requests
 import logging
 import pickle
 from urllib.parse import quote
-
+import glob
 from bs4 import BeautifulSoup
 from PIL import Image, ImageDraw, ImageFont
 
