@@ -174,7 +174,7 @@ def make_thumb(save_path, var_title):
     try:
         font = ImageFont.truetype(
             os.path.join("assets", "fonts", "NotoSansJP-VariableFont_wght.ttf"),
-            48
+            42
         )
     except:
         font = ImageFont.load_default()
