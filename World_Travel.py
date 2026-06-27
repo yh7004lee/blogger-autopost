@@ -61,7 +61,7 @@ SERPER_API_KEY = secrets.get("SERPER_API_KEY", "")
 GOOGLE_MAPS_API_KEY = secrets.get("GOOGLE_MAPS_API_KEY", "")
 GROQ_API_KEY = secrets.get("GROQ_API_KEY", "")
 CEREBRAS_API_KEY = secrets.get("CEREBRAS_API_KEY", "")
-
+DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "")
 if not TOUR_API_KEY:
     raise RuntimeError("TOUR_API_KEY가 없습니다.")
 if not OPENAI_API_KEY:
