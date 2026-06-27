@@ -449,8 +449,84 @@ def get_default_places(country, city):
 
 def get_naver_places(country, city):
     keyword = f"{country} {city} 가볼만한곳"
-    debug(f"네이버 플레이스 검색어: {keyword}")
-    return []
+
+    options = Options()
+    options.add_argument("--headless=new")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--window-size=1920,1080")
+    options.add_argument(
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    )
+
+    driver = webdriver.Chrome(options=options)
+
+    try:
+        driver.get("https://search.naver.com/search.naver?query=" + quote(keyword))
+        time.sleep(2)
+
+        try:
+            btn = driver.find_element(
+                By.CSS_SELECTOR,
+                "#place-main-section-root section div.mod_more_wrap a"
+            )
+            btn.click()
+            time.sleep(3)
+        except Exception:
+            pass
+
+        try:
+            if len(driver.window_handles) > 1:
+                driver.switch_to.window(driver.window_handles[-1])
+        except Exception:
+            pass
+
+        try:
+            WebDriverWait(driver, 15).until(
+                EC.presence_of_element_located(
+                    (By.CSS_SELECTOR, "div.pc_scroll_container__iXtmX")
+                )
+            )
+        except Exception:
+            pass
+
+        time.sleep(2)
+
+        items = driver.find_elements(By.CSS_SELECTOR, "ul > li")
+        places = []
+        seen = set()
+
+        for item in items:
+            try:
+                name = item.find_element(By.CSS_SELECTOR, "span").text.strip()
+                if not name:
+                    continue
+                if "서비스" in name or "더보기" in name:
+                    continue
+                if len(name) < 2:
+                    continue
+                if name.lower() in seen:
+                    continue
+                seen.add(name.lower())
+                places.append(name)
+            except Exception:
+                continue
+
+            if len(places) >= 10:
+                break
+
+        return places
+
+    except Exception as e:
+        print("ERROR:", e)
+        return []
+
+    finally:
+        try:
+            driver.quit()
+        except:
+            pass
 
 def serper_places_search(country, city):
     try:
