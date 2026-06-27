@@ -1,10 +1,18 @@
 name: 09_Maxico_Travel.py
 
 on:
-  workflow_dispatch:        # ✅ 수동 실행 가능
- schedule:
-   - cron: "10 1 * * *"   # 매일 새벽 1시 10분 (KST)
-   - cron: "10 13 * * *"  # 매일 오후 1시 10분 (KST)
+  workflow_dispatch:
+  schedule:
+    - cron: "36 0 * * *"
+    - cron: "0 3 * * *"
+    - cron: "24 5 * * *"
+    - cron: "48 7 * * *"
+    - cron: "12 10 * * *"
+    - cron: "36 12 * * *"
+    - cron: "0 15 * * *"
+    - cron: "24 17 * * *"
+    - cron: "48 19 * * *"
+    - cron: "12 22 * * *"
 
 
 jobs:
