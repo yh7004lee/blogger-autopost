@@ -3,7 +3,16 @@ name: 06_Korea_Travel.py
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 2 * * *"
+    - cron: "0 0 * * *"
+    # - cron: "24 2 * * *"
+    - cron: "48 4 * * *"
+    # - cron: "12 7 * * *"
+    - cron: "36 9 * * *"
+    # - cron: "0 12 * * *"
+    - cron: "24 14 * * *"
+    # - cron: "48 16 * * *"
+    - cron: "12 19 * * *"
+    # - cron: "36 21 * * *"
 
 
 jobs:
