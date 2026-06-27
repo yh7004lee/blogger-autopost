@@ -251,9 +251,9 @@ blog_handler = get_blogger_service()
 # 글 생성용 유틸
 # ==================================================
 def generate_random_title(country, city):
-    keywords = ["観光地", "おすすめスポット", "デートコース", "家族旅行", "日帰りコース", "週末旅行", "人気スポット"]
+    keywords = ["観光スポット", "人気スポット", "おすすめスポット", "定番スポット", "注目スポット"]
     suffixes = ["TOP10", "BEST10", "おすすめ10選"]
-    return f"{country} {city} のおすすめスポット {random.choice(keywords)} {random.choice(suffixes)}"
+    return f"{country} {city} の {random.choice(keywords)} {random.choice(suffixes)}"
 
 def clean_html(raw_html):
     return BeautifulSoup(raw_html or "", "html.parser").get_text(separator="\n", strip=True)
