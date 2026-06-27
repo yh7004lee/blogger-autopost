@@ -3,16 +3,8 @@ name: 11_Japan_Cafe
 on:
   workflow_dispatch:
   schedule:
-    - cron: "36 0 * * *"
-    - cron: "0 3 * * *"
-    - cron: "24 5 * * *"
-    - cron: "48 7 * * *"
-    - cron: "12 10 * * *"
-    - cron: "36 12 * * *"
-    - cron: "0 15 * * *"
-    - cron: "24 17 * * *"
-    - cron: "48 19 * * *"
-    - cron: "12 22 * * *"
+    - cron: "36 1 * * *"
+
 
 jobs:
   autopost:
