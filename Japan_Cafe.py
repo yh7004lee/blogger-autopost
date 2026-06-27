@@ -80,6 +80,96 @@ THUMB_DIR = "thumbnails"
 LABELS = ["海外旅行", "旅行"]
 
 # ==================================================
+# 카테고리 설정
+# ==================================================
+POST_CONFIGS = [
+    {
+        "name": "맛집",
+        "keywords": ["맛집", "グルメ", "レストラン"],
+        "title_templates": [
+            "{country} {city} グルメ人気スポット TOP10",
+            "{country} {city} グルメ有名スポット BEST10",
+            "{country} {city} グルメおすすめスポット 10選",
+        ],
+        "search_terms": [
+            "{country} {city} 맛집",
+            "{country} {city} レストラン",
+            "{country} {city} グルメ",
+        ],
+    },
+    {
+        "name": "피자",
+        "keywords": ["피자", "ピザ"],
+        "title_templates": [
+            "{country} {city} ピザ人気スポット TOP10",
+            "{country} {city} ピザ有名スポット BEST10",
+            "{country} {city} ピザおすすめスポット 10選",
+        ],
+        "search_terms": [
+            "{country} {city} ピザ",
+            "{country} {city} ピザ店",
+            "{country} {city} ピザショップ",
+        ],
+    },
+    {
+        "name": "커피",
+        "keywords": ["커피", "カフェ", "コーヒー"],
+        "title_templates": [
+            "{country} {city} カフェ人気スポット TOP10",
+            "{country} {city} カフェ有名スポット BEST10",
+            "{country} {city} カフェおすすめスポット 10選",
+        ],
+        "search_terms": [
+            "{country} {city} カフェ",
+            "{country} {city} コーヒー",
+            "{country} {city} 喫茶店",
+        ],
+    },
+    {
+        "name": "베이커리",
+        "keywords": ["베이커리", "ベーカリー", "パン"],
+        "title_templates": [
+            "{country} {city} ベーカリー人気スポット TOP10",
+            "{country} {city} ベーカリー有名スポット BEST10",
+            "{country} {city} ベーカリーおすすめスポット 10選",
+        ],
+        "search_terms": [
+            "{country} {city} ベーカリー",
+            "{country} {city} パン屋",
+            "{country} {city} ベーカリーショップ",
+        ],
+    },
+    {
+        "name": "액티비티",
+        "keywords": ["액티비티", "アクティビティ", "体験"],
+        "title_templates": [
+            "{country} {city} アクティビティ人気スポット TOP10",
+            "{country} {city} アクティビティ有名スポット BEST10",
+            "{country} {city} アクティビティおすすめスポット 10選",
+        ],
+        "search_terms": [
+            "{country} {city} アクティビティ",
+            "{country} {city} 体験",
+            "{country} {city} レジャー",
+        ],
+    },
+    {
+        "name": "바",
+        "keywords": ["바", "バー", "居酒屋"],
+        "title_templates": [
+            "{country} {city} バー人気スポット TOP10",
+            "{country} {city} バー有名スポット BEST10",
+            "{country} {city} バーおすすめスポット 10選",
+        ],
+        "search_terms": [
+            "{country} {city} バー",
+            "{country} {city} 居酒屋",
+            "{country} {city} ナイトスポット",
+        ],
+    },
+]
+
+# ==================================================
 # 클라이언트
 # ==================================================
 client_genai = genai.Client(api_key=GEMINI_API_KEY)
@@ -112,9 +202,9 @@ def load_processed_pairs():
     except Exception:
         return []
 
-def save_processed_pair(country, city):
+def save_processed_pair(country, city, category):
     processed = load_processed_pairs()
-    key = f"{country}|{city}"
+    key = f"{country}|{city}|{category}"
     if key not in processed:
         processed.append(key)
     with open(HISTORY_PATH, "w", encoding="utf-8") as f:
@@ -136,16 +226,23 @@ def read_sheet_rows():
     debug(f"시트 전체 행 수: {len(values)}")
     return values
 
-def find_next_row():
+def is_done_cell(value):
+    return str(value or "").strip() == "完"
+
+def find_next_rows_bulk(limit=6):
     rows = read_sheet_rows()
-    for i, row in enumerate(rows[1:], start=2):
+    targets = []
+    for i in range(len(rows) - 1, 0, -1):
+        row = rows[i]
         country = row[0].strip() if len(row) > 0 and row[0] else ""
         city = row[1].strip() if len(row) > 1 and row[1] else ""
-        status = row[2].strip() if len(row) > 2 and row[2] else ""
-        debug(f"[ROW {i}] country={country}, city={city}, status={status}")
-        if country and city and status != "完":
-            return i, country, city
-    return None, None, None
+        done = row[2].strip() if len(row) > 2 and row[2] else ""
+        debug(f"[ROW {i+1}] country={country}, city={city}, done={done}")
+        if country and city and not is_done_cell(done):
+            targets.append((i + 1, country, city))
+        if len(targets) >= limit:
+            break
+    return targets
 
 # ==================================================
 # 파일 / 이미지
@@ -250,10 +347,8 @@ blog_handler = get_blogger_service()
 # ==================================================
 # 글 생성용 유틸
 # ==================================================
-def generate_random_title(country, city):
-    keywords = ["観光スポット", "人気スポット", "おすすめスポット", "定番スポット", "注目スポット"]
-    suffixes = ["TOP10", "BEST10", "おすすめ10選"]
-    return f"{country} {city} の {random.choice(keywords)} {random.choice(suffixes)}"
+def generate_random_title(country, city, cfg):
+    return random.choice(cfg["title_templates"]).format(country=country, city=city)
 
 def clean_html(raw_html):
     return BeautifulSoup(raw_html or "", "html.parser").get_text(separator="\n", strip=True)
@@ -282,12 +377,13 @@ def build_map_search_keyword(country, city, place_title):
         return f"{country} {city} {clean_place}"
     return f"{country} {city}"
 
-def make_intro_prompt(country, city, title):
+def make_intro_prompt(country, city, title, category_name):
     return f"""
 あなたは日本語の海外旅行ブログ専門ライターです。以下の情報をもとに、導入文（序章）を日本語で作成してください。
 
 国: {country}
 都市: {city}
+カテゴリ: {category_name}
 タイトル: {title}
 
 条件:
@@ -300,16 +396,17 @@ def make_intro_prompt(country, city, title):
 - マークダウン禁止
 """.strip()
 
-def make_section_prompt(country, city, place_title, addr, overview):
+def make_section_prompt(country, city, place_title, addr, overview, category_name):
     addr_text = addr or ""
     overview_text = overview or ""
     return f"""
 あなたは日本語の海外旅行ブログ専門ライターです。
 
-観光地情報:
+カテゴリ: {category_name}
+情報:
 - 国: {country}
 - 都市: {city}
-- 観光地名: {place_title}
+- スポット名: {place_title}
 - 住所: {addr_text}
 - 概要: {overview_text}
 
@@ -326,10 +423,8 @@ def make_section_prompt(country, city, place_title, addr, overview):
 - マークダウン禁止
 """.strip()
 
-def make_last(country, city):
-    return (
-        f"{country} {city} の旅行は動線が重要です。主要スポットを事前に組み合わせておけば、短い日程でも効率よく観光できます。"
-    )
+def make_last(country, city, category_name):
+    return f"{country} {city} の{category_name}は、事前に回る順番を決めておくと効率よく楽しめます。"
 
 # ==================================================
 # AI 생성
@@ -395,68 +490,45 @@ def normalize_place_title(title):
     title = re.sub(r"\s+", " ", title)
     return title
 
-def get_google_places_textsearch(country, city, limit=10):
+def get_google_places_textsearch(country, city, category_cfg, limit=10):
     if not GOOGLE_MAPS_API_KEY:
         debug("GOOGLE_MAPS_API_KEY가 설정되어 있지 않습니다.")
         return []
-    query = f"{country} {city} 観光地"
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    params = {
-        "query": query,
-        "key": GOOGLE_MAPS_API_KEY,
-        "language": "ja",
-    }
+    seen = set()
+    places = []
     try:
-        res = requests.get(url, params=params, timeout=30)
-        data = res.json()
-        results = data.get("results", [])
-        places = []
-        seen = set()
-        for r in results:
-            name = r.get("name", "").strip()
-            if not name:
-                continue
-            name_norm = normalize_place_title(name)
-            if name_norm.lower() in seen:
-                continue
-            seen.add(name_norm.lower())
-            addr = r.get("formatted_address", "").strip()
-            places.append({
-                "contentId": r.get("place_id", ""),
-                "title": name_norm,
-                "addr": addr,
-                "raw": r,
-                "score": (r.get("rating") or 0) + min((r.get("user_ratings_total") or 0) / 100.0, 5)
-            })
+        for raw_q in category_cfg["search_terms"]:
             if len(places) >= limit:
                 break
-
-        if len(places) < limit:
-            alt_queries = [f"{city} 人気 観光地", f"{city} 名所", f"{city} 観光スポット"]
-            for q in alt_queries:
+            query = raw_q.format(country=country, city=city)
+            params = {
+                "query": query,
+                "key": GOOGLE_MAPS_API_KEY,
+                "language": "ja",
+            }
+            res = requests.get(url, params=params, timeout=30)
+            data = res.json()
+            for r in data.get("results", []):
+                name = r.get("name", "").strip()
+                if not name:
+                    continue
+                name_norm = normalize_place_title(name)
+                key = name_norm.lower()
+                if key in seen:
+                    continue
+                seen.add(key)
+                addr = r.get("formatted_address", "").strip()
+                places.append({
+                    "contentId": r.get("place_id", ""),
+                    "title": name_norm,
+                    "addr": addr,
+                    "raw": r,
+                    "score": (r.get("rating") or 0) + min((r.get("user_ratings_total") or 0) / 100.0, 5)
+                })
                 if len(places) >= limit:
                     break
-                params["query"] = f"{country} {q}"
-                res = requests.get(url, params=params, timeout=30)
-                data = res.json()
-                for r in data.get("results", []):
-                    name = r.get("name", "").strip()
-                    if not name:
-                        continue
-                    name_norm = normalize_place_title(name)
-                    if name_norm.lower() in seen:
-                        continue
-                    seen.add(name_norm.lower())
-                    addr = r.get("formatted_address", "").strip()
-                    places.append({
-                        "contentId": r.get("place_id", ""),
-                        "title": name_norm,
-                        "addr": addr,
-                        "raw": r,
-                        "score": (r.get("rating") or 0) + min((r.get("user_ratings_total") or 0) / 100.0, 5)
-                    })
-                    if len(places) >= limit:
-                        break
+
         return places[:limit]
     except Exception as e:
         debug(f"⚠️ Google Places TextSearch 실패: {e}")
@@ -467,8 +539,7 @@ def get_google_place_photos(place_name, count=3, country="", city=""):
         return []
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        parts = [x.strip() for x in [country, city, place_name] if x and x.strip()]
-        query = " ".join(parts).strip()
+        query = " ".join([x.strip() for x in [country, city, place_name] if x and x.strip()]).strip()
 
         search_url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
         search_params = {
@@ -544,11 +615,11 @@ def build_images_html(place_title, image_list):
         '''
     return html
 
-def build_post_html(country, city, title, places, thumb_url):
-    intro_html = generate_ai_review(make_intro_prompt(country, city, title), title)
+def build_post_html(country, city, title, places, thumb_url, category_name):
+    intro_html = generate_ai_review(make_intro_prompt(country, city, title, category_name), title)
     intro_html = intro_html.replace('data-ke-size="size16"', 'data-ke-size="size18"')
     intro_html = intro_html.replace("size16", "size18")
-    last_text = make_last(country, city)
+    last_text = make_last(country, city, category_name)
 
     sections_html = ""
     for idx, item in enumerate(places, start=1):
@@ -588,10 +659,9 @@ def build_post_html(country, city, title, places, thumb_url):
 <br><br>
 """
 
-    ai_review_text = f"<p data-ke-size='size18'>{country} {city} の主要観光スポットを組み合わせて効率よい旅程にできます。</p>"
+    ai_review_text = f"<p data-ke-size='size18'>{country} {city} の主要スポットを組み合わせて効率よい旅程にできます。</p>"
 
     html_content = f"""
-
   {intro_html}
   <p style="text-align:center;">
    <p data-ke-size="size18"><br /></p>
@@ -599,7 +669,7 @@ def build_post_html(country, city, title, places, thumb_url):
     <img src="{thumb_url}" alt="{title} サムネイル" style="max-width:100%; height:auto; border-radius:8px;">
   </p>
   <div style="padding:12px;">
-  <span><!--more--></span>  
+  <span><!--more--></span>
   <p data-ke-size="size18"><br /></p>
   <div class="mbtTOC"><button>  目次 </button>
   <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
@@ -614,102 +684,122 @@ def build_post_html(country, city, title, places, thumb_url):
     return html_content, LABELS
 
 # ==================================================
+# 단일 포스팅 실행
+# ==================================================
+def process_one_post(row_idx, country, city, category_cfg):
+    category_name = category_cfg["name"]
+    debug(f"▶ 시작: {country} {city} / {category_name}")
+    log_step(row_idx, f"{category_name}: 1단계 시작")
+
+    title = generate_random_title(country, city, category_cfg)
+    debug(f"생성 제목: {title}")
+    log_step(row_idx, f"{category_name}: 2단계 제목 생성 ({title})")
+
+    places_raw = get_google_places_textsearch(country, city, category_cfg, limit=10)
+    debug(f"수집된 장소 개수: {len(places_raw)}")
+
+    if not places_raw:
+        fallback = [
+            f"{city} の代表的なスポット",
+            f"{city} の人気スポット",
+            f"{city} の定番スポット",
+            f"{city} の写真スポット",
+            f"{city} の穴場スポット",
+            f"{city} の話題スポット",
+            f"{city} のおすすめスポット",
+            f"{city} の便利なスポット",
+            f"{city} の注目スポット",
+            f"{city} の人気施設",
+        ]
+        places_raw = [{"contentId": "", "title": name, "addr": "", "raw": {}, "score": 0} for name in fallback]
+
+    post_sections = []
+    for idx, place in enumerate(places_raw, start=1):
+        debug(f"장소 처리 {idx}/{len(places_raw)}: {place['title']}")
+        place["title"] = normalize_text(place["title"])
+        place["overview"] = place.get("raw", {}).get("formatted_address", "") or f"{place['title']} は{city} の人気スポットです。"
+        place["images"] = get_place_images(place, count=3, country=country, city=city)
+        place["image"] = place["images"][0] if place["images"] else ""
+        prompt = make_section_prompt(country, city, place["title"], place.get("addr", ""), place.get("overview", ""), category_name)
+        place["desc"] = generate_ai_review(prompt, place["title"])
+        place["desc"] = re.sub(r"<h1[^>]*>.*?</h1>", "", place["desc"], flags=re.IGNORECASE)
+        place["desc"] = place["desc"].replace("**", "")
+        place["desc"] = place["desc"].replace('data-ke-size="size16"', 'data-ke-size="size18"')
+        place["desc"] = place["desc"].replace("size16", "size18")
+        post_sections.append({
+            "contentId": place.get("contentId", ""),
+            "title": place["title"],
+            "addr": place.get("addr", ""),
+            "image": place.get("image", ""),
+            "images": place.get("images", []),
+            "overview": place.get("overview", ""),
+            "desc": place.get("desc", "")
+        })
+        time.sleep(0.4)
+
+    safe_title = re.sub(r'[\\/:*?"<>|.]', "_", title)
+    os.makedirs(THUMB_DIR, exist_ok=True)
+    thumb_path = os.path.join(THUMB_DIR, f"{safe_title}.png")
+    make_thumb(thumb_path, title)
+    debug("썸네일 생성 완료")
+    log_step(row_idx, f"{category_name}: 3단계 썸네일 생성 완료")
+
+    thumb_url = upload_to_drive(thumb_path, f"{safe_title}.png")
+    debug(f"Drive 업로드 완료: {thumb_url}")
+    log_step(row_idx, f"{category_name}: 4단계 썸네일 Drive 업로드 완료")
+
+    html_content, labels = build_post_html(country, city, title, post_sections, thumb_url, category_name)
+    debug(f"HTML 길이: {len(html_content)}")
+
+    post_body = {
+        "content": html_content,
+        "title": title,
+        "labels": labels,
+        "blog": {"id": BLOG_ID}
+    }
+
+    res = blog_handler.posts().insert(
+        blogId=BLOG_ID,
+        body=post_body,
+        isDraft=False,
+        fetchImages=True
+    ).execute()
+
+    debug(f"Blogger 업로드 성공: {res.get('url', '')}")
+    log_step(row_idx, f"{category_name}: 5단계 Blogger 업로드 성공 ({res.get('url', '')})")
+    save_processed_pair(country, city, category_name)
+    return res.get("url", "")
+
+# ==================================================
 # 실행
 # ==================================================
 def main():
     try:
-        row_idx, country, city = find_next_row()
-        if not row_idx:
-            debug("処理する行がありません。")
+        targets = find_next_rows_bulk(limit=6)
+        if not targets:
+            debug("처리할 대상이 없습니다.")
             return
 
-        debug(f"選択された行: {row_idx}, {country}, {city}")
-        log_step(row_idx, "1단계: 대상 행 선택")
+        debug(f"선택된 대상 수: {len(targets)}")
+        for idx, (row_idx, country, city) in enumerate(targets, start=1):
+            category_cfg = POST_CONFIGS[(idx - 1) % len(POST_CONFIGS)]
+            debug(f"현재 순서 {idx}/{len(targets)} / 행 {row_idx} / {country} {city} / {category_cfg['name']}")
 
-        title = generate_random_title(country, city)
-        debug(f"生成タイトル: {title}")
-        log_step(row_idx, f"2단계: 제목 생성 ({title})")
-
-        places_raw = get_google_places_textsearch(country, city, limit=10)
-        debug(f"수집된 장소 개수: {len(places_raw)}")
-
-        if not places_raw:
-            fallback = [
-                f"{city} の代表的な観光地",
-                f"{city} の夜景スポット",
-                f"{city} の散歩コース",
-                f"{city} の伝統市場",
-                f"{city} の公園",
-                f"{city} の展望台",
-                f"{city} の写真スポット",
-                f"{city} の文化施設",
-                f"{city} のグルメ通り",
-                f"{city} の人気観光地",
-            ]
-            places_raw = [{"contentId": "", "title": name, "addr": "", "raw": {}, "score": 0} for name in fallback]
-
-        travel_sections = []
-        for idx, place in enumerate(places_raw, start=1):
-            debug(f"장소 처리 {idx}/{len(places_raw)}: {place['title']}")
-            place["title"] = normalize_text(place["title"])
-            place["overview"] = place.get("raw", {}).get("formatted_address", "") or f"{place['title']} は{city} の人気スポットです。"
-            place["images"] = get_place_images(place, count=3, country=country, city=city)
-            place["image"] = place["images"][0] if place["images"] else ""
-            prompt = make_section_prompt(country, city, place["title"], place.get("addr", ""), place.get("overview", ""))
-            place["desc"] = generate_ai_review(prompt, place["title"])
-            place["desc"] = re.sub(r"<h1[^>]*>.*?</h1>", "", place["desc"], flags=re.IGNORECASE)
-            place["desc"] = place["desc"].replace("**", "")
-            place["desc"] = place["desc"].replace('data-ke-size="size16"', 'data-ke-size="size18"')
-            place["desc"] = place["desc"].replace("size16", "size18")
-            travel_sections.append({
-                "contentId": place.get("contentId", ""),
-                "title": place["title"],
-                "addr": place.get("addr", ""),
-                "image": place.get("image", ""),
-                "images": place.get("images", []),
-                "overview": place.get("overview", ""),
-                "desc": place.get("desc", "")
-            })
-            time.sleep(0.4)
-
-        safe_title = re.sub(r'[\\/:*?"<>|.]', "_", title)
-        os.makedirs(THUMB_DIR, exist_ok=True)
-        thumb_path = os.path.join(THUMB_DIR, f"{safe_title}.png")
-        make_thumb(thumb_path, title)
-        debug("썸네일 생성 완료")
-        log_step(row_idx, "3단계: 썸네일 생성 완료")
-
-        thumb_url = upload_to_drive(thumb_path, f"{safe_title}.png")
-        debug(f"Drive 업로드 완료: {thumb_url}")
-        log_step(row_idx, "4단계: 썸네일 Drive 업로드 완료")
-
-        html_content, labels = build_post_html(country, city, title, travel_sections, thumb_url)
-        debug(f"HTML 길이: {len(html_content)}")
-
-        post_body = {
-            "content": html_content,
-            "title": title,
-            "labels": labels,
-            "blog": {"id": BLOG_ID}
-        }
-
-        res = blog_handler.posts().insert(
-            blogId=BLOG_ID,
-            body=post_body,
-            isDraft=False,
-            fetchImages=True
-        ).execute()
-
-        debug(f"Blogger 업로드 성공: {res.get('url', '')}")
-        ws4.update_cell(row_idx, 3, "完")
-        try:
-            ws4.update_cell(row_idx, 15, res.get("url", ""))
-        except Exception as e:
-            debug(f"URL 기록 실패: {e}")
-
-        log_step(row_idx, f"5단계: Blogger 업로드 성공 ({res.get('url', '')})")
-        save_processed_pair(country, city)
-        debug(f"✅ {country} {city} 처리 완료")
+            try:
+                url = process_one_post(row_idx, country, city, category_cfg)
+                ws4.update_cell(row_idx, 4, category_cfg["name"])
+                ws4.update_cell(row_idx, 3, "完")
+                try:
+                    ws4.update_cell(row_idx, 15, url)
+                except Exception as e:
+                    debug(f"URL 기록 실패: {e}")
+                debug(f"✅ 완료: {country} {city} / {category_cfg['name']}")
+                time.sleep(1.2)
+            except Exception as e:
+                tb = traceback.format_exc()
+                debug(f"❌ 실패: {country} {city} / {category_cfg['name']} / {e}")
+                debug(tb)
+                continue
 
     except Exception as e:
         tb = traceback.format_exc()
