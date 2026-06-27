@@ -172,7 +172,10 @@ def make_thumb(save_path, var_title):
     else:
         bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
     try:
-        font = ImageFont.truetype(ASSETS_FONT_TTF, 48)
+        font = ImageFont.truetype(
+            os.path.join("assets", "fonts", "NotoSansJP-VariableFont_wght.ttf"),
+            48
+        )
     except:
         font = ImageFont.load_default()
     canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
