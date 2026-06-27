@@ -101,10 +101,9 @@ def get_sheet4():
     creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
-    for ws in sh.worksheets():
-        if ws.id == SHEET_GID:
-            return ws
-    raise RuntimeError(f"gid={SHEET_GID} 시트를 찾지 못했습니다.")
+    ws = sh.worksheet("Sheet4")
+    print(f"selected worksheet: {ws.title} / {ws.id}")
+    return ws
 
 ws4 = get_sheet4()
 
