@@ -1,0 +1,80 @@
+name: 12_Korea_Cafe
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 0 * * *"
+    # - cron: "24 2 * * *"
+    - cron: "48 4 * * *"
+    # - cron: "12 7 * * *"
+    - cron: "36 9 * * *"
+    # - cron: "0 12 * * *"
+    - cron: "24 14 * * *"
+    # - cron: "48 16 * * *"
+    - cron: "12 19 * * *"
+    # - cron: "36 21 * * *"
+
+
+jobs:
+  autopost:
+    runs-on: windows-latest
+
+
+    env:
+      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}       
+      SECRETS_API: ${{ secrets.SECRETS_API }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+   
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create blogger_token.json
+        shell: powershell
+        run: |
+          @'
+          ${{ secrets.BLOGGER_TOKEN_JSON }}
+          '@ | Set-Content blogger_token.json
+
+      - name: Restore cc.json
+        run: |
+          echo "${{ secrets.CC_JSON_B64 }}" > cc.json.b64
+          certutil -decode cc.json.b64 cc.json
+
+      - name: Restore sheetapi.json
+        run: |
+          echo "${{ secrets.SHEETAPI_JSON }}" > sheetapi.json.b64
+          certutil -decode sheetapi.json.b64 sheetapi.json
+
+      - name: Restore openai.json
+        run: |
+          echo "${{ secrets.OPENAI_JSON_B64 }}" > openai.json.b64
+          certutil -decode openai.json.b64 openai.json
+
+      - name: Restore 2nd.json
+        run: |
+          echo "${{ secrets.DRIVE_JSON_B64 }}" > 2nd.json.b64
+          certutil -decode 2nd.json.b64 2nd.json
+
+      - name: Restore drive_token_2nd.pickle
+        run: |
+          echo "${{ secrets.DRIVE_TOKEN_2ND_B64 }}" > drive_token_2nd.pickle.b64
+          certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
+
+      # ✅ 실행할 파이썬 파일 (여기만 변경)
+      - name: Run autopost script
+        run: python Korea_Cafe.py
+
+
+
+
+
+
