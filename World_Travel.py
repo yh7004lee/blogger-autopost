@@ -435,6 +435,8 @@ def build_post_html(country, city, title, places, thumb_url):
     intro_html = generate_ai_review(make_intro_prompt(country, city, title), title)
     intro_html = intro_html.replace('data-ke-size="size16"', 'data-ke-size="size18"').replace("size16", "size18")
 
+    last_text = make_last(country, city)
+
     sections_html = ""
     for idx, item in enumerate(places, start=1):
         section_title = build_display_title(country, city, item["title"])
