@@ -12,8 +12,8 @@ jobs:
 
 
     env:
-      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
-      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}  
+      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}       
+      SECRETS_API: ${{ secrets.SECRETS_API }}
 
     steps:
       - name: Checkout
