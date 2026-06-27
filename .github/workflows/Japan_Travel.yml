@@ -1,4 +1,5 @@
-name: Blogger Autopost Galaxy jp
+name: 08_Japan_Travel
+
 
 on:
   workflow_dispatch:        # ✅ 수동 실행 가능
@@ -62,7 +63,8 @@ jobs:
 
       # ✅ 실행할 파이썬 파일 (여기만 변경)
       - name: Run autopost script
-        run: python app_galaxy_jp.py
+        run: python Japan_Travel.py.py
+
 
 
 
