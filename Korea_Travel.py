@@ -49,10 +49,12 @@ except Exception as e:
 OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
+OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 SHEET_ID = "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs"
 DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "")
 GOOGLE_MAPS_API_KEY = "AIzaSyBiLiWI4rTtdk_IW-f26uEIkhnKjEBHI1w"
 TOUR_API_KEY = secrets.get("TOUR_API_KEY", "")
+
 
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 genai_client = None
@@ -233,12 +235,62 @@ def clean_html(raw_html):
 
 
 def generate_ai_review(prompt, keyword):
+    last_err = None
+
+    # 1차: Gemini Flash
     if genai_client:
         try:
-            response = genai_client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-            return response.text.strip()
-        except:
-            pass
+            response = genai_client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt
+            )
+            text = getattr(response, "text", "") or ""
+            if text.strip():
+                return text.strip()
+        except Exception as e:
+            last_err = e
+            print("⚠️ AI 실패 1: Gemini Flash /", e)
+
+    # 2차: Gemini Flash Lite
+    if genai_client:
+        try:
+            response = genai_client.models.generate_content(
+                model="gemini-2.5-flash-lite",
+                contents=prompt
+            )
+            text = getattr(response, "text", "") or ""
+            if text.strip():
+                return text.strip()
+        except Exception as e:
+            last_err = e
+            print("⚠️ AI 실패 2: Gemini Flash Lite /", e)
+
+    # 3차: OpenRouter
+    try:
+        res = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "openrouter/auto",
+                "messages": [{"role": "user", "content": prompt}]
+            },
+            timeout=40
+        )
+        data = res.json()
+        choices = data.get("choices", [])
+        if choices:
+            text = choices[0].get("message", {}).get("content", "")
+            if text.strip():
+                return text.strip()
+        raise RuntimeError(f"OpenRouter 응답 구조 이상: {data}")
+    except Exception as e:
+        last_err = e
+        print("⚠️ AI 실패 3: OpenRouter /", e)
+
+    # 4차: OpenAI
     if client:
         try:
             res = client.chat.completions.create(
@@ -247,10 +299,30 @@ def generate_ai_review(prompt, keyword):
                 temperature=0.7,
                 max_tokens=1200
             )
-            return res.choices[0].message.content.strip()
-        except:
-            pass
-    return f"{keyword} 설명 생성 실패"
+            text = res.choices[0].message.content.strip()
+            if text:
+                return text
+        except Exception as e:
+            last_err = e
+            print("⚠️ AI 실패 4: OpenAI /", e)
+
+    # 5차: 마지막 유료 GPT fallback
+    if client:
+        try:
+            res = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=1200
+            )
+            text = res.choices[0].message.content.strip()
+            if text:
+                return text
+        except Exception as e:
+            last_err = e
+            print("⚠️ AI 실패 5: OpenAI GPT-4o /", e)
+
+    return f"{keyword} 설명 생성 실패: {last_err}"
 
 
 def get_queries(region, city):
