@@ -10,8 +10,10 @@ jobs:
   autopost:
     runs-on: windows-latest
 
+
     env:
       API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}  
 
     steps:
       - name: Checkout
