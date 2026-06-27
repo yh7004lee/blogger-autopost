@@ -11,6 +11,7 @@ jobs:
     runs-on: windows-latest
 
     env:
+      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
       SECRETS_API: ${{ secrets.SECRETS_API }}
 
     steps:
@@ -26,52 +27,36 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Create blogger_token.json
-        shell: pwsh
+        shell: powershell
         run: |
-          $token = @'
+          @'
           ${{ secrets.BLOGGER_TOKEN_JSON }}
-          '@
-          Set-Content -Path blogger_token.json -Value $token -Encoding utf8
+          '@ | Set-Content blogger_token.json
 
       - name: Restore cc.json
-        shell: pwsh
-        env:
-          CC_JSON_B64: ${{ secrets.CC_JSON_B64 }}
         run: |
-          $bytes = [System.Convert]::FromBase64String($env:CC_JSON_B64)
-          [System.IO.File]::WriteAllBytes("cc.json", $bytes)
+          echo "${{ secrets.CC_JSON_B64 }}" > cc.json.b64
+          certutil -decode cc.json.b64 cc.json
 
       - name: Restore sheetapi.json
-        shell: pwsh
-        env:
-          SHEETAPI_JSON_B64: ${{ secrets.SHEETAPI_JSON_B64 }}
         run: |
-          $bytes = [System.Convert]::FromBase64String($env:SHEETAPI_JSON_B64)
-          [System.IO.File]::WriteAllBytes("sheetapi.json", $bytes)
+          echo "${{ secrets.SHEETAPI_JSON }}" > sheetapi.json.b64
+          certutil -decode sheetapi.json.b64 sheetapi.json
 
       - name: Restore openai.json
-        shell: pwsh
-        env:
-          OPENAI_JSON_B64: ${{ secrets.OPENAI_JSON_B64 }}
         run: |
-          $bytes = [System.Convert]::FromBase64String($env:OPENAI_JSON_B64)
-          [System.IO.File]::WriteAllBytes("openai.json", $bytes)
+          echo "${{ secrets.OPENAI_JSON_B64 }}" > openai.json.b64
+          certutil -decode openai.json.b64 openai.json
 
       - name: Restore 2nd.json
-        shell: pwsh
-        env:
-          DRIVE_JSON_B64: ${{ secrets.DRIVE_JSON_B64 }}
         run: |
-          $bytes = [System.Convert]::FromBase64String($env:DRIVE_JSON_B64)
-          [System.IO.File]::WriteAllBytes("2nd.json", $bytes)
+          echo "${{ secrets.DRIVE_JSON_B64 }}" > 2nd.json.b64
+          certutil -decode 2nd.json.b64 2nd.json
 
       - name: Restore drive_token_2nd.pickle
-        shell: pwsh
-        env:
-          DRIVE_TOKEN_2ND_B64: ${{ secrets.DRIVE_TOKEN_2ND_B64 }}
         run: |
-          $bytes = [System.Convert]::FromBase64String($env:DRIVE_TOKEN_2ND_B64)
-          [System.IO.File]::WriteAllBytes("drive_token_2nd.pickle", $bytes)
+          echo "${{ secrets.DRIVE_TOKEN_2ND_B64 }}" > drive_token_2nd.pickle.b64
+          certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
 
       - name: Run autopost script
         run: python World_Travel.py
