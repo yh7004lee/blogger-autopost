@@ -778,14 +778,18 @@ def get_place_images(place, count=3, country="", city=""):
 def build_images_html(place_title, image_list):
     if not image_list:
         return ""
-    html = '<div style="display:flex; gap:10px; flex-wrap:wrap; margin:20px 0;">'
+
+    html = ""
+
     for img_url in image_list[:3]:
         html += f'''
-        <div style="flex:1 1 30%; min-width:180px;">
-            <img src="{img_url}" style="width:100%; height:auto; border-radius:8px;" alt="{place_title}">
+        <div style="margin:20px 0;">
+            <img src="{img_url}"
+                 alt="{place_title}"
+                 style="width:100%; height:auto; border-radius:8px;">
         </div>
         '''
-    html += "</div>"
+
     return html
 
 def build_post_html(country, city, title, places, thumb_url):
