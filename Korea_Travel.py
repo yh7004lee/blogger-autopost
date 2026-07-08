@@ -565,6 +565,42 @@ def clean_place_title(title, region, city):
     if not t:
         return ""
 
+    # 1) 링크/마크다운 꼬리 제거
+    t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)
+
+    # 2) 다국어/설명 꼬리 제거
+    #    예: "서울맛집 지강한식당 압구정본점 | restaurants | 韓国ナッコプセレストラン | 餐馆"
+    #    -> "서울맛집 지강한식당 압구정본점"
+    cut_markers = [
+        " | ",
+        "｜",
+        " / ",
+        " ・ ",
+        " · ",
+        " • ",
+        " - ",
+        " — ",
+        " :: ",
+    ]
+    for marker in cut_markers:
+        if marker in t:
+            t = t.split(marker, 1)[0].strip()
+
+    # 3) 언어별/설명형 키워드가 뒤에 붙은 경우 추가 제거
+    #    영어/일본어/중국어/설명성 단어가 뒤로 이어질 때 정리
+    t = re.split(
+        r"\s+(?:restaurants?|restaurant|korean\s*restaurant|kbbq|kfood|grill|bar|cafe|"
+        r"韓国料理|韓国焼肉レストラン|レストラン|グルメ|必食|餐馆|美食|食堂|"
+        r"맛집|음식점|식당|branch|main\s*branch)\b",
+        t,
+        flags=re.IGNORECASE
+    )[0].strip()
+
+    # 4) 괄호 안 부가정보 제거
+    t = re.sub(r"\s*\([^)]+\)\s*", " ", t).strip()
+    t = re.sub(r"\s+", " ", t).strip()
+
+    # 5) 지역명 반복 제거
     variants = [
         f"{region} {city}",
         f"{city} {city}",
@@ -579,9 +615,11 @@ def clean_place_title(title, region, city):
         pattern = rf"^\s*{re.escape(v)}\s+"
         while re.match(pattern, t):
             t = re.sub(pattern, "", t).strip()
+
     t = re.sub(rf"^\s*{re.escape(city)}\s+", "", t).strip()
     t = re.sub(rf"^\s*{re.escape(region)}\s+", "", t).strip()
     t = re.sub(r"\s+", " ", t).strip()
+
     return t or title
 
 
