@@ -629,7 +629,7 @@ def make_title(region, city):
         "요즘 핫한",
         "가성비 좋은",
         "재방문각",
-        "로컬푸드",
+        "로컬이 인정한",
         "숨은",
         "인기",
         "꼭 가봐야 할",
@@ -640,17 +640,11 @@ def make_title(region, city):
         "분위기 좋은",
         "실패 없는",
         "찐",
-        "로컬이 인정한",
         "믿고 가는",
         "한 번쯤 가볼",
         "SNS에서 핫한",
         "주말에 가기 좋은",
-        "음식점",
-        "맛있는",
         "입소문 난",
-        "현지 맛집",
-        "대표",
-        "핫플",
     ]
 
     suffixes = ["베스트 10", "top10"]
@@ -658,7 +652,7 @@ def make_title(region, city):
     prefix = random.choice(prefixes)
     suffix = random.choice(suffixes)
 
-    return f"{city} 맛집 {prefix} {suffix}"
+    return f"{region} {city} {prefix} {suffix}"
 
 
 def make_last(region, city):
