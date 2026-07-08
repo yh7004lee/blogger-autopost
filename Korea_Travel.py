@@ -54,7 +54,6 @@ DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "")
 GOOGLE_MAPS_API_KEY = "AIzaSyBiLiWI4rTtdk_IW-f26uEIkhnKjEBHI1w"
 TOUR_API_KEY = secrets.get("TOUR_API_KEY", "")
 
-
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 genai_client = None
 if GEMINI_API_KEY and genai:
@@ -182,7 +181,7 @@ def textwrap_wrap_kor(text, width):
         return [""]
     words = text.split()
     if not words:
-        return [text[i:i+width] for i in range(0, len(text), width)]
+        return [text[i:i + width] for i in range(0, len(text), width)]
     lines, cur = [], ""
     for w in words:
         test = (cur + " " + w).strip()
@@ -197,8 +196,8 @@ def textwrap_wrap_kor(text, width):
     return lines
 
 
-def _thumb(save_path: str, var_title: str):
-    os.dirs(os.path.dirname(save_path), exist_ok=True)
+def make_thumb(save_path: str, var_title: str):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     bg_path = pick_random_background()
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
@@ -226,10 +225,6 @@ def _thumb(save_path: str, var_title: str):
         var_y_point += line_height
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
-
-
-def clean_html(raw_html):
-    return BeautifulSoup(raw_html, "html.parser").get_text(separator="\n", strip=True)
 
 
 def generate_ai_review(prompt, keyword):
@@ -512,7 +507,7 @@ def get_best_place_image(place):
     return final_images[:3]
 
 
-def _intro_prompt(region, city, title):
+def make_intro_prompt(region, city, title):
     return f"""
 너는 한국 맛집 블로그 전문 작성자다.
 
@@ -534,7 +529,7 @@ def _intro_prompt(region, city, title):
 """
 
 
-def _section_prompt(region, city, place_title, addr, overview):
+def make_section_prompt(region, city, place_title, addr, overview):
     return f"""
 너는 한국 맛집 블로그 전문 작성자다.
 
@@ -564,30 +559,11 @@ def clean_place_title(title, region, city):
     t = re.sub(r"\s+", " ", t)
     if not t:
         return ""
-
-    # 1) 링크/마크다운 꼬리 제거
     t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)
-
-    # 2) 다국어/설명 꼬리 제거
-    #    예: "서울맛집 지강한식당 압구정본점 | restaurants | 韓国ナッコプセレストラン | 餐馆"
-    #    -> "서울맛집 지강한식당 압구정본점"
-    cut_markers = [
-        " | ",
-        "｜",
-        " / ",
-        " ・ ",
-        " · ",
-        " • ",
-        " - ",
-        " — ",
-        " :: ",
-    ]
+    cut_markers = [" | ", "｜", " / ", " ・ ", " · ", " • ", " - ", " — ", " :: "]
     for marker in cut_markers:
         if marker in t:
             t = t.split(marker, 1)[0].strip()
-
-    # 3) 언어별/설명형 키워드가 뒤에 붙은 경우 추가 제거
-    #    영어/일본어/중국어/설명성 단어가 뒤로 이어질 때 정리
     t = re.split(
         r"\s+(?:restaurants?|restaurant|korean\s*restaurant|kbbq|kfood|grill|bar|cafe|"
         r"韓国料理|韓国焼肉レストラン|レストラン|グルメ|必食|餐馆|美食|食堂|"
@@ -595,12 +571,8 @@ def clean_place_title(title, region, city):
         t,
         flags=re.IGNORECASE
     )[0].strip()
-
-    # 4) 괄호 안 부가정보 제거
     t = re.sub(r"\s*\([^)]+\)\s*", " ", t).strip()
     t = re.sub(r"\s+", " ", t).strip()
-
-    # 5) 지역명 반복 제거
     variants = [
         f"{region} {city}",
         f"{city} {city}",
@@ -615,11 +587,9 @@ def clean_place_title(title, region, city):
         pattern = rf"^\s*{re.escape(v)}\s+"
         while re.match(pattern, t):
             t = re.sub(pattern, "", t).strip()
-
     t = re.sub(rf"^\s*{re.escape(city)}\s+", "", t).strip()
     t = re.sub(rf"^\s*{re.escape(region)}\s+", "", t).strip()
     t = re.sub(r"\s+", " ", t).strip()
-
     return t or title
 
 
@@ -646,13 +616,12 @@ def make_title(region, city):
         "주말에 가기 좋은",
         "입소문 난",
     ]
-
     suffixes = ["베스트 10", "top10"]
+    return f"{region} {city} 맛집 {random.choice(prefixes)} 식당 {random.choice(suffixes)}"
 
-    prefix = random.choice(prefixes)
-    suffix = random.choice(suffixes)
 
-    return f"{region} {city} 맛집 {prefix} 식당 {suffix}"
+def generate_random_title(region, city):
+    return make_title(region, city)
 
 
 def make_last(region, city):
@@ -756,15 +725,11 @@ def build_post_html(region, city, title, places, thumb_url):
   <h2 style="{H2_STYLE}">{city} 맛집 총평</h2>
   {ai_review_text}
   <p data-ke-size="size18">{last_text}</p>
-  <div style="margin-top:20px; color:#888;">{' '.join(['#'+x for x in labels])}</div>
+  <div style="margin-top:20px; color:#888;">{' '.join(['#' + x for x in labels])}</div>
   <script>mbtTOC();</script>
 </div>
 """
     return html_content, labels
-
-
-def generate_random_title(region, city):
-    return make_title(region, city)
 
 
 def find_next_row(ws):
