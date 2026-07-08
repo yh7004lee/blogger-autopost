@@ -197,8 +197,8 @@ def textwrap_wrap_kor(text, width):
     return lines
 
 
-def make_thumb(save_path: str, var_title: str):
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+def _thumb(save_path: str, var_title: str):
+    os.dirs(os.path.dirname(save_path), exist_ok=True)
     bg_path = pick_random_background()
     if bg_path and os.path.exists(bg_path):
         bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
@@ -512,7 +512,7 @@ def get_best_place_image(place):
     return final_images[:3]
 
 
-def make_intro_prompt(region, city, title):
+def _intro_prompt(region, city, title):
     return f"""
 너는 한국 맛집 블로그 전문 작성자다.
 
@@ -534,7 +534,7 @@ def make_intro_prompt(region, city, title):
 """
 
 
-def make_section_prompt(region, city, place_title, addr, overview):
+def _section_prompt(region, city, place_title, addr, overview):
     return f"""
 너는 한국 맛집 블로그 전문 작성자다.
 
@@ -652,7 +652,7 @@ def make_title(region, city):
     prefix = random.choice(prefixes)
     suffix = random.choice(suffixes)
 
-    return f"{region} {city} {prefix} {suffix}"
+    return f"{region} {city} 맛집 {prefix} 식당 {suffix}"
 
 
 def make_last(region, city):
