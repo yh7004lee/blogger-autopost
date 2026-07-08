@@ -175,7 +175,6 @@ def pick_random_background() -> str:
     for ext in ("*.png", "*.jpg", "*.jpeg"):
         files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
     return random.choice(files) if files else ""
-    
 
 
 def textwrap_wrap_kor(text, width):
@@ -236,7 +235,6 @@ def clean_html(raw_html):
 def generate_ai_review(prompt, keyword):
     last_err = None
 
-    # 1차: Gemini Flash
     if genai_client:
         try:
             response = genai_client.models.generate_content(
@@ -250,7 +248,6 @@ def generate_ai_review(prompt, keyword):
             last_err = e
             print("⚠️ AI 실패 1: Gemini Flash /", e)
 
-    # 2차: Gemini Flash Lite
     if genai_client:
         try:
             response = genai_client.models.generate_content(
@@ -264,7 +261,6 @@ def generate_ai_review(prompt, keyword):
             last_err = e
             print("⚠️ AI 실패 2: Gemini Flash Lite /", e)
 
-    # 3차: OpenRouter
     try:
         res = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
@@ -289,7 +285,6 @@ def generate_ai_review(prompt, keyword):
         last_err = e
         print("⚠️ AI 실패 3: OpenRouter /", e)
 
-    # 4차: OpenAI
     if client:
         try:
             res = client.chat.completions.create(
@@ -305,7 +300,6 @@ def generate_ai_review(prompt, keyword):
             last_err = e
             print("⚠️ AI 실패 4: OpenAI /", e)
 
-    # 5차: 마지막 유료 GPT fallback
     if client:
         try:
             res = client.chat.completions.create(
@@ -326,18 +320,18 @@ def generate_ai_review(prompt, keyword):
 
 def get_queries(region, city):
     return [
-        f"{region} {city} 관광지",
-        f"{region} {city} 가볼만한곳",
-        f"{region} {city} 여행지",
-        f"{region} {city} 명소",
-        f"{region} {city} 핫플",
-        f"{city} 관광지",
-        f"{city} 가볼만한곳",
-        f"{city} 여행지",
-        f"{city} 명소",
-        f"{city} 핫플",
-        f"{city} 유명 관광지",
-        f"{city} 대표 관광지",
+        f"{region} {city} 맛집",
+        f"{region} {city} 음식점",
+        f"{region} {city} 현지인 추천 맛집",
+        f"{region} {city} 유명 맛집",
+        f"{region} {city} 가성비 맛집",
+        f"{city} 맛집",
+        f"{city} 음식점",
+        f"{city} 현지인 추천 맛집",
+        f"{city} 유명 맛집",
+        f"{city} 가성비 맛집",
+        f"{city} 대표 맛집",
+        f"{city} 인기 맛집",
     ]
 
 
@@ -361,8 +355,7 @@ def is_valid_place(place):
     types = place.get("types", [])
     bad_types = [
         "school", "university", "gym", "hospital", "lodging",
-        "real_estate_agency", "bank", "shopping_mall", "store",
-        "restaurant", "cafe"
+        "real_estate_agency", "bank", "shopping_mall", "store"
     ]
     return not any(t in bad_types for t in types)
 
@@ -372,11 +365,9 @@ def score_place(item):
     reviews = item.get("user_ratings_total", 0) or 0
     s = rating * 10
     s += min(reviews / 100, 20)
-    if "tourist_attraction" in item.get("types", []):
-        s += 5
-    if "park" in item.get("types", []):
-        s += 3
-    if "museum" in item.get("types", []):
+    if "restaurant" in item.get("types", []):
+        s += 8
+    if "meal_takeaway" in item.get("types", []):
         s += 4
     if "point_of_interest" in item.get("types", []):
         s += 2
@@ -385,14 +376,14 @@ def score_place(item):
 
 def get_fallback_places(region, city):
     candidates = [
-        f"{city} 시청",
-        f"{city} 중앙공원",
-        f"{city} 역",
-        f"{city} 관광안내소",
-        f"{city} 박물관",
-        f"{city} 공원",
-        f"{city} 문화의거리",
+        f"{city} 맛집",
         f"{city} 전통시장",
+        f"{city} 먹자골목",
+        f"{city} 로컬푸드",
+        f"{city} 분식거리",
+        f"{city} 한식당",
+        f"{city} 국밥거리",
+        f"{city} 카페거리",
     ]
     places = []
     seen = set()
@@ -523,7 +514,7 @@ def get_best_place_image(place):
 
 def make_intro_prompt(region, city, title):
     return f"""
-너는 한국 여행 블로그 전문 작성자다.
+너는 한국 맛집 블로그 전문 작성자다.
 
 아래 정보를 바탕으로 서론만 작성해라.
 - 지역: {region}
@@ -533,9 +524,9 @@ def make_intro_prompt(region, city, title):
 조건:
 - 5 문장
 - 핵심 키워드 자연스럽게 포함
-- 첫 문장에서 독자의 호기심을 강하게 끌 것
+- 첫 문장에서 독자의 식욕과 호기심을 강하게 끌 것
 - 너무 짧지 않게, 그러나 장황하지 않게
-- 여행 동선, 추천 이유, 기대감이 느껴지게
+- 지역 분위기, 맛집 탐방 기대감, 추천 이유가 느껴지게
 - HTML 사용 가능하지만 <p>와 <br>만 사용
 - <p data-ke-size="size18"> 로 시작할 것
 - 마크다운 금지
@@ -545,22 +536,21 @@ def make_intro_prompt(region, city, title):
 
 def make_section_prompt(region, city, place_title, addr, overview):
     return f"""
-너는 한국 여행 블로그 전문 작성자다.
+너는 한국 맛집 블로그 전문 작성자다.
 
-관광지 정보:
+맛집 정보:
 - 지역: {region}
 - 도시: {city}
-- 관광지명: {place_title}
+- 맛집명: {place_title}
 - 주소: {addr}
 - 참고설명: {overview}
 
 작성 조건:
 - 자연스러운 한국어
-- 여행 블로그 스타일
+- 맛집 블로그 스타일
 - 4문단
 - 350자 이상
-- 장점 설명
-- 방문 포인트 설명
+- 음식의 특징, 분위기, 추천 포인트, 방문 팁을 포함
 - HTML 사용 가능, <p>와 <br>만 사용
 - <p data-ke-size="size18"> 로 시작
 - 제목 태그 금지
@@ -596,14 +586,50 @@ def clean_place_title(title, region, city):
 
 
 def make_title(region, city):
-    return f"{city} 가볼만한곳 {random.choice(['여행지', '숨은 명소', '당일치기코스', '주말여행'])} {random.choice(['TOP10', 'BEST10', '추천 10선'])}"
-    
+    prefixes = [
+        "현지인 추천",
+        "요즘 핫한",
+        "가성비 좋은",
+        "재방문각",
+        "로컬푸드",
+        "숨은",
+        "인기",
+        "꼭 가봐야 할",
+        "요즘 뜨는",
+        "후회 없는",
+        "줄 서는",
+        "웨이팅 있는",
+        "분위기 좋은",
+        "실패 없는",
+        "찐",
+        "로컬이 인정한",
+        "믿고 가는",
+        "한 번쯤 가볼",
+        "SNS에서 핫한",
+        "주말에 가기 좋은",
+        "음식점",
+        "맛있는",
+        "입소문 난",
+        "현지 맛집",
+        "대표",
+        "핫플",
+    ]
+
+    suffixes = ["베스트 10", "top10"]
+
+    prefix = random.choice(prefixes)
+    suffix = random.choice(suffixes)
+
+    return f"{city} 맛집 {prefix} {suffix}"
+
+
 def make_last(region, city):
     return (
-        f"{city} 여행은 생각보다 동선이 중요해서, 미리 핵심 명소를 정리해두면 훨씬 편하게 움직일 수 있습니다. "
-        f"이번 글에서 소개한 곳들은 {city}의 분위기와 매력을 함께 느끼기 좋은 곳들로 구성했습니다. "
-        f"일정이 짧아도 충분히 알차게 둘러볼 수 있으니, 취향에 맞게 코스를 조합해 보시면 좋습니다."
+        f"{city} 맛집은 지역 특색과 개성이 잘 드러나는 곳이 많아서 동선에 맞춰 고르면 만족도가 높습니다. "
+        f"이번 글에서 소개한 곳들은 {city} 분위기와 잘 어울리는 식당들로 구성했습니다. "
+        f"짧은 일정이라도 충분히 만족스러운 식사를 즐길 수 있으니 취향에 맞게 골라보시면 좋습니다."
     )
+
 
 def build_post_html(region, city, title, places, thumb_url):
     intro_html = generate_ai_review(make_intro_prompt(region, city, title), title)
@@ -675,8 +701,8 @@ def build_post_html(region, city, title, places, thumb_url):
 <br><br>
 """
 
-    ai_review_text = f"<p data-ke-size='size18'>{city}의 대표 관광지들을 중심으로 여행 코스를 구성하면 더욱 알찬 일정이 됩니다.</p>"
-    labels = ["여행", "국내여행"]
+    ai_review_text = f"<p data-ke-size='size18'>{city}의 대표 맛집들을 중심으로 코스를 구성하면 훨씬 만족도 높은 식도락 여행이 됩니다.</p>"
+    labels = ["맛집", "국내여행"]
 
     html_content = f"""
   <p data-ke-size="size18"><br /></p>
@@ -695,7 +721,7 @@ def build_post_html(region, city, title, places, thumb_url):
   </div>
   
   {sections_html}
-  <h2 style="{H2_STYLE}">{city} 여행 총평</h2>
+  <h2 style="{H2_STYLE}">{city} 맛집 총평</h2>
   {ai_review_text}
   <p data-ke-size="size18">{last_text}</p>
   <div style="margin-top:20px; color:#888;">{' '.join(['#'+x for x in labels])}</div>
@@ -706,9 +732,7 @@ def build_post_html(region, city, title, places, thumb_url):
 
 
 def generate_random_title(region, city):
-    keywords = ["여행지", "숨은 명소", "데이트 코스", "가족여행", "당일치기 코스", "주말여행", "핫플레이스"]
-    suffixes = ["TOP10", "BEST10", "추천 10선"]
-    return f"{city} 가볼만한곳 {random.choice(keywords)} {random.choice(suffixes)}"
+    return make_title(region, city)
 
 
 def find_next_row(ws):
@@ -717,7 +741,7 @@ def find_next_row(ws):
         city = row[0].strip() if len(row) > 0 and row[0] else ""
         region = row[1].strip() if len(row) > 1 and row[1] else ""
         code = row[2].strip() if len(row) > 2 and row[2] else ""
-        status = row[3].strip() if len(row) > 3 and row[3] else ""
+        status = row[4].strip() if len(row) > 4 and row[4] else ""
         if city and region and code and status != "완":
             return i, region, city
     return None, None, None
@@ -774,7 +798,7 @@ def main():
             fetchImages=True
         ).execute()
 
-        ws3.update_cell(row_idx, 4, "완")
+        ws3.update_cell(row_idx, 5, "완")
         try:
             ws3.update_cell(row_idx, 15, res.get("url", ""))
         except:
