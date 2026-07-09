@@ -48,7 +48,6 @@ except Exception as e:
 OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
-
 SHEET_ID = "1u9dWxBc-JDITIn4S0c_wvkswWImwgnPSPuAX-qJywaw"
 BLOG_ID = "5711594645656469839"
 
@@ -357,7 +356,6 @@ async def main():
     global target_row
     target_row, row = None, None
     rows = ws.get_all_values()
-
     for i, row in enumerate(rows[1:], start=2):
         status = row[2].strip() if len(row) > 2 and row[2] else ""
         if status != "완":
