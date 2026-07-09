@@ -356,6 +356,7 @@ async def main():
     global target_row
     target_row, row = None, None
     rows = ws.get_all_values()
+
     for i, row in enumerate(rows[1:], start=2):
         status = row[2].strip() if len(row) > 2 and row[2] else ""
         if status != "완":
