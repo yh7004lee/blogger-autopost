@@ -48,7 +48,8 @@ except Exception as e:
 OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
 OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
 GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
-SHEET_ID = "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs"
+
+SHEET_ID = "1u9dWxBc-JDITIn4S0c_wvkswWImwgnPSPuAX-qJywaw"
 BLOG_ID = "5711594645656469839"
 
 client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
@@ -69,7 +70,7 @@ debug(f"스프레드시트 제목: {sh.title}")
 all_sheets = sh.worksheets()
 debug(f"탭 목록: {[s.title for s in all_sheets]}")
 
-ws = sh.worksheet("Sheet2")
+ws = sh.worksheet("시트1")
 debug(f"선택된 탭: {ws.title}")
 log_step("1 단계: Google Sheets 인증 성공")
 
