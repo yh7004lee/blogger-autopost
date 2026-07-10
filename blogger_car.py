@@ -366,18 +366,16 @@ async def main():
         log_step("처리할 행이 없습니다.")
         return
 
-    car_name = row[0].strip() if len(row) > 0 and row[0] else ""
     info_url = row[1].strip() if len(row) > 1 and row[1] else ""
-    if not car_name and info_url:
-        car_name = get_car_name_from_url(info_url)
-
     if info_url.startswith("?"):
         info_url = "https://search.naver.com/search.naver" + info_url
     elif not info_url.startswith("http"):
         info_url = "https://" + info_url
 
-    spec_url = f"https://search.naver.com/search.naver?where=nexearch&query={car_name.replace(' ', '%20')}+제원"
-    photo_url = f"https://search.naver.com/search.naver?where=nexearch&query={car_name.replace(' ', '%20')}+포토"
+    car_name = ""
+
+    spec_url = ""
+    photo_url = ""
 
     summary_items = {}
     extracted_specs = []
@@ -429,6 +427,25 @@ async def main():
                 summary_items["⚡ 공인 연비"] = grid_data["연비"]
             if grid_data.get("배기량"):
                 summary_items["🧪 엔진 배기량"] = grid_data["배기량"]
+
+        try:
+            page_car_name = await generate_title_from_spec_page(page)
+            if page_car_name:
+                car_name = page_car_name
+        except Exception:
+            pass
+
+        if not car_name:
+            try:
+                car_name = get_car_name_from_url(info_url)
+            except Exception:
+                car_name = ""
+
+        if not car_name:
+            car_name = "확인불가"
+
+        spec_url = f"https://search.naver.com/search.naver?where=nexearch&query={car_name.replace(' ', '%20')}+제원"
+        photo_url = f"https://search.naver.com/search.naver?where=nexearch&query={car_name.replace(' ', '%20')}+포토"
 
         await page.goto(spec_url, wait_until="domcontentloaded")
         await page.wait_for_timeout(3000)
