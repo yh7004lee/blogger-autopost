@@ -37,6 +37,12 @@ except Exception:
 import feedparser
 
 
+DEBUG_MODE = True
+
+def dprint(*args):
+    if DEBUG_MODE:
+        print("[DEBUG]", *args)
+
 API_KEYS_JSON = os.getenv("API_KEYS_JSON")
 if not API_KEYS_JSON:
     raise RuntimeError("API_KEYS_JSON 환경변수가 없습니다. GitHub Secrets 를 확인하세요.")
@@ -65,7 +71,8 @@ genai_client = None
 if GEMINI_API_KEY and genai:
     try:
         genai_client = genai.Client(api_key=GEMINI_API_KEY)
-    except Exception:
+    except Exception as e:
+        dprint("genai init failed:", e)
         genai_client = None
 
 HISTORY_PATH = "processed_regions_blogger.json"
@@ -79,11 +86,16 @@ THUMB_DIR = "thumbnails"
 def get_sheet3():
     service_account_file = "sheetapi.json"
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    dprint("loading service account:", service_account_file)
     creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
+    dprint("spreadsheet title:", sh.title)
+    dprint("looking for sheet gid:", SHEET_GID)
     for ws in sh.worksheets():
+        dprint("worksheet:", ws.title, "id:", ws.id, "rows:", ws.row_count, "cols:", ws.col_count)
         if ws.id == SHEET_GID:
+            dprint("matched worksheet:", ws.title)
             return ws
     raise RuntimeError(f"gid={SHEET_GID} 시트를 찾지 못했습니다.")
 
@@ -124,7 +136,8 @@ def upload_to_drive(file_path, file_name):
     meta = {"name": file_name, "parents": [folder_id]}
     try:
         uploaded = drive_service.files().create(body=meta, media_body=media, fields="id").execute()
-    except Exception:
+    except Exception as e:
+        dprint("drive upload first attempt failed:", e)
         folder_id = ensure_drive_folder(drive_service, "blogger")
         meta = {"name": file_name, "parents": [folder_id]}
         uploaded = drive_service.files().create(body=meta, media_body=media, fields="id").execute()
@@ -141,7 +154,8 @@ def load_processed_regions():
     try:
         with open(HISTORY_PATH, "r", encoding="utf-8") as f:
             return json.load(f).get("regions", [])
-    except:
+    except Exception as e:
+        dprint("load_processed_regions failed:", e)
         return []
 
 
@@ -222,44 +236,29 @@ def make_thumb(save_path: str, var_title: str):
 
 def generate_ai_review(prompt, keyword):
     last_err = None
-
     if genai_client:
         try:
-            response = genai_client.models.generate_content(
-                model="gemini-2.5-flash",
-                contents=prompt
-            )
+            response = genai_client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
             text = getattr(response, "text", "") or ""
             if text.strip():
                 return text.strip()
         except Exception as e:
             last_err = e
-            print("⚠️ AI 실패 1: Gemini Flash /", e)
-
+            dprint("AI 실패 1:", e)
     if genai_client:
         try:
-            response = genai_client.models.generate_content(
-                model="gemini-2.5-flash-lite",
-                contents=prompt
-            )
+            response = genai_client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
             text = getattr(response, "text", "") or ""
             if text.strip():
                 return text.strip()
         except Exception as e:
             last_err = e
-            print("⚠️ AI 실패 2: Gemini Flash Lite /", e)
-
+            dprint("AI 실패 2:", e)
     try:
         res = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "openrouter/auto",
-                "messages": [{"role": "user", "content": prompt}]
-            },
+            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+            json={"model": "openrouter/auto", "messages": [{"role": "user", "content": prompt}]},
             timeout=40
         )
         data = res.json()
@@ -271,8 +270,7 @@ def generate_ai_review(prompt, keyword):
         raise RuntimeError(f"OpenRouter 응답 구조 이상: {data}")
     except Exception as e:
         last_err = e
-        print("⚠️ AI 실패 3: OpenRouter /", e)
-
+        dprint("AI 실패 3:", e)
     if client:
         try:
             res = client.chat.completions.create(
@@ -286,8 +284,7 @@ def generate_ai_review(prompt, keyword):
                 return text
         except Exception as e:
             last_err = e
-            print("⚠️ AI 실패 4: OpenAI /", e)
-
+            dprint("AI 실패 4:", e)
     if client:
         try:
             res = client.chat.completions.create(
@@ -301,8 +298,7 @@ def generate_ai_review(prompt, keyword):
                 return text
         except Exception as e:
             last_err = e
-            print("⚠️ AI 실패 5: OpenAI GPT-4o /", e)
-
+            dprint("AI 실패 5:", e)
     return f"{keyword} 설명 생성 실패: {last_err}"
 
 
@@ -335,16 +331,14 @@ def google_text_search(query, city="", region=""):
         if status in ["ZERO_RESULTS", "INVALID_REQUEST", "OVER_QUERY_LIMIT", "REQUEST_DENIED"]:
             return []
         return data.get("results", [])
-    except:
+    except Exception as e:
+        dprint("google_text_search failed:", query, e)
         return []
 
 
 def is_valid_place(place):
     types = place.get("types", [])
-    bad_types = [
-        "school", "university", "gym", "hospital", "lodging",
-        "real_estate_agency", "bank", "shopping_mall", "store"
-    ]
+    bad_types = ["school", "university", "gym", "hospital", "lodging", "real_estate_agency", "bank", "shopping_mall", "store"]
     return not any(t in bad_types for t in types)
 
 
@@ -363,16 +357,7 @@ def score_place(item):
 
 
 def get_fallback_places(region, city):
-    candidates = [
-        f"{city} 맛집",
-        f"{city} 전통시장",
-        f"{city} 먹자골목",
-        f"{city} 로컬푸드",
-        f"{city} 분식거리",
-        f"{city} 한식당",
-        f"{city} 국밥거리",
-        f"{city} 카페거리",
-    ]
+    candidates = [f"{city} 맛집", f"{city} 전통시장", f"{city} 먹자골목", f"{city} 로컬푸드", f"{city} 분식거리", f"{city} 한식당", f"{city} 국밥거리", f"{city} 카페거리"]
     places = []
     seen = set()
     for name in candidates:
@@ -389,6 +374,7 @@ def get_places(region, city):
     seen = set()
     for q in get_queries(region, city):
         results = google_text_search(q, city=city, region=region)
+        dprint("query:", q, "results:", len(results))
         for r in results:
             name = r.get("name")
             if not name:
@@ -408,8 +394,10 @@ def get_places(region, city):
         if len(pool) >= 10:
             break
     if not pool:
+        dprint("no google places found, using fallback")
         pool = get_fallback_places(region, city)
     pool = sorted(pool, key=lambda x: x["score"], reverse=True)
+    dprint("final places:", [p["title"] for p in pool[:10]])
     return pool[:10]
 
 
@@ -430,7 +418,8 @@ def is_valid_image_url(url):
             return False
         content_type = res.headers.get("content-type", "").lower()
         return "image" in content_type
-    except:
+    except Exception as e:
+        dprint("image url check failed:", url, e)
         return False
 
 
@@ -466,7 +455,8 @@ def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""
                 f"?maxwidth=1600&photo_reference={ref}&key={GOOGLE_MAPS_API_KEY}"
             )
         return photo_urls
-    except:
+    except Exception as e:
+        dprint("place photo lookup failed:", place_name, e)
         return []
 
 
@@ -501,8 +491,7 @@ def get_best_place_image(place):
 
 
 def make_intro_prompt(region, city, title):
-    return f"""
-너는 한국 여행 블로그 전문 작성자다.
+    return f"""너는 한국 여행 블로그 전문 작성자다.
 
 아래 정보를 바탕으로 서론만 작성해라.
 - 지역: {region}
@@ -523,8 +512,7 @@ def make_intro_prompt(region, city, title):
 
 
 def make_section_prompt(region, city, place_title, addr, overview):
-    return f"""
-너는 한국 여행 블로그 전문 작성자다.
+    return f"""너는 한국 여행 블로그 전문 작성자다.
 
 여행 정보:
 - 지역: {region}
@@ -557,22 +545,10 @@ def clean_place_title(title, region, city):
     for marker in cut_markers:
         if marker in t:
             t = t.split(marker, 1)[0].strip()
-    t = re.split(
-        r"\s+(?:restaurants?|restaurant|korean\s*restaurant|kbbq|kfood|grill|bar|cafe|"
-        r"韓国料理|韓国焼肉レストラン|レストラン|グルメ|必食|餐馆|美食|食堂|"
-        r"맛집|음식점|식당|branch|main\s*branch)\b",
-        t,
-        flags=re.IGNORECASE
-    )[0].strip()
+    t = re.split(r"\s+(?:restaurants?|restaurant|korean\s*restaurant|kbbq|kfood|grill|bar|cafe|韓国料理|韓国焼肉レストラン|レストラン|グルメ|必食|餐馆|美食|食堂|맛집|음식점|식당|branch|main\s*branch)\b", t, flags=re.IGNORECASE)[0].strip()
     t = re.sub(r"\s*\([^)]+\)\s*", " ", t).strip()
     t = re.sub(r"\s+", " ", t).strip()
-    variants = [
-        f"{region} {city}",
-        f"{city} {city}",
-        f"{region} {region}",
-        city,
-        region,
-    ]
+    variants = [f"{region} {city}", f"{city} {city}", f"{region} {region}", city, region]
     for v in variants:
         v = v.strip()
         if not v:
@@ -587,27 +563,7 @@ def clean_place_title(title, region, city):
 
 
 def make_title(region, city):
-    prefixes = [
-        "현지인 추천",
-        "요즘 핫한",
-        "가성비 좋은",
-        "재방문각",
-        "로컬이 인정한",
-        "숨은",
-        "인기",
-        "꼭 가봐야 할",
-        "요즘 뜨는",
-        "후회 없는",
-        "줄 서는",
-        "분위기 좋은",
-        "실패 없는",
-        "찐",
-        "믿고 가는",
-        "한 번쯤 가볼",
-        "SNS에서 핫한",
-        "주말에 가기 좋은",
-        "입소문 난",
-    ]
+    prefixes = ["현지인 추천", "요즘 핫한", "가성비 좋은", "재방문각", "로컬이 인정한", "숨은", "인기", "꼭 가봐야 할", "요즘 뜨는", "후회 없는", "줄 서는", "분위기 좋은", "실패 없는", "찐", "믿고 가는", "한 번쯤 가볼", "SNS에서 핫한", "주말에 가기 좋은", "입소문 난"]
     suffixes = ["베스트 10", "top10"]
     return f"{region} {city} 여행 {random.choice(prefixes)} 명소 {random.choice(suffixes)}"
 
@@ -627,14 +583,12 @@ def make_last(region, city):
 def build_markdown_post(region, city, title, places, thumb_url, date_str):
     intro = generate_ai_review(make_intro_prompt(region, city, title), title)
     sections = []
-
     for idx, item in enumerate(places, start=1):
         clean_title = clean_place_title(item["title"], region, city)
         section_title = f"{city} {clean_title}"
         images = item.get("images", [])
         overview = item.get("overview", "")
         body = generate_ai_review(make_section_prompt(region, city, clean_title, item.get("addr", ""), overview), clean_title)
-
         sec = []
         sec.append(f"## {idx}. {section_title}")
         sec.append("")
@@ -649,9 +603,7 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
         sec.append(f"[구글 지도에서 위치 확인하기](https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(region + ' ' + city + ' ' + clean_title)})")
         sec.append("")
         sections.append("\n".join(sec))
-
     last_text = make_last(region, city)
-
     md = f"""---
 title: "{title}"
 date: {date_str}
@@ -682,13 +634,29 @@ image: {thumb_url}
 
 def find_next_row(ws):
     rows = ws.get_all_values()
+    dprint("total rows from get_all_values:", len(rows))
+    if rows:
+        dprint("header preview:", rows[:3])
     for i, row in enumerate(rows[1:], start=2):
         city = row[0].strip() if len(row) > 0 and row[0] else ""
         region = row[1].strip() if len(row) > 1 and row[1] else ""
         code = row[3].strip() if len(row) > 3 and row[3] else ""
         status = row[3].strip() if len(row) > 3 and row[3] else ""
+        dprint("row", i, "raw:", row)
+        dprint("parsed:", {"city": city, "region": region, "code": code, "status": status})
+        reasons = []
+        if not city:
+            reasons.append("city empty")
+        if not region:
+            reasons.append("region empty")
+        if not code:
+            reasons.append("code empty")
+        if status == "완":
+            reasons.append("status already complete")
         if city and region and code and status != "완":
+            dprint("selected row:", i, region, city)
             return i, region, city
+        dprint("skipped row", i, "reasons:", reasons)
     return None, None, None
 
 
@@ -701,34 +669,30 @@ def push_post_to_github(file_path, repo_path):
         raise RuntimeError("TARGET_GITHUB_PAT 환경변수가 없습니다.")
     if not os.path.exists(os.path.join(repo_path, ".git")):
         raise RuntimeError(f"Git 저장소가 아닙니다: {repo_path}")
-
     rel_path = os.path.relpath(file_path, repo_path)
     git_run(["git", "add", rel_path], cwd=repo_path)
     git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_path)
     git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_path)
-
-    status = subprocess.run(
-        ["git", "status", "--porcelain"],
-        cwd=repo_path,
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True
-    ).stdout.strip()
-
+    status = subprocess.run(["git", "status", "--porcelain"], cwd=repo_path, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.strip()
+    dprint("git status:", status)
     if not status:
         return "no changes"
-
     git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path)
-
     remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
     git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path)
     git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path)
-
     return "pushed"
 
 
 def main():
+    dprint("DEBUG_MODE ON")
+    dprint("SHEET_ID:", SHEET_ID)
+    dprint("SHEET_GID:", SHEET_GID)
+    dprint("REPO_PATH:", REPO_PATH)
+    dprint("TARGET_REPO:", TARGET_REPO)
+    dprint("TARGET_BRANCH:", TARGET_BRANCH)
+    dprint("TARGET_GITHUB_PAT exists:", bool(TARGET_GITHUB_PAT))
+
     row_idx, region, city = find_next_row(ws3)
     if not row_idx:
         print("처리할 행이 없습니다.")
@@ -769,18 +733,21 @@ def main():
         f.write(markdown_content)
 
     log_step(row_idx, "5단계: Markdown 파일 생성 완료")
-
     push_state = push_post_to_github(post_path, REPO_PATH)
 
     ws3.update_cell(row_idx, 4, "완")
     try:
         ws3.update_cell(row_idx, 15, f"https://github.com/{TARGET_REPO}/blob/{TARGET_BRANCH}/{POSTS_DIR}/{post_filename}")
-    except:
-        pass
+    except Exception as e:
+        dprint("link write failed:", e)
 
     log_step(row_idx, f"6단계: GitHub 업로드 {push_state}")
     print(f"[완료] {post_path}")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        traceback.print_exc()
+        raise
