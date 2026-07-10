@@ -694,6 +694,14 @@ def push_post_to_github(file_path, repo_path):
         dprint("fetch stderr:", e.stderr)
         raise
 
+    try:
+        git_run(["git", "rebase", f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
+    except subprocess.CalledProcessError as e:
+        dprint("rebase failed returncode:", e.returncode)
+        dprint("rebase stdout:", e.stdout)
+        dprint("rebase stderr:", e.stderr)
+        raise
+
     status = subprocess.run(
         ["git", "status", "--porcelain"],
         cwd=repo_path,
@@ -703,27 +711,10 @@ def push_post_to_github(file_path, repo_path):
         text=True,
         env=env
     ).stdout.strip()
-    dprint("git status after add:", status if status else "(clean)")
-
-    if not status:
-        return "no changes"
-
-    try:
-        git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path, env=env)
-    except subprocess.CalledProcessError as e:
-        dprint("commit failed returncode:", e.returncode)
-        dprint("commit stdout:", e.stdout)
-        dprint("commit stderr:", e.stderr)
-        raise
+    dprint("git status after rebase:", status if status else "(clean)")
 
     remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
-    try:
-        git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path, env=env)
-    except subprocess.CalledProcessError as e:
-        dprint("remote set-url failed returncode:", e.returncode)
-        dprint("remote set-url stdout:", e.stdout)
-        dprint("remote set-url stderr:", e.stderr)
-        raise
+    git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path, env=env)
 
     show_git_state(repo_path, env)
 
