@@ -678,29 +678,17 @@ def push_post_to_github(file_path, repo_path):
     rel_path = os.path.relpath(file_path, repo_path)
     dprint("target repo:", TARGET_REPO)
     dprint("target branch:", TARGET_BRANCH)
-    dprint("adding file:", rel_path)
+    dprint("posting file:", rel_path)
 
     show_git_state(repo_path, env)
 
-    git_run(["git", "add", rel_path], cwd=repo_path, env=env)
     git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_path, env=env)
     git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_path, env=env)
 
-    try:
-        git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
-    except subprocess.CalledProcessError as e:
-        dprint("fetch failed returncode:", e.returncode)
-        dprint("fetch stdout:", e.stdout)
-        dprint("fetch stderr:", e.stderr)
-        raise
+    git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
+    git_run(["git", "rebase", f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
 
-    try:
-        git_run(["git", "rebase", f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
-    except subprocess.CalledProcessError as e:
-        dprint("rebase failed returncode:", e.returncode)
-        dprint("rebase stdout:", e.stdout)
-        dprint("rebase stderr:", e.stderr)
-        raise
+    git_run(["git", "add", rel_path], cwd=repo_path, env=env)
 
     status = subprocess.run(
         ["git", "status", "--porcelain"],
@@ -711,21 +699,20 @@ def push_post_to_github(file_path, repo_path):
         text=True,
         env=env
     ).stdout.strip()
-    dprint("git status after rebase:", status if status else "(clean)")
+    dprint("git status after add:", status if status else "(clean)")
+
+    if not status:
+        return "no changes"
+
+    git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path, env=env)
 
     remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
     git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path, env=env)
 
     show_git_state(repo_path, env)
 
-    try:
-        git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
-        return "pushed"
-    except subprocess.CalledProcessError as e:
-        dprint("push failed returncode:", e.returncode)
-        dprint("push stdout:", e.stdout)
-        dprint("push stderr:", e.stderr)
-        raise
+    git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
+    return "pushed"
 
 
 def main():
