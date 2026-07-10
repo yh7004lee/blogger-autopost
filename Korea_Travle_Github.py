@@ -671,7 +671,14 @@ def push_post_to_github(file_path, repo_path):
     git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
 
     branch_name = f"autopost-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    git_run(["git", "checkout", "-B", branch_name, f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
+    try:
+        git_run(["git", "switch", "-C", branch_name, f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
+    except subprocess.CalledProcessError as e:
+        dprint("switch failed returncode:", e.returncode)
+        dprint("switch stdout:", e.stdout or "")
+        dprint("switch stderr:", e.stderr or "")
+        git_run(["git", "reset", "--hard", f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
+        git_run(["git", "switch", "-C", branch_name], cwd=repo_path, env=env)
 
     git_run(["git", "add", rel_path], cwd=repo_path, env=env)
 
