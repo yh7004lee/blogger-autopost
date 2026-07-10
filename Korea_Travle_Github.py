@@ -646,16 +646,6 @@ def git_run(cmd, cwd=None, env=None):
         dprint("git stderr:", stderr.strip())
     return result
 
-def show_git_state(repo_path, env):
-    try:
-        dprint("repo_path:", repo_path)
-        git_run(["git", "rev-parse", "--show-toplevel"], cwd=repo_path, env=env)
-        git_run(["git", "remote", "-v"], cwd=repo_path, env=env)
-        git_run(["git", "branch", "--show-current"], cwd=repo_path, env=env)
-        git_run(["git", "status", "--short"], cwd=repo_path, env=env)
-    except Exception as e:
-        dprint("show_git_state failed:", e)
-
 def push_post_to_github(file_path, repo_path):
     if not TARGET_GITHUB_PAT:
         raise RuntimeError("TARGET_GITHUB_PAT 환경변수가 없습니다.")
@@ -672,8 +662,6 @@ def push_post_to_github(file_path, repo_path):
     dprint("target branch:", TARGET_BRANCH)
     dprint("posting file:", rel_path)
 
-    show_git_state(repo_path, env)
-
     git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_path, env=env)
     git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_path, env=env)
 
@@ -682,8 +670,8 @@ def push_post_to_github(file_path, repo_path):
 
     git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
 
-    git_run(["git", "reset", "--mixed"], cwd=repo_path, env=env)
-    git_run(["git", "rebase", f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
+    branch_name = f"autopost-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+    git_run(["git", "checkout", "-B", branch_name, f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
 
     git_run(["git", "add", rel_path], cwd=repo_path, env=env)
 
@@ -709,10 +697,14 @@ def push_post_to_github(file_path, repo_path):
         dprint("commit stderr:", e.stderr or "")
         raise
 
-    show_git_state(repo_path, env)
-
-    git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
-    return "pushed"
+    try:
+        git_run(["git", "push", "-u", "origin", branch_name], cwd=repo_path, env=env)
+        return f"pushed to {branch_name}"
+    except subprocess.CalledProcessError as e:
+        dprint("push failed returncode:", e.returncode)
+        dprint("push stdout:", e.stdout or "")
+        dprint("push stderr:", e.stderr or "")
+        raise
 
 def main():
     dprint("DEBUG_MODE ON")
