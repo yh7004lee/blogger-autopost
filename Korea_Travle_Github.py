@@ -520,22 +520,15 @@ def clean_place_title(title, region, city):
     if not t:
         return ""
     t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)
-    cut_markers = [" | ", "｜", " / ", " ・ ", " · ", " • ", " - ", " — ", " :: "]
-    for marker in cut_markers:
-        if marker in t:
-            t = t.split(marker, 1)[0].strip()
     t = re.sub(r"\s+", " ", t).strip()
     return t or title
 
 def make_title(region, city):
     prefixes = ["현지인 추천", "요즘 핫한", "가성비 좋은", "재방문각", "로컬이 인정한", "숨은", "인기", "꼭 가봐야 할", "요즘 뜨는", "후회 없는", "줄 서는", "분위기 좋은", "실패 없는", "찐", "믿고 가는", "한 번쯤 가볼", "SNS에서 핫한", "주말에 가기 좋은", "입소문 난"]
     mids = ["숨은", "핵심", "대표", "핫플", "감성", "베스트", "추천"]
-    suffix_opts = ["가볼만한곳", "여행명소"]
-    a = random.choice(suffix_opts)
-    b = "여행명소" if a == "가볼만한곳" else "가볼만한곳"
-    order = random.choice([0, 1])
-    pair = f"{a} {b}" if order == 0 else f"{b} {a}"
-    return f"{region} {city} {random.choice(prefixes)} {random.choice(mids)} {pair}"
+    pair = "가볼만한곳 여행명소" if random.choice([0, 1]) == 0 else "여행명소 가볼만한곳"
+    ending = random.choice(["TOP10", "BEST10", "핫플레이스10"])
+    return f"{region} {city} {random.choice(prefixes)} {random.choice(mids)} {pair} {ending}"
 
 def generate_random_title(region, city):
     return make_title(region, city)
@@ -607,12 +600,6 @@ def find_next_row(ws):
 def git_run(cmd, cwd=None, env=None):
     dprint("git cmd:", " ".join(cmd))
     result = subprocess.run(cmd, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-    stdout = result.stdout or ""
-    stderr = result.stderr or ""
-    if stdout.strip():
-        dprint("git stdout:", stdout.strip())
-    if stderr.strip():
-        dprint("git stderr:", stderr.strip())
     return result
 
 def push_post_to_github(file_path, repo_path):
