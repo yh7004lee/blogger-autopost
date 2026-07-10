@@ -70,6 +70,5 @@ jobs:
           echo "${{ secrets.DRIVE_TOKEN_2ND_B64 }}" > drive_token_2nd.pickle.b64
           certutil -decode drive_token_2nd.pickle.b64 drive_token_2nd.pickle
 
-      # ✅ 실행할 파이썬 파일 (여기만 변경)
       - name: Run autopost script
         run: python Korea_Travle_Github.py
