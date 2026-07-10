@@ -91,7 +91,6 @@ openai.json
 openai.json.b64
 sheetapi.json
 sheetapi.json.b64
-_posts/
 thumbnails/
 """
 
@@ -670,15 +669,8 @@ def push_post_to_github(file_path, repo_path):
 
     git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
 
-    branch_name = f"autopost-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    try:
-        git_run(["git", "switch", "-C", branch_name, f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
-    except subprocess.CalledProcessError as e:
-        dprint("switch failed returncode:", e.returncode)
-        dprint("switch stdout:", e.stdout or "")
-        dprint("switch stderr:", e.stderr or "")
-        git_run(["git", "reset", "--hard", f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
-        git_run(["git", "switch", "-C", branch_name], cwd=repo_path, env=env)
+    git_run(["git", "switch", "main"], cwd=repo_path, env=env)
+    git_run(["git", "reset", "--hard", f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
 
     git_run(["git", "add", rel_path], cwd=repo_path, env=env)
 
@@ -705,8 +697,8 @@ def push_post_to_github(file_path, repo_path):
         raise
 
     try:
-        git_run(["git", "push", "-u", "origin", branch_name], cwd=repo_path, env=env)
-        return f"pushed to {branch_name}"
+        git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
+        return f"pushed to {TARGET_BRANCH}"
     except subprocess.CalledProcessError as e:
         dprint("push failed returncode:", e.returncode)
         dprint("push stdout:", e.stdout or "")
