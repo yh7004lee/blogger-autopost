@@ -19,7 +19,6 @@ from PIL import Image, ImageDraw, ImageFont
 
 import gspread
 from google.oauth2.service_account import Credentials as SA_Credentials
-from google.oauth2.credentials import Credentials as UserCredentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -175,13 +174,11 @@ def log_step(row, msg: str):
     except Exception as e:
         print("⚠️ 로그 기록 실패:", e)
 
-
 def pick_random_background() -> str:
     files = []
     for ext in ("*.png", "*.jpg", "*.jpeg"):
         files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
     return random.choice(files) if files else ""
-
 
 def textwrap_wrap_kor(text, width):
     if not text:
@@ -201,7 +198,6 @@ def textwrap_wrap_kor(text, width):
     if cur:
         lines.append(cur)
     return lines
-
 
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -232,7 +228,6 @@ def make_thumb(save_path: str, var_title: str):
         var_y_point += line_height
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
-
 
 def generate_ai_review(prompt, keyword):
     last_err = None
@@ -301,7 +296,6 @@ def generate_ai_review(prompt, keyword):
             dprint("AI 실패 5:", e)
     return f"{keyword} 설명 생성 실패: {last_err}"
 
-
 def get_queries(region, city):
     return [
         f"{region} {city} 맛집",
@@ -317,7 +311,6 @@ def get_queries(region, city):
         f"{city} 대표 맛집",
         f"{city} 인기 맛집",
     ]
-
 
 def google_text_search(query, city="", region=""):
     if not GOOGLE_MAPS_API_KEY:
@@ -335,12 +328,10 @@ def google_text_search(query, city="", region=""):
         dprint("google_text_search failed:", query, e)
         return []
 
-
 def is_valid_place(place):
     types = place.get("types", [])
     bad_types = ["school", "university", "gym", "hospital", "lodging", "real_estate_agency", "bank", "shopping_mall", "store"]
     return not any(t in bad_types for t in types)
-
 
 def score_place(item):
     rating = item.get("rating", 0) or 0
@@ -355,7 +346,6 @@ def score_place(item):
         s += 2
     return s
 
-
 def get_fallback_places(region, city):
     candidates = [f"{city} 맛집", f"{city} 전통시장", f"{city} 먹자골목", f"{city} 로컬푸드", f"{city} 분식거리", f"{city} 한식당", f"{city} 국밥거리", f"{city} 카페거리"]
     places = []
@@ -367,7 +357,6 @@ def get_fallback_places(region, city):
         seen.add(key)
         places.append({"title": name, "addr": f"{region} {city}", "raw": {}, "score": 0})
     return places
-
 
 def get_places(region, city):
     pool = []
@@ -400,10 +389,8 @@ def get_places(region, city):
     dprint("final places:", [p["title"] for p in pool[:10]])
     return pool[:10]
 
-
 def get_overview_from_place(place):
     return place.get("raw", {}).get("formatted_address", "상세 설명이 제공되지 않습니다.")
-
 
 def is_valid_image_url(url):
     if not url or not isinstance(url, str):
@@ -421,7 +408,6 @@ def is_valid_image_url(url):
     except Exception as e:
         dprint("image url check failed:", url, e)
         return False
-
 
 def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""):
     if not GOOGLE_MAPS_API_KEY:
@@ -459,7 +445,6 @@ def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""
         dprint("place photo lookup failed:", place_name, e)
         return []
 
-
 def get_best_place_image(place):
     candidates = []
     title = place.get("title", "").strip()
@@ -489,7 +474,6 @@ def get_best_place_image(place):
         final_images.append(fallback)
     return final_images[:3]
 
-
 def make_intro_prompt(region, city, title):
     return f"""너는 한국 여행 블로그 전문 작성자다.
 
@@ -509,7 +493,6 @@ def make_intro_prompt(region, city, title):
 - <p> 로 시작할 것
 - 중국어/일본어 금지
 """
-
 
 def make_section_prompt(region, city, place_title, addr, overview):
     return f"""너는 한국 여행 블로그 전문 작성자다.
@@ -533,7 +516,6 @@ def make_section_prompt(region, city, place_title, addr, overview):
 - 제목 태그 금지
 - 중국어/일본어 금지
 """
-
 
 def clean_place_title(title, region, city):
     t = str(title or "").strip()
@@ -561,16 +543,13 @@ def clean_place_title(title, region, city):
     t = re.sub(r"\s+", " ", t).strip()
     return t or title
 
-
 def make_title(region, city):
     prefixes = ["현지인 추천", "요즘 핫한", "가성비 좋은", "재방문각", "로컬이 인정한", "숨은", "인기", "꼭 가봐야 할", "요즘 뜨는", "후회 없는", "줄 서는", "분위기 좋은", "실패 없는", "찐", "믿고 가는", "한 번쯤 가볼", "SNS에서 핫한", "주말에 가기 좋은", "입소문 난"]
     suffixes = ["베스트 10", "top10"]
     return f"{region} {city} 여행 {random.choice(prefixes)} 명소 {random.choice(suffixes)}"
 
-
 def generate_random_title(region, city):
     return make_title(region, city)
-
 
 def make_last(region, city):
     return (
@@ -579,16 +558,17 @@ def make_last(region, city):
         f"짧은 일정이라도 충분히 만족스러운 여행을 즐길 수 있으니 취향에 맞게 골라보시면 좋습니다."
     )
 
-
 def build_markdown_post(region, city, title, places, thumb_url, date_str):
     intro = generate_ai_review(make_intro_prompt(region, city, title), title)
     sections = []
+
     for idx, item in enumerate(places, start=1):
         clean_title = clean_place_title(item["title"], region, city)
         section_title = f"{city} {clean_title}"
         images = item.get("images", [])
         overview = item.get("overview", "")
         body = generate_ai_review(make_section_prompt(region, city, clean_title, item.get("addr", ""), overview), clean_title)
+
         sec = []
         sec.append(f"## {idx}. {section_title}")
         sec.append("")
@@ -603,7 +583,9 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
         sec.append(f"[구글 지도에서 위치 확인하기](https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(region + ' ' + city + ' ' + clean_title)})")
         sec.append("")
         sections.append("\n".join(sec))
+
     last_text = make_last(region, city)
+
     md = f"""---
 title: "{title}"
 date: {date_str}
@@ -631,7 +613,6 @@ image: {thumb_url}
 """
     return md
 
-
 def find_next_row(ws):
     rows = ws.get_all_values()
     dprint("total rows from get_all_values:", len(rows))
@@ -641,7 +622,7 @@ def find_next_row(ws):
         city = row[0].strip() if len(row) > 0 and row[0] else ""
         region = row[1].strip() if len(row) > 1 and row[1] else ""
         code = row[2].strip() if len(row) > 2 and row[2] else ""
-        status = row[3].strip() if len(row) > 3 and row[3] else ""
+        status = row[5].strip() if len(row) > 5 and row[5] else ""
         dprint("row", i, "raw:", row)
         dprint("parsed:", {"city": city, "region": region, "code": code, "status": status})
         reasons = []
@@ -659,30 +640,40 @@ def find_next_row(ws):
         dprint("skipped row", i, "reasons:", reasons)
     return None, None, None
 
-
 def git_run(cmd, cwd=None):
     subprocess.run(cmd, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-
 
 def push_post_to_github(file_path, repo_path):
     if not TARGET_GITHUB_PAT:
         raise RuntimeError("TARGET_GITHUB_PAT 환경변수가 없습니다.")
     if not os.path.exists(os.path.join(repo_path, ".git")):
         raise RuntimeError(f"Git 저장소가 아닙니다: {repo_path}")
+
     rel_path = os.path.relpath(file_path, repo_path)
     git_run(["git", "add", rel_path], cwd=repo_path)
     git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_path)
     git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_path)
-    status = subprocess.run(["git", "status", "--porcelain"], cwd=repo_path, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True).stdout.strip()
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=repo_path,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    ).stdout.strip()
     dprint("git status:", status)
+
     if not status:
         return "no changes"
+
     git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path)
+
     remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
     git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path)
     git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path)
-    return "pushed"
 
+    return "pushed"
 
 def main():
     dprint("DEBUG_MODE ON")
@@ -735,7 +726,7 @@ def main():
     log_step(row_idx, "5단계: Markdown 파일 생성 완료")
     push_state = push_post_to_github(post_path, REPO_PATH)
 
-    ws3.update_cell(row_idx, 4, "완")
+    ws3.update_cell(row_idx, 6, "완")
     try:
         ws3.update_cell(row_idx, 15, f"https://github.com/{TARGET_REPO}/blob/{TARGET_BRANCH}/{POSTS_DIR}/{post_filename}")
     except Exception as e:
