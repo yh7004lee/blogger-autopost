@@ -685,7 +685,7 @@ def find_next_row(ws):
     for i, row in enumerate(rows[1:], start=2):
         city = row[0].strip() if len(row) > 0 and row[0] else ""
         region = row[1].strip() if len(row) > 1 and row[1] else ""
-        code = row[2].strip() if len(row) > 2 and row[2] else ""
+        code = row[3].strip() if len(row) > 3 and row[3] else ""
         status = row[3].strip() if len(row) > 3 and row[3] else ""
         if city and region and code and status != "완":
             return i, region, city
