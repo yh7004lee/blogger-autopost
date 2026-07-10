@@ -14,7 +14,6 @@ import glob
 import pickle
 import subprocess
 from datetime import datetime
-from bs4 import BeautifulSoup
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
@@ -39,7 +38,6 @@ import feedparser
 
 
 API_KEYS_JSON = os.getenv("API_KEYS_JSON")
-
 if not API_KEYS_JSON:
     raise RuntimeError("API_KEYS_JSON 환경변수가 없습니다. GitHub Secrets 를 확인하세요.")
 
@@ -59,8 +57,8 @@ TOUR_API_KEY = secrets.get("TOUR_API_KEY", "")
 TARGET_GITHUB_PAT = os.getenv("TARGET_GITHUB_PAT", "")
 TARGET_REPO = "jm7004lee/jm7004lee.github.io"
 TARGET_BRANCH = "main"
+REPO_PATH = os.getenv("TARGET_REPO_PATH", os.getcwd())
 POSTS_DIR = "_posts"
-LOCAL_REPO_PATH = os.getenv("TARGET_REPO_PATH", os.getcwd())
 
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 genai_client = None
@@ -626,12 +624,6 @@ def make_last(region, city):
     )
 
 
-def markdown_escape(text):
-    if text is None:
-        return ""
-    return str(text).replace("\r\n", "\n").replace("\r", "\n").strip()
-
-
 def build_markdown_post(region, city, title, places, thumb_url, date_str):
     intro = generate_ai_review(make_intro_prompt(region, city, title), title)
     sections = []
@@ -704,20 +696,20 @@ def git_run(cmd, cwd=None):
     subprocess.run(cmd, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
 
-def push_post_to_github(file_path, commit_message):
+def push_post_to_github(file_path, repo_path):
     if not TARGET_GITHUB_PAT:
         raise RuntimeError("TARGET_GITHUB_PAT 환경변수가 없습니다.")
-    if not os.path.exists(os.path.join(LOCAL_REPO_PATH, ".git")):
-        raise RuntimeError(f"Git 저장소가 아닙니다: {LOCAL_REPO_PATH}")
+    if not os.path.exists(os.path.join(repo_path, ".git")):
+        raise RuntimeError(f"Git 저장소가 아닙니다: {repo_path}")
 
-    rel_path = os.path.relpath(file_path, LOCAL_REPO_PATH)
-    git_run(["git", "add", rel_path], cwd=LOCAL_REPO_PATH)
-    git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=LOCAL_REPO_PATH)
-    git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=LOCAL_REPO_PATH)
+    rel_path = os.path.relpath(file_path, repo_path)
+    git_run(["git", "add", rel_path], cwd=repo_path)
+    git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_path)
+    git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_path)
 
     status = subprocess.run(
         ["git", "status", "--porcelain"],
-        cwd=LOCAL_REPO_PATH,
+        cwd=repo_path,
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -727,15 +719,11 @@ def push_post_to_github(file_path, commit_message):
     if not status:
         return "no changes"
 
-    git_run(["git", "commit", "-m", commit_message], cwd=LOCAL_REPO_PATH)
-
-    env = os.environ.copy()
-    env["GIT_ASKPASS"] = ""
-    env["GIT_TERMINAL_PROMPT"] = "0"
+    git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path)
 
     remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
-    git_run(["git", "remote", "set-url", "origin", remote_url], cwd=LOCAL_REPO_PATH)
-    git_run(["git", "push", "origin", TARGET_BRANCH], cwd=LOCAL_REPO_PATH)
+    git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path)
+    git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path)
 
     return "pushed"
 
@@ -765,7 +753,7 @@ def main():
     safe_title = re.sub(r'[\\/:*?"<>|.]', "_", title)
     date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S +0900")
     post_filename = f"{datetime.now().strftime('%Y-%m-%d')}-{safe_title}.md"
-    post_path = os.path.join(LOCAL_REPO_PATH, POSTS_DIR, post_filename)
+    post_path = os.path.join(REPO_PATH, POSTS_DIR, post_filename)
 
     os.makedirs(os.path.dirname(post_path), exist_ok=True)
 
@@ -782,8 +770,7 @@ def main():
 
     log_step(row_idx, "5단계: Markdown 파일 생성 완료")
 
-    commit_message = f"Add post: {title}"
-    push_state = push_post_to_github(post_path, commit_message)
+    push_state = push_post_to_github(post_path, REPO_PATH)
 
     ws3.update_cell(row_idx, 4, "완")
     try:
