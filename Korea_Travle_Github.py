@@ -80,6 +80,26 @@ ASSETS_BG_DIR = "assets/backgrounds"
 ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
 THUMB_DIR = "thumbnails"
 
+GITIGNORE_CONTENT = """2nd.json
+2nd.json.b64
+blogger_token.json
+cc.json
+cc.json.b64
+drive_token_2nd.pickle
+drive_token_2nd.pickle.b64
+openai.json
+openai.json.b64
+sheetapi.json
+sheetapi.json.b64
+_posts/
+thumbnails/
+"""
+
+def ensure_gitignore(repo_path):
+    path = os.path.join(repo_path, ".gitignore")
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(GITIGNORE_CONTENT)
 
 def get_sheet3():
     service_account_file = "sheetapi.json"
@@ -92,9 +112,7 @@ def get_sheet3():
             return ws
     raise RuntimeError(f"gid={SHEET_GID} 시트를 찾지 못했습니다.")
 
-
 ws3 = get_sheet3()
-
 
 def get_drive_service():
     token_path = "drive_token_2nd.pickle"
@@ -108,7 +126,6 @@ def get_drive_service():
             pickle.dump(creds, f)
     return build("drive", "v3", credentials=creds)
 
-
 def ensure_drive_folder(drive_service, folder_name):
     q = f"mimeType='application/vnd.google-apps.folder' and name='{folder_name}' and trashed=false"
     res = drive_service.files().list(q=q, fields="files(id, name)").execute()
@@ -118,7 +135,6 @@ def ensure_drive_folder(drive_service, folder_name):
     folder_metadata = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
     folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
     return folder.get("id")
-
 
 def upload_to_drive(file_path, file_name):
     drive_service = get_drive_service()
@@ -140,7 +156,6 @@ def upload_to_drive(file_path, file_name):
     ).execute()
     return f"https://lh3.googleusercontent.com/d/{uploaded['id']}"
 
-
 def load_processed_regions():
     if not os.path.exists(HISTORY_PATH):
         return []
@@ -151,7 +166,6 @@ def load_processed_regions():
         dprint("load_processed_regions failed:", e)
         return []
 
-
 def save_processed_region(region, city):
     processed = load_processed_regions()
     key = f"{region} {city}"
@@ -160,7 +174,6 @@ def save_processed_region(region, city):
     with open(HISTORY_PATH, "w", encoding="utf-8") as f:
         json.dump({"regions": processed}, f, ensure_ascii=False, indent=2)
 
-
 def log_step(row, msg: str):
     try:
         prev = ws3.cell(row, 16).value or ""
@@ -168,13 +181,11 @@ def log_step(row, msg: str):
     except Exception as e:
         print("⚠️ 로그 기록 실패:", e)
 
-
 def pick_random_background() -> str:
     files = []
     for ext in ("*.png", "*.jpg", "*.jpeg"):
         files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
     return random.choice(files) if files else ""
-
 
 def textwrap_wrap_kor(text, width):
     if not text:
@@ -194,7 +205,6 @@ def textwrap_wrap_kor(text, width):
     if cur:
         lines.append(cur)
     return lines
-
 
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -225,7 +235,6 @@ def make_thumb(save_path: str, var_title: str):
         var_y_point += line_height
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
-
 
 def generate_ai_review(prompt, keyword):
     last_err = None
@@ -294,7 +303,6 @@ def generate_ai_review(prompt, keyword):
             dprint("AI 실패 5:", e)
     return f"{keyword} 설명 생성 실패: {last_err}"
 
-
 def get_queries(region, city):
     return [
         f"{region} {city} 맛집",
@@ -310,7 +318,6 @@ def get_queries(region, city):
         f"{city} 대표 맛집",
         f"{city} 인기 맛집",
     ]
-
 
 def google_text_search(query, city="", region=""):
     if not GOOGLE_MAPS_API_KEY:
@@ -328,12 +335,10 @@ def google_text_search(query, city="", region=""):
         dprint("google_text_search failed:", query, e)
         return []
 
-
 def is_valid_place(place):
     types = place.get("types", [])
     bad_types = ["school", "university", "gym", "hospital", "lodging", "real_estate_agency", "bank", "shopping_mall", "store"]
     return not any(t in bad_types for t in types)
-
 
 def score_place(item):
     rating = item.get("rating", 0) or 0
@@ -348,7 +353,6 @@ def score_place(item):
         s += 2
     return s
 
-
 def get_fallback_places(region, city):
     candidates = [f"{city} 맛집", f"{city} 전통시장", f"{city} 먹자골목", f"{city} 로컬푸드", f"{city} 분식거리", f"{city} 한식당", f"{city} 국밥거리", f"{city} 카페거리"]
     places = []
@@ -360,7 +364,6 @@ def get_fallback_places(region, city):
         seen.add(key)
         places.append({"title": name, "addr": f"{region} {city}", "raw": {}, "score": 0})
     return places
-
 
 def get_places(region, city):
     pool = []
@@ -390,10 +393,8 @@ def get_places(region, city):
     pool = sorted(pool, key=lambda x: x["score"], reverse=True)
     return pool[:10]
 
-
 def get_overview_from_place(place):
     return place.get("raw", {}).get("formatted_address", "상세 설명이 제공되지 않습니다.")
-
 
 def is_valid_image_url(url):
     if not url or not isinstance(url, str):
@@ -410,7 +411,6 @@ def is_valid_image_url(url):
         return "image" in content_type
     except:
         return False
-
 
 def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""):
     if not GOOGLE_MAPS_API_KEY:
@@ -448,7 +448,6 @@ def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""
         dprint("place photo lookup failed:", place_name, e)
         return []
 
-
 def get_best_place_image(place):
     candidates = []
     title = place.get("title", "").strip()
@@ -478,7 +477,6 @@ def get_best_place_image(place):
         final_images.append(fallback)
     return final_images[:3]
 
-
 def make_intro_prompt(region, city, title):
     return f"""너는 한국 여행 블로그 전문 작성자다.
 
@@ -498,7 +496,6 @@ def make_intro_prompt(region, city, title):
 - <p> 로 시작할 것
 - 중국어/일본어 금지
 """
-
 
 def make_section_prompt(region, city, place_title, addr, overview):
     return f"""너는 한국 여행 블로그 전문 작성자다.
@@ -522,7 +519,6 @@ def make_section_prompt(region, city, place_title, addr, overview):
 - 제목 태그 금지
 - 중국어/일본어 금지
 """
-
 
 def clean_place_title(title, region, city):
     t = str(title or "").strip()
@@ -550,16 +546,13 @@ def clean_place_title(title, region, city):
     t = re.sub(r"\s+", " ", t).strip()
     return t or title
 
-
 def make_title(region, city):
     prefixes = ["현지인 추천", "요즘 핫한", "가성비 좋은", "재방문각", "로컬이 인정한", "숨은", "인기", "꼭 가봐야 할", "요즘 뜨는", "후회 없는", "줄 서는", "분위기 좋은", "실패 없는", "찐", "믿고 가는", "한 번쯤 가볼", "SNS에서 핫한", "주말에 가기 좋은", "입소문 난"]
     suffixes = ["베스트 10", "top10"]
     return f"{region} {city} 여행 {random.choice(prefixes)} 명소 {random.choice(suffixes)}"
 
-
 def generate_random_title(region, city):
     return make_title(region, city)
-
 
 def make_last(region, city):
     return (
@@ -567,7 +560,6 @@ def make_last(region, city):
         f"이번 글에서 소개한 곳들은 {city} 분위기와 잘 어울리는 장소들로 구성했습니다. "
         f"짧은 일정이라도 충분히 만족스러운 여행을 즐길 수 있으니 취향에 맞게 골라보시면 좋습니다."
     )
-
 
 def build_markdown_post(region, city, title, places, thumb_url, date_str):
     intro = generate_ai_review(make_intro_prompt(region, city, title), title)
@@ -624,7 +616,6 @@ image: {thumb_url}
 """
     return md
 
-
 def find_next_row(ws):
     rows = ws.get_all_values()
     for i, row in enumerate(rows[1:], start=2):
@@ -635,7 +626,6 @@ def find_next_row(ws):
         if city and region and code and status != "완":
             return i, region, city
     return None, None, None
-
 
 def git_run(cmd, cwd=None, env=None):
     dprint("git cmd:", " ".join(cmd))
@@ -648,12 +638,13 @@ def git_run(cmd, cwd=None, env=None):
         text=True,
         env=env
     )
-    if result.stdout.strip():
-        dprint("git stdout:", result.stdout.strip())
-    if result.stderr.strip():
-        dprint("git stderr:", result.stderr.strip())
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
+    if stdout.strip():
+        dprint("git stdout:", stdout.strip())
+    if stderr.strip():
+        dprint("git stderr:", stderr.strip())
     return result
-
 
 def show_git_state(repo_path, env):
     try:
@@ -665,12 +656,13 @@ def show_git_state(repo_path, env):
     except Exception as e:
         dprint("show_git_state failed:", e)
 
-
 def push_post_to_github(file_path, repo_path):
     if not TARGET_GITHUB_PAT:
         raise RuntimeError("TARGET_GITHUB_PAT 환경변수가 없습니다.")
     if not os.path.exists(os.path.join(repo_path, ".git")):
         raise RuntimeError(f"Git 저장소가 아닙니다: {repo_path}")
+
+    ensure_gitignore(repo_path)
 
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
@@ -685,7 +677,12 @@ def push_post_to_github(file_path, repo_path):
     git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_path, env=env)
     git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_path, env=env)
 
+    remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
+    git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path, env=env)
+
     git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
+
+    git_run(["git", "reset", "--mixed"], cwd=repo_path, env=env)
     git_run(["git", "rebase", f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
 
     git_run(["git", "add", rel_path], cwd=repo_path, env=env)
@@ -704,16 +701,18 @@ def push_post_to_github(file_path, repo_path):
     if not status:
         return "no changes"
 
-    git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path, env=env)
-
-    remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
-    git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path, env=env)
+    try:
+        git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path, env=env)
+    except subprocess.CalledProcessError as e:
+        dprint("commit failed returncode:", e.returncode)
+        dprint("commit stdout:", e.stdout or "")
+        dprint("commit stderr:", e.stderr or "")
+        raise
 
     show_git_state(repo_path, env)
 
     git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
     return "pushed"
-
 
 def main():
     dprint("DEBUG_MODE ON")
@@ -772,7 +771,6 @@ def main():
 
     log_step(row_idx, f"6단계: GitHub 업로드 {push_state}")
     print(f"[완료] {post_path}")
-
 
 if __name__ == "__main__":
     try:
