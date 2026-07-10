@@ -174,11 +174,13 @@ def log_step(row, msg: str):
     except Exception as e:
         print("⚠️ 로그 기록 실패:", e)
 
+
 def pick_random_background() -> str:
     files = []
     for ext in ("*.png", "*.jpg", "*.jpeg"):
         files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
     return random.choice(files) if files else ""
+
 
 def textwrap_wrap_kor(text, width):
     if not text:
@@ -198,6 +200,7 @@ def textwrap_wrap_kor(text, width):
     if cur:
         lines.append(cur)
     return lines
+
 
 def make_thumb(save_path: str, var_title: str):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -228,6 +231,7 @@ def make_thumb(save_path: str, var_title: str):
         var_y_point += line_height
     canvas = canvas.resize((400, 400))
     canvas.save(save_path, "PNG")
+
 
 def generate_ai_review(prompt, keyword):
     last_err = None
@@ -296,6 +300,7 @@ def generate_ai_review(prompt, keyword):
             dprint("AI 실패 5:", e)
     return f"{keyword} 설명 생성 실패: {last_err}"
 
+
 def get_queries(region, city):
     return [
         f"{region} {city} 맛집",
@@ -311,6 +316,7 @@ def get_queries(region, city):
         f"{city} 대표 맛집",
         f"{city} 인기 맛집",
     ]
+
 
 def google_text_search(query, city="", region=""):
     if not GOOGLE_MAPS_API_KEY:
@@ -328,10 +334,12 @@ def google_text_search(query, city="", region=""):
         dprint("google_text_search failed:", query, e)
         return []
 
+
 def is_valid_place(place):
     types = place.get("types", [])
     bad_types = ["school", "university", "gym", "hospital", "lodging", "real_estate_agency", "bank", "shopping_mall", "store"]
     return not any(t in bad_types for t in types)
+
 
 def score_place(item):
     rating = item.get("rating", 0) or 0
@@ -346,6 +354,7 @@ def score_place(item):
         s += 2
     return s
 
+
 def get_fallback_places(region, city):
     candidates = [f"{city} 맛집", f"{city} 전통시장", f"{city} 먹자골목", f"{city} 로컬푸드", f"{city} 분식거리", f"{city} 한식당", f"{city} 국밥거리", f"{city} 카페거리"]
     places = []
@@ -357,6 +366,7 @@ def get_fallback_places(region, city):
         seen.add(key)
         places.append({"title": name, "addr": f"{region} {city}", "raw": {}, "score": 0})
     return places
+
 
 def get_places(region, city):
     pool = []
@@ -389,8 +399,10 @@ def get_places(region, city):
     dprint("final places:", [p["title"] for p in pool[:10]])
     return pool[:10]
 
+
 def get_overview_from_place(place):
     return place.get("raw", {}).get("formatted_address", "상세 설명이 제공되지 않습니다.")
+
 
 def is_valid_image_url(url):
     if not url or not isinstance(url, str):
@@ -408,6 +420,7 @@ def is_valid_image_url(url):
     except Exception as e:
         dprint("image url check failed:", url, e)
         return False
+
 
 def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""):
     if not GOOGLE_MAPS_API_KEY:
@@ -640,8 +653,13 @@ def find_next_row(ws):
         dprint("skipped row", i, "reasons:", reasons)
     return None, None, None
 
-def git_run(cmd, cwd=None):
-    subprocess.run(cmd, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+def git_run(cmd, cwd=None, env=None):
+    result = subprocess.run(cmd, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    if result.stdout:
+        dprint("git stdout:", result.stdout.strip())
+    if result.stderr:
+        dprint("git stderr:", result.stderr.strip())
+    return result
 
 def push_post_to_github(file_path, repo_path):
     if not TARGET_GITHUB_PAT:
@@ -649,10 +667,15 @@ def push_post_to_github(file_path, repo_path):
     if not os.path.exists(os.path.join(repo_path, ".git")):
         raise RuntimeError(f"Git 저장소가 아닙니다: {repo_path}")
 
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+
     rel_path = os.path.relpath(file_path, repo_path)
-    git_run(["git", "add", rel_path], cwd=repo_path)
-    git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_path)
-    git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_path)
+    git_run(["git", "add", rel_path], cwd=repo_path, env=env)
+    git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_path, env=env)
+    git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_path, env=env)
+
+    git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
 
     status = subprocess.run(
         ["git", "status", "--porcelain"],
@@ -660,18 +683,19 @@ def push_post_to_github(file_path, repo_path):
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
+        env=env
     ).stdout.strip()
     dprint("git status:", status)
 
     if not status:
         return "no changes"
 
-    git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path)
+    git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path, env=env)
 
     remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
-    git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path)
-    git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path)
+    git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path, env=env)
+    git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
 
     return "pushed"
 
