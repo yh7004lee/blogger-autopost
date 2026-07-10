@@ -35,7 +35,6 @@ except Exception:
 
 import feedparser
 
-
 DEBUG_MODE = True
 
 def dprint(*args):
@@ -85,16 +84,11 @@ THUMB_DIR = "thumbnails"
 def get_sheet3():
     service_account_file = "sheetapi.json"
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    dprint("loading service account:", service_account_file)
     creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
-    dprint("spreadsheet title:", sh.title)
-    dprint("looking for sheet gid:", SHEET_GID)
     for ws in sh.worksheets():
-        dprint("worksheet:", ws.title, "id:", ws.id, "rows:", ws.row_count, "cols:", ws.col_count)
         if ws.id == SHEET_GID:
-            dprint("matched worksheet:", ws.title)
             return ws
     raise RuntimeError(f"gid={SHEET_GID} 시트를 찾지 못했습니다.")
 
@@ -373,7 +367,6 @@ def get_places(region, city):
     seen = set()
     for q in get_queries(region, city):
         results = google_text_search(q, city=city, region=region)
-        dprint("query:", q, "results:", len(results))
         for r in results:
             name = r.get("name")
             if not name:
@@ -393,10 +386,8 @@ def get_places(region, city):
         if len(pool) >= 10:
             break
     if not pool:
-        dprint("no google places found, using fallback")
         pool = get_fallback_places(region, city)
     pool = sorted(pool, key=lambda x: x["score"], reverse=True)
-    dprint("final places:", [p["title"] for p in pool[:10]])
     return pool[:10]
 
 
@@ -417,8 +408,7 @@ def is_valid_image_url(url):
             return False
         content_type = res.headers.get("content-type", "").lower()
         return "image" in content_type
-    except Exception as e:
-        dprint("image url check failed:", url, e)
+    except:
         return False
 
 
@@ -458,6 +448,7 @@ def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""
         dprint("place photo lookup failed:", place_name, e)
         return []
 
+
 def get_best_place_image(place):
     candidates = []
     title = place.get("title", "").strip()
@@ -487,6 +478,7 @@ def get_best_place_image(place):
         final_images.append(fallback)
     return final_images[:3]
 
+
 def make_intro_prompt(region, city, title):
     return f"""너는 한국 여행 블로그 전문 작성자다.
 
@@ -506,6 +498,7 @@ def make_intro_prompt(region, city, title):
 - <p> 로 시작할 것
 - 중국어/일본어 금지
 """
+
 
 def make_section_prompt(region, city, place_title, addr, overview):
     return f"""너는 한국 여행 블로그 전문 작성자다.
@@ -529,6 +522,7 @@ def make_section_prompt(region, city, place_title, addr, overview):
 - 제목 태그 금지
 - 중국어/일본어 금지
 """
+
 
 def clean_place_title(title, region, city):
     t = str(title or "").strip()
@@ -556,13 +550,16 @@ def clean_place_title(title, region, city):
     t = re.sub(r"\s+", " ", t).strip()
     return t or title
 
+
 def make_title(region, city):
     prefixes = ["현지인 추천", "요즘 핫한", "가성비 좋은", "재방문각", "로컬이 인정한", "숨은", "인기", "꼭 가봐야 할", "요즘 뜨는", "후회 없는", "줄 서는", "분위기 좋은", "실패 없는", "찐", "믿고 가는", "한 번쯤 가볼", "SNS에서 핫한", "주말에 가기 좋은", "입소문 난"]
     suffixes = ["베스트 10", "top10"]
     return f"{region} {city} 여행 {random.choice(prefixes)} 명소 {random.choice(suffixes)}"
 
+
 def generate_random_title(region, city):
     return make_title(region, city)
+
 
 def make_last(region, city):
     return (
@@ -570,6 +567,7 @@ def make_last(region, city):
         f"이번 글에서 소개한 곳들은 {city} 분위기와 잘 어울리는 장소들로 구성했습니다. "
         f"짧은 일정이라도 충분히 만족스러운 여행을 즐길 수 있으니 취향에 맞게 골라보시면 좋습니다."
     )
+
 
 def build_markdown_post(region, city, title, places, thumb_url, date_str):
     intro = generate_ai_review(make_intro_prompt(region, city, title), title)
@@ -626,40 +624,47 @@ image: {thumb_url}
 """
     return md
 
+
 def find_next_row(ws):
     rows = ws.get_all_values()
-    dprint("total rows from get_all_values:", len(rows))
-    if rows:
-        dprint("header preview:", rows[:3])
     for i, row in enumerate(rows[1:], start=2):
         city = row[0].strip() if len(row) > 0 and row[0] else ""
         region = row[1].strip() if len(row) > 1 and row[1] else ""
         code = row[2].strip() if len(row) > 2 and row[2] else ""
         status = row[5].strip() if len(row) > 5 and row[5] else ""
-        dprint("row", i, "raw:", row)
-        dprint("parsed:", {"city": city, "region": region, "code": code, "status": status})
-        reasons = []
-        if not city:
-            reasons.append("city empty")
-        if not region:
-            reasons.append("region empty")
-        if not code:
-            reasons.append("code empty")
-        if status == "완":
-            reasons.append("status already complete")
         if city and region and code and status != "완":
-            dprint("selected row:", i, region, city)
             return i, region, city
-        dprint("skipped row", i, "reasons:", reasons)
     return None, None, None
 
+
 def git_run(cmd, cwd=None, env=None):
-    result = subprocess.run(cmd, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
-    if result.stdout:
+    dprint("git cmd:", " ".join(cmd))
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env
+    )
+    if result.stdout.strip():
         dprint("git stdout:", result.stdout.strip())
-    if result.stderr:
+    if result.stderr.strip():
         dprint("git stderr:", result.stderr.strip())
     return result
+
+
+def show_git_state(repo_path, env):
+    try:
+        dprint("repo_path:", repo_path)
+        git_run(["git", "rev-parse", "--show-toplevel"], cwd=repo_path, env=env)
+        git_run(["git", "remote", "-v"], cwd=repo_path, env=env)
+        git_run(["git", "branch", "--show-current"], cwd=repo_path, env=env)
+        git_run(["git", "status", "--short"], cwd=repo_path, env=env)
+    except Exception as e:
+        dprint("show_git_state failed:", e)
+
 
 def push_post_to_github(file_path, repo_path):
     if not TARGET_GITHUB_PAT:
@@ -671,11 +676,23 @@ def push_post_to_github(file_path, repo_path):
     env["GIT_TERMINAL_PROMPT"] = "0"
 
     rel_path = os.path.relpath(file_path, repo_path)
+    dprint("target repo:", TARGET_REPO)
+    dprint("target branch:", TARGET_BRANCH)
+    dprint("adding file:", rel_path)
+
+    show_git_state(repo_path, env)
+
     git_run(["git", "add", rel_path], cwd=repo_path, env=env)
     git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_path, env=env)
     git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_path, env=env)
 
-    git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
+    try:
+        git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
+    except subprocess.CalledProcessError as e:
+        dprint("fetch failed returncode:", e.returncode)
+        dprint("fetch stdout:", e.stdout)
+        dprint("fetch stderr:", e.stderr)
+        raise
 
     status = subprocess.run(
         ["git", "status", "--porcelain"],
@@ -686,23 +703,42 @@ def push_post_to_github(file_path, repo_path):
         text=True,
         env=env
     ).stdout.strip()
-    dprint("git status:", status)
+    dprint("git status after add:", status if status else "(clean)")
 
     if not status:
         return "no changes"
 
-    git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path, env=env)
+    try:
+        git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path, env=env)
+    except subprocess.CalledProcessError as e:
+        dprint("commit failed returncode:", e.returncode)
+        dprint("commit stdout:", e.stdout)
+        dprint("commit stderr:", e.stderr)
+        raise
 
     remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
-    git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path, env=env)
-    git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
+    try:
+        git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path, env=env)
+    except subprocess.CalledProcessError as e:
+        dprint("remote set-url failed returncode:", e.returncode)
+        dprint("remote set-url stdout:", e.stdout)
+        dprint("remote set-url stderr:", e.stderr)
+        raise
 
-    return "pushed"
+    show_git_state(repo_path, env)
+
+    try:
+        git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
+        return "pushed"
+    except subprocess.CalledProcessError as e:
+        dprint("push failed returncode:", e.returncode)
+        dprint("push stdout:", e.stdout)
+        dprint("push stderr:", e.stderr)
+        raise
+
 
 def main():
     dprint("DEBUG_MODE ON")
-    dprint("SHEET_ID:", SHEET_ID)
-    dprint("SHEET_GID:", SHEET_GID)
     dprint("REPO_PATH:", REPO_PATH)
     dprint("TARGET_REPO:", TARGET_REPO)
     dprint("TARGET_BRANCH:", TARGET_BRANCH)
