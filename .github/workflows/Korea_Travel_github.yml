@@ -14,20 +14,21 @@ on:
     # - cron: "12 19 * * *"
     # - cron: "36 21 * * *"
 
-
 jobs:
   autopost:
     runs-on: windows-latest
 
-
     env:
-      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}       
+      API_KEYS_JSON: ${{ secrets.API_KEYS_JSON }}
       SECRETS_API: ${{ secrets.SECRETS_API }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
-   
+      TARGET_GITHUB_PAT: ${{ secrets.TARGET_GITHUB_PAT }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -72,8 +73,3 @@ jobs:
       # ✅ 실행할 파이썬 파일 (여기만 변경)
       - name: Run autopost script
         run: python Korea_Travle_Github.py
-
-
-
-
-
