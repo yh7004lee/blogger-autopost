@@ -574,25 +574,28 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
         sec = []
         sec.append(f"## {idx}. {section_title}")
         sec.append("")
+        for img in images[:3]:
+            sec.append(f"![{clean_title}]({img})")
+            sec.append("")
         if images:
-            sec.append(f"![{clean_title}]({images[0]})")
+            sec.append(f"[구글 지도에서 위치 확인하기](https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(region + ' ' + city + ' ' + clean_title)})")
             sec.append("")
         if item.get("addr"):
             sec.append(f"- 주소: {item['addr']}")
             sec.append("")
         sec.append(body)
         sec.append("")
-        sec.append(f"[구글 지도에서 위치 확인하기](https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(region + ' ' + city + ' ' + clean_title)})")
-        sec.append("")
         sections.append("\n".join(sec))
 
     last_text = make_last(region, city)
 
+    cat = "국내여행" if "해외" not in region else "해외여행"
+
     md = f"""---
 title: "{title}"
 date: {date_str}
-categories: [여행]
-tags: [국내여행, {city}, {region}]
+categories: [{cat}]
+tags: [{cat}, {city}, {region}]
 image: {thumb_url}
 ---
 
@@ -600,12 +603,7 @@ image: {thumb_url}
 
 ![{title}]({thumb_url})
 
-<!--more-->
-
-## 목차
-- 지역 소개
-- 추천 장소
-- 총평
+## {city} 여행
 
 {chr(10).join(sections)}
 
@@ -668,7 +666,6 @@ def push_post_to_github(file_path, repo_path):
     git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path, env=env)
 
     git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
-
     git_run(["git", "switch", "main"], cwd=repo_path, env=env)
     git_run(["git", "reset", "--hard", f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
 
