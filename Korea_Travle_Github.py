@@ -12,6 +12,8 @@ import traceback
 import urllib.parse
 import glob
 import pickle
+import subprocess
+from datetime import datetime
 from bs4 import BeautifulSoup
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -54,6 +56,12 @@ DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "")
 GOOGLE_MAPS_API_KEY = "AIzaSyBiLiWI4rTtdk_IW-f26uEIkhnKjEBHI1w"
 TOUR_API_KEY = secrets.get("TOUR_API_KEY", "")
 
+TARGET_GITHUB_PAT = os.getenv("TARGET_GITHUB_PAT", "")
+TARGET_REPO = "jm7004lee/jm7004lee.github.io"
+TARGET_BRANCH = "main"
+POSTS_DIR = "_posts"
+LOCAL_REPO_PATH = os.getenv("TARGET_REPO_PATH", os.getcwd())
+
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 genai_client = None
 if GEMINI_API_KEY and genai:
@@ -62,7 +70,6 @@ if GEMINI_API_KEY and genai:
     except Exception:
         genai_client = None
 
-BLOG_ID = "6498243474990332474"
 HISTORY_PATH = "processed_regions_blogger.json"
 SHEET_GID = 2131907983
 
@@ -128,18 +135,6 @@ def upload_to_drive(file_path, file_name):
         body={"type": "anyone", "role": "reader", "allowFileDiscovery": False}
     ).execute()
     return f"https://lh3.googleusercontent.com/d/{uploaded['id']}"
-
-
-def get_blogger_service():
-    if not os.path.exists("blogger_token.json"):
-        raise RuntimeError("blogger_token.json 없음 — Blogger 사용자 인증 정보가 필요합니다.")
-    with open("blogger_token.json", "r", encoding="utf-8") as f:
-        data = json.load(f)
-    creds = UserCredentials.from_authorized_user_info(data, ["https://www.googleapis.com/auth/blogger"])
-    return build("blogger", "v3", credentials=creds)
-
-
-blog_handler = get_blogger_service()
 
 
 def load_processed_regions():
@@ -509,7 +504,7 @@ def get_best_place_image(place):
 
 def make_intro_prompt(region, city, title):
     return f"""
-너는 한국 맛집 블로그 전문 작성자다.
+너는 한국 여행 블로그 전문 작성자다.
 
 아래 정보를 바탕으로 서론만 작성해라.
 - 지역: {region}
@@ -519,37 +514,37 @@ def make_intro_prompt(region, city, title):
 조건:
 - 5 문장
 - 핵심 키워드 자연스럽게 포함
-- 첫 문장에서 독자의 식욕과 호기심을 강하게 끌 것
+- 첫 문장에서 독자의 흥미를 끌 것
 - 너무 짧지 않게, 그러나 장황하지 않게
-- 지역 분위기, 맛집 탐방 기대감, 추천 이유가 느껴지게
-- HTML 사용 가능하지만 <p>와 <br>만 사용
-- <p data-ke-size="size18"> 로 시작할 것
+- 지역 분위기, 여행 기대감, 추천 이유가 느껴지게
 - 마크다운 금지
+- <p>와 <br> 태그만 사용 가능
+- <p> 로 시작할 것
 - 중국어/일본어 금지
 """
 
 
 def make_section_prompt(region, city, place_title, addr, overview):
     return f"""
-너는 한국 맛집 블로그 전문 작성자다.
+너는 한국 여행 블로그 전문 작성자다.
 
-맛집 정보:
+여행 정보:
 - 지역: {region}
 - 도시: {city}
-- 맛집명: {place_title}
+- 장소명: {place_title}
 - 주소: {addr}
 - 참고설명: {overview}
 
 작성 조건:
 - 자연스러운 한국어
-- 맛집 블로그 스타일
+- 여행 블로그 스타일
 - 4문단
 - 350자 이상
-- 음식의 특징, 분위기, 추천 포인트, 방문 팁을 포함
-- HTML 사용 가능, <p>와 <br>만 사용
-- <p data-ke-size="size18"> 로 시작
-- 제목 태그 금지
+- 장소의 특징, 분위기, 추천 포인트, 방문 팁을 포함
 - 마크다운 금지
+- <p>와 <br> 태그만 사용 가능
+- <p> 로 시작
+- 제목 태그 금지
 - 중국어/일본어 금지
 """
 
@@ -606,7 +601,6 @@ def make_title(region, city):
         "요즘 뜨는",
         "후회 없는",
         "줄 서는",
-        "웨이팅 있는",
         "분위기 좋은",
         "실패 없는",
         "찐",
@@ -617,7 +611,7 @@ def make_title(region, city):
         "입소문 난",
     ]
     suffixes = ["베스트 10", "top10"]
-    return f"{region} {city} 맛집 {random.choice(prefixes)} 식당 {random.choice(suffixes)}"
+    return f"{region} {city} 여행 {random.choice(prefixes)} 명소 {random.choice(suffixes)}"
 
 
 def generate_random_title(region, city):
@@ -626,110 +620,72 @@ def generate_random_title(region, city):
 
 def make_last(region, city):
     return (
-        f"{city} 맛집은 지역 특색과 개성이 잘 드러나는 곳이 많아서 동선에 맞춰 고르면 만족도가 높습니다. "
-        f"이번 글에서 소개한 곳들은 {city} 분위기와 잘 어울리는 식당들로 구성했습니다. "
-        f"짧은 일정이라도 충분히 만족스러운 식사를 즐길 수 있으니 취향에 맞게 골라보시면 좋습니다."
+        f"{city} 여행지는 지역 특색과 개성이 잘 드러나는 곳이 많아서 동선에 맞춰 고르면 만족도가 높습니다. "
+        f"이번 글에서 소개한 곳들은 {city} 분위기와 잘 어울리는 장소들로 구성했습니다. "
+        f"짧은 일정이라도 충분히 만족스러운 여행을 즐길 수 있으니 취향에 맞게 골라보시면 좋습니다."
     )
 
 
-def build_post_html(region, city, title, places, thumb_url):
-    intro_html = generate_ai_review(make_intro_prompt(region, city, title), title)
-    intro_html = intro_html.replace('data-ke-size="size16"', 'data-ke-size="size18"')
-    intro_html = intro_html.replace("size16", "size18")
+def markdown_escape(text):
+    if text is None:
+        return ""
+    return str(text).replace("\r\n", "\n").replace("\r", "\n").strip()
 
-    last_text = make_last(region, city)
-    sections_html = ""
-    fallback_img = "https://via.placeholder.com/800x500?text=No+Image"
-    H2_STYLE = ""
+
+def build_markdown_post(region, city, title, places, thumb_url, date_str):
+    intro = generate_ai_review(make_intro_prompt(region, city, title), title)
+    sections = []
 
     for idx, item in enumerate(places, start=1):
         clean_title = clean_place_title(item["title"], region, city)
         section_title = f"{city} {clean_title}"
         images = item.get("images", [])
-        img_html = ""
+        overview = item.get("overview", "")
+        body = generate_ai_review(make_section_prompt(region, city, clean_title, item.get("addr", ""), overview), clean_title)
 
-        if len(images) >= 3:
-            img_html = f"""
-<div style="text-align:center; margin:20px 0;">
-    <a href="{images[0]}" target="_blank"><img src="{images[0]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px; margin-bottom:10px;" alt="{clean_title} 1"></a><br>
-    <a href="{images[1]}" target="_blank"><img src="{images[1]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px; margin-bottom:10px;" alt="{clean_title} 2"></a><br>
-    <a href="{images[2]}" target="_blank"><img src="{images[2]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px;" alt="{clean_title} 3"></a>
-</div>
-"""
-        elif len(images) == 2:
-            img_html = f"""
-<div style="text-align:center; margin:20px 0;">
-    <a href="{images[0]}" target="_blank"><img src="{images[0]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px; margin-bottom:10px;" alt="{clean_title} 1"></a><br>
-    <a href="{images[1]}" target="_blank"><img src="{images[1]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px;" alt="{clean_title} 2"></a>
-</div>
-"""
-        elif len(images) == 1:
-            img_html = f"""
-<div style="text-align:center; margin:20px 0;">
-    <a href="{images[0]}" target="_blank"><img src="{images[0]}" onerror="this.onerror=null;this.src='{fallback_img}'" style="max-width:100%; height:auto; border-radius:8px;" alt="{clean_title} 1"></a>
-</div>
-"""
-        else:
-            img_html = f"""
-<div style="text-align:center; margin:20px 0;">
-    <img src="{fallback_img}" style="max-width:100%; height:auto; border-radius:8px;" alt="{clean_title}">
-</div>
-"""
+        sec = []
+        sec.append(f"## {idx}. {section_title}")
+        sec.append("")
+        if images:
+            sec.append(f"![{clean_title}]({images[0]})")
+            sec.append("")
+        if item.get("addr"):
+            sec.append(f"- 주소: {item['addr']}")
+            sec.append("")
+        sec.append(body)
+        sec.append("")
+        sec.append(f"[구글 지도에서 위치 확인하기](https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(region + ' ' + city + ' ' + clean_title)})")
+        sec.append("")
+        sections.append("\n".join(sec))
 
-        map_link_url = "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(f"{region} {city} {clean_title}")
-        map_html = f"""
-<div style="text-align:center; margin-bottom:25px;">
-    <a href="{map_link_url}" target="_blank"
-       style="color:#1a2a40; font-weight:bold; text-decoration:underline; font-size:15px;">
-       🗺️ 구글 지도에서 위치 확인하기
-    </a>
-</div>
+    last_text = make_last(region, city)
+
+    md = f"""---
+title: "{title}"
+date: {date_str}
+categories: [여행]
+tags: [국내여행, {city}, {region}]
+image: {thumb_url}
+---
+
+{intro}
+
+![{title}]({thumb_url})
+
+<!--more-->
+
+## 목차
+- 지역 소개
+- 추천 장소
+- 총평
+
+{chr(10).join(sections)}
+
+## {city} 여행 총평
+
+{last_text}
 """
-
-        section_body = generate_ai_review(make_section_prompt(region, city, clean_title, item.get("addr", ""), item.get("overview", "")), clean_title)
-        section_body = section_body.replace('data-ke-size="size16"', 'data-ke-size="size18"')
-        section_body = section_body.replace("size16", "size18")
-
-        sections_html += f"""
-<br><br>
-<h2 style="{H2_STYLE}">{idx}. {section_title}</h2>
-<br>
-{img_html}
-<br>
-{map_html}
-<br><br>
-{section_body}
-<br><br>
-"""
-
-    ai_review_text = f"<p data-ke-size='size18'>{city}의 대표 맛집들을 중심으로 코스를 구성하면 훨씬 만족도 높은 식도락 여행이 됩니다.</p>"
-    labels = ["맛집", "국내여행"]
-
-    html_content = f"""
-  <p data-ke-size="size18"><br /></p>
-  {intro_html}
-  <p style="text-align:center;">
-  <p data-ke-size="size18"><br /></p>  
-    <img src="{thumb_url}" alt="{title} 썸네일" style="max-width:100%; height:auto; border-radius:8px;">
-  </p>
-  <p data-ke-size="size18"><br /></p>  
-  <div style="padding:12px;">
-  <span><!--more--></span>
-  <p data-ke-size="size18"><br /></p>
-  <p data-ke-size="size18"><br /></p>
-  <div class="mbtTOC"><button>  목차 </button>
-  <ul data-ke-list-type="disc" id="mbtTOC" style="list-style-type: disc;"></ul>
-  </div>
-  
-  {sections_html}
-  <h2 style="{H2_STYLE}">{city} 맛집 총평</h2>
-  {ai_review_text}
-  <p data-ke-size="size18">{last_text}</p>
-  <div style="margin-top:20px; color:#888;">{' '.join(['#' + x for x in labels])}</div>
-  <script>mbtTOC();</script>
-</div>
-"""
-    return html_content, labels
+    return md
 
 
 def find_next_row(ws):
@@ -738,10 +694,50 @@ def find_next_row(ws):
         city = row[0].strip() if len(row) > 0 and row[0] else ""
         region = row[1].strip() if len(row) > 1 and row[1] else ""
         code = row[2].strip() if len(row) > 2 and row[2] else ""
-        status = row[4].strip() if len(row) > 4 and row[4] else ""
+        status = row[3].strip() if len(row) > 3 and row[3] else ""
         if city and region and code and status != "완":
             return i, region, city
     return None, None, None
+
+
+def git_run(cmd, cwd=None):
+    subprocess.run(cmd, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+
+def push_post_to_github(file_path, commit_message):
+    if not TARGET_GITHUB_PAT:
+        raise RuntimeError("TARGET_GITHUB_PAT 환경변수가 없습니다.")
+    if not os.path.exists(os.path.join(LOCAL_REPO_PATH, ".git")):
+        raise RuntimeError(f"Git 저장소가 아닙니다: {LOCAL_REPO_PATH}")
+
+    rel_path = os.path.relpath(file_path, LOCAL_REPO_PATH)
+    git_run(["git", "add", rel_path], cwd=LOCAL_REPO_PATH)
+    git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=LOCAL_REPO_PATH)
+    git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=LOCAL_REPO_PATH)
+
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=LOCAL_REPO_PATH,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    ).stdout.strip()
+
+    if not status:
+        return "no changes"
+
+    git_run(["git", "commit", "-m", commit_message], cwd=LOCAL_REPO_PATH)
+
+    env = os.environ.copy()
+    env["GIT_ASKPASS"] = ""
+    env["GIT_TERMINAL_PROMPT"] = "0"
+
+    remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
+    git_run(["git", "remote", "set-url", "origin", remote_url], cwd=LOCAL_REPO_PATH)
+    git_run(["git", "push", "origin", TARGET_BRANCH], cwd=LOCAL_REPO_PATH)
+
+    return "pushed"
 
 
 def main():
@@ -764,13 +760,15 @@ def main():
         p["title"] = clean_place_title(p["title"], region, city)
         p["images"] = get_best_place_image(p)
         p["overview"] = get_overview_from_place(p)
-        p["desc"] = generate_ai_review(make_section_prompt(region, city, p["title"], p.get("addr", ""), p["overview"]), p["title"])
-        p["desc"] = p["desc"].replace('data-ke-size="size16"', 'data-ke-size="size18"')
-        p["desc"] = p["desc"].replace("size16", "size18")
         time.sleep(0.4)
 
     safe_title = re.sub(r'[\\/:*?"<>|.]', "_", title)
-    os.makedirs(THUMB_DIR, exist_ok=True)
+    date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S +0900")
+    post_filename = f"{datetime.now().strftime('%Y-%m-%d')}-{safe_title}.md"
+    post_path = os.path.join(LOCAL_REPO_PATH, POSTS_DIR, post_filename)
+
+    os.makedirs(os.path.dirname(post_path), exist_ok=True)
+
     thumb_path = os.path.join(THUMB_DIR, f"{safe_title}.png")
     make_thumb(thumb_path, title)
     log_step(row_idx, "3단계: 썸네일 생성 완료")
@@ -778,37 +776,23 @@ def main():
     thumb_url = upload_to_drive(thumb_path, f"{safe_title}.png")
     log_step(row_idx, "4단계: 썸네일 Drive 업로드 완료")
 
-    html_content, labels = build_post_html(region, city, title, places, thumb_url)
+    markdown_content = build_markdown_post(region, city, title, places, thumb_url, date_str)
+    with open(post_path, "w", encoding="utf-8") as f:
+        f.write(markdown_content)
 
-    post_body = {
-        "content": html_content,
-        "title": title,
-        "labels": labels,
-        "blog": {"id": BLOG_ID}
-    }
+    log_step(row_idx, "5단계: Markdown 파일 생성 완료")
 
+    commit_message = f"Add post: {title}"
+    push_state = push_post_to_github(post_path, commit_message)
+
+    ws3.update_cell(row_idx, 4, "완")
     try:
-        res = blog_handler.posts().insert(
-            blogId=BLOG_ID,
-            body=post_body,
-            isDraft=False,
-            fetchImages=True
-        ).execute()
+        ws3.update_cell(row_idx, 15, f"https://github.com/{TARGET_REPO}/blob/{TARGET_BRANCH}/{POSTS_DIR}/{post_filename}")
+    except:
+        pass
 
-        ws3.update_cell(row_idx, 5, "완")
-        try:
-            ws3.update_cell(row_idx, 15, res.get("url", ""))
-        except:
-            pass
-
-        log_step(row_idx, f"5단계: Blogger 업로드 성공 ({res.get('url', '')})")
-        print(f"[완료] 블로그 포스팅: {res.get('url', '')}")
-        save_processed_region(region, city)
-
-    except Exception as e:
-        tb = traceback.format_exc().replace("\n", " | ")
-        log_step(row_idx, f"5단계: Blogger 업로드 실패: {e} | {tb}")
-        raise
+    log_step(row_idx, f"6단계: GitHub 업로드 {push_state}")
+    print(f"[완료] {post_path}")
 
 
 if __name__ == "__main__":
