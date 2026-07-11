@@ -502,7 +502,7 @@ def get_places(region, city):
     # 3차: Google 보조
     if len(places) < 10 and GOOGLE_MAPS_API_KEY:
         print("🔄 Google Places 보조 수집 시작")
-        for q in get_queries(city):
+        for q in get_queries(region, city):
             results = google_text_search(q)
             print(f"[Google] {q} -> {len(results)}개")
             for r in results:
