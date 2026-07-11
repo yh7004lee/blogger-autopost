@@ -394,81 +394,189 @@ def get_overview_from_place(place):
 
 def is_valid_image_url(url):
     if not url or not isinstance(url, str):
-        return False
+        return False, "empty_url"
+
     url = url.strip()
     if not url.startswith(("http://", "https://")):
-        return False
+        return False, "invalid_scheme"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
-        res = requests.get(url, headers=headers, timeout=10, stream=True)
+        # 1차: HEAD로 가볍게 확인
+        try:
+            head = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
+            ctype = (head.headers.get("content-type") or "").lower()
+            if head.status_code >= 400:
+                return False, f"head_status_{head.status_code}"
+            if ctype and not ctype.startswith("image/"):
+                return False, f"head_not_image_{ctype}"
+        except Exception as e:
+            dprint("HEAD check failed:", url, e)
+
+        # 2차: GET으로 실제 바이트 확인
+        res = requests.get(url, headers=headers, timeout=15, allow_redirects=True, stream=True)
         if res.status_code != 200:
-            return False
-        content_type = res.headers.get("content-type", "").lower()
-        return "image" in content_type
-    except:
-        return False
+            return False, f"get_status_{res.status_code}"
+
+        content_type = (res.headers.get("content-type") or "").lower()
+        if not content_type.startswith("image/"):
+            return False, f"get_not_image_{content_type}"
+
+        content = res.content
+        if not content or len(content) < 100:
+            return False, "too_small"
+
+        # 3차: PIL로 진짜 이미지인지 검증
+        try:
+            from io import BytesIO
+            img = Image.open(BytesIO(content))
+            img.verify()
+        except Exception as e:
+            return False, f"pil_verify_failed_{type(e).__name__}"
+
+        return True, "ok"
+
+    except Exception as e:
+        return False, f"exception_{type(e).__name__}"
+
 
 def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""):
     if not GOOGLE_MAPS_API_KEY:
         return []
+
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
         q = " ".join([x for x in [region, city, place_name] if x]).strip()
+
         search_url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-        search_params = {"query": q, "key": GOOGLE_MAPS_API_KEY, "language": "ko"}
+        search_params = {
+            "query": q,
+            "key": GOOGLE_MAPS_API_KEY,
+            "language": "ko"
+        }
+
         res = requests.get(search_url, params=search_params, headers=headers, timeout=15)
         data = res.json()
         if not data.get("results"):
+            dprint("photo search no results:", q)
             return []
+
         place_id = data["results"][0].get("place_id")
         if not place_id:
+            dprint("photo search no place_id:", q)
             return []
+
         details_url = "https://maps.googleapis.com/maps/api/place/details/json"
-        details_params = {"place_id": place_id, "fields": "photos", "key": GOOGLE_MAPS_API_KEY, "language": "ko"}
+        details_params = {
+            "place_id": place_id,
+            "fields": "photos",
+            "key": GOOGLE_MAPS_API_KEY,
+            "language": "ko"
+        }
+
         res2 = requests.get(details_url, params=details_params, headers=headers, timeout=15)
         data2 = res2.json()
+
         photos = data2.get("result", {}).get("photos", [])
         if isinstance(photos, dict):
             photos = [photos]
+
         photo_urls = []
         for p in photos[:max_photos]:
             ref = p.get("photo_reference")
             if not ref:
                 continue
-            photo_urls.append("https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photo_reference=" + ref + f"&key={GOOGLE_MAPS_API_KEY}")
+            url = (
+                "https://maps.googleapis.com/maps/api/place/photo"
+                f"?maxwidth=1600&photo_reference={ref}&key={GOOGLE_MAPS_API_KEY}"
+            )
+            photo_urls.append(url)
+
+        dprint("photo candidates:", q, len(photo_urls))
         return photo_urls
+
     except Exception as e:
         dprint("place photo lookup failed:", place_name, e)
         return []
 
+
 def get_best_place_image(place):
     candidates = []
-    title = place.get("title", "").strip()
-    region = place.get("region", "").strip()
-    city = place.get("city", "").strip()
+    title = str(place.get("title", "")).strip()
+    region = str(place.get("region", "")).strip()
+    city = str(place.get("city", "")).strip()
+
     if title:
-        candidates.extend(get_google_place_photos_by_name(title, max_photos=3, region=region, city=city))
-    candidates = [x.strip() for x in candidates if x and isinstance(x, str)]
-    verified = []
+        candidates.extend(get_google_place_photos_by_name(title, max_photos=5, region=region, city=city))
+
+    # 후보 중복 제거
+    cleaned = []
     seen = set()
     for url in candidates:
+        if not url or not isinstance(url, str):
+            continue
+        url = url.strip()
         if url in seen:
             continue
         seen.add(url)
-        if is_valid_image_url(url):
+        cleaned.append(url)
+
+    verified = []
+    for idx, url in enumerate(cleaned, start=1):
+        ok, reason = is_valid_image_url(url)
+        dprint(f"[IMAGE CHECK] {title} #{idx} ok={ok} reason={reason} url={url}")
+        if ok:
             verified.append(url)
         if len(verified) >= 3:
             break
-    final_images = verified[:]
-    for url in candidates:
-        if len(final_images) >= 3:
-            break
-        if url not in final_images:
-            final_images.append(url)
+
+    # 검증된 이미지가 부족하면 다른 후보를 더 탐색
+    if len(verified) < 3:
+        extra_queries = []
+        base = f"{region} {city} {title}".strip()
+        if city and title:
+            extra_queries += [
+                f"{city} {title} 맛집",
+                f"{city} {title}",
+                f"{base} 사진",
+                f"{base} 음식점",
+            ]
+
+        for q in extra_queries:
+            if len(verified) >= 3:
+                break
+
+            try:
+                search_url = "https://www.google.com/search"
+                params = {"q": q, "tbm": "isch", "hl": "ko"}
+                headers = {"User-Agent": "Mozilla/5.0"}
+                res = requests.get(search_url, params=params, headers=headers, timeout=15)
+                html = res.text
+
+                urls = re.findall(r'https?://[^"\']+\.(?:jpg|jpeg|png|webp)(?:\?[^"\']*)?', html, re.I)
+                for u in urls:
+                    u = u.replace("\\u003d", "=").replace("\\u0026", "&")
+                    if u in seen:
+                        continue
+                    seen.add(u)
+                    ok, reason = is_valid_image_url(u)
+                    dprint(f"[IMAGE EXTRA CHECK] {q} ok={ok} reason={reason} url={u}")
+                    if ok:
+                        verified.append(u)
+                    if len(verified) >= 3:
+                        break
+            except Exception as e:
+                dprint("extra image search failed:", q, e)
+
     fallback = "https://via.placeholder.com/800x500?text=No+Image"
-    while len(final_images) < 3:
-        final_images.append(fallback)
-    return final_images[:3]
+    while len(verified) < 3:
+        verified.append(fallback)
+
+    dprint(f"[IMAGE FINAL] {title} => {verified[:3]}")
+    return verified[:3]
 
 def make_intro_prompt(region, city, title):
     return f"""너는 한국 맛집 블로그 전문 작성자다.
