@@ -441,14 +441,18 @@ def get_places(region, city):
         return items
 
     # 1차: TourAPI 키워드 검색
+    
     keywords = [
-        f"{region} {city}",
-        f"{city}",
-        f"{region} {city} 관광지",
-        f"{city} 관광지",
-        f"{city} 명소",
-        f"{city} 가볼만한곳",
-        f"{city} 여행지",
+        f"{region} {city} 맛집",
+        f"{region} {city} 식당",
+        f"{region} {city} 추천 맛집",
+        f"{region} {city} 인기 맛집",
+        f"{region} {city} 현지인 맛집",
+        f"{city} 맛집",
+        f"{city} 식당",
+        f"{city} 추천 맛집",
+        f"{city} 인기 맛집",
+        f"{city} 현지인 맛집",
     ]
 
     for kw in keywords:
