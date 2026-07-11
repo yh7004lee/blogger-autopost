@@ -1052,13 +1052,30 @@ image: {thumb_url}
 
 def find_next_row(ws):
     rows = ws.get_all_values()
+    dprint(f"sheet title={getattr(ws, 'title', '')}")
+    dprint(f"total rows={len(rows)}")
+
+    if not rows:
+        dprint("시트에 행이 없습니다.")
+        return None, None, None
+
+    header = rows[0]
+    dprint(f"header={header}")
+
     for i, row in enumerate(rows[1:], start=2):
         city = row[0].strip() if len(row) > 0 and row[0] else ""
         region = row[1].strip() if len(row) > 1 and row[1] else ""
         code = row[2].strip() if len(row) > 2 and row[2] else ""
         status = row[5].strip() if len(row) > 5 and row[5] else ""
+
+        dprint(f"row={i} raw={row}")
+        dprint(f"row={i} parsed city='{city}', region='{region}', code='{code}', status='{status}'")
+
         if city and region and code and status != "완":
+            dprint(f"selected row={i}")
             return i, region, city
+
+    dprint("조건에 맞는 행을 찾지 못했습니다.")
     return None, None, None
 
 def git_run(cmd, cwd=None, env=None):
@@ -1091,7 +1108,14 @@ def push_post_to_github(file_path, repo_path):
     return f"pushed to {TARGET_BRANCH}"
 
 def main():
+    dprint("=== MAIN START ===")
+    dprint(f"ws title={getattr(ws7, 'title', '')}")
+    dprint(f"ws id={getattr(ws7, 'id', '')}")
+
     row_idx, region, city = find_next_row(ws7)
+
+    dprint(f"find_next_row result -> row_idx={row_idx}, region={region}, city={city}")
+
     if not row_idx:
         print("처리할 행이 없습니다.")
         return
