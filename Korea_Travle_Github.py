@@ -100,18 +100,18 @@ def ensure_gitignore(repo_path):
         with open(path, "w", encoding="utf-8") as f:
             f.write(GITIGNORE_CONTENT)
 
-def get_sheet7():
+def get_sheet3():
     service_account_file = "sheetapi.json"
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
     for ws in sh.worksheets():
-        if ws.title == "Sheet7":
+        if ws.id == SHEET_GID:
             return ws
-    raise RuntimeError("Sheet7 시트를 찾지 못했습니다.")
+    raise RuntimeError(f"gid={SHEET_GID} 시트를 찾지 못했습니다.")
 
-ws7 = get_sheet7()
+ws3 = get_sheet3()
 
 def get_drive_service():
     token_path = "drive_token_2nd.pickle"
@@ -175,8 +175,8 @@ def save_processed_region(region, city):
 
 def log_step(row, msg: str):
     try:
-        prev = ws7.cell(row, 16).value or ""
-        ws7.update_cell(row, 16, f"{prev} | {msg}" if prev else msg)
+        prev = ws3.cell(row, 16).value or ""
+        ws3.update_cell(row, 16, f"{prev} | {msg}" if prev else msg)
     except Exception as e:
         print("⚠️ 로그 기록 실패:", e)
 
@@ -702,7 +702,7 @@ def push_post_to_github(file_path, repo_path):
     return f"pushed to {TARGET_BRANCH}"
 
 def main():
-    row_idx, region, city = find_next_row(ws7)
+    row_idx, region, city = find_next_row(ws3)
     if not row_idx:
         print("처리할 행이 없습니다.")
         return
@@ -734,9 +734,9 @@ def main():
         f.write(markdown_content)
     log_step(row_idx, "5단계: Markdown 파일 생성 완료")
     push_state = push_post_to_github(post_path, REPO_PATH)
-    ws7.update_cell(row_idx, 6, "완")
+    ws3.update_cell(row_idx, 6, "완")
     try:
-        ws7.update_cell(row_idx, 15, f"https://github.com/{TARGET_REPO}/blob/{TARGET_BRANCH}/{POSTS_DIR}/{post_filename}")
+        ws3.update_cell(row_idx, 15, f"https://github.com/{TARGET_REPO}/blob/{TARGET_BRANCH}/{POSTS_DIR}/{post_filename}")
     except Exception as e:
         dprint("link write failed:", e)
     log_step(row_idx, f"6단계: GitHub 업로드 {push_state}")
