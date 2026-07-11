@@ -1112,7 +1112,7 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
     sections = []
     for idx, item in enumerate(places, start=1):
         clean_title = clean_place_title(item.get("title", ""), region, city)
-        section_title = f"{region} {city} 가볼만한곳 - {clean_title}"
+        section_title = f"{region} {city} 맛집 추천 - {clean_title}"
         images = item.get("images", []) or []
         overview = item.get("overview", "") or item.get("raw", {}).get("overview", "") or ""
         addr = item.get("addr", "") or item.get("raw", {}).get("addr1", "") or ""
