@@ -1165,7 +1165,7 @@ image: {thumb_url}
 
 {chr(10).join(sections)}
 
-## {city} 총평
+## {region} {city} 맛집 추천 총평 및 마무리
 
 {last_text}
 """
