@@ -388,113 +388,368 @@ def get_fallback_places(region, city):
     return places
 
 def get_places(region, city):
-    pool = []
+    print("🔄 관광지/장소 목록 수집 시작")
+    print(f"📍 region={region}, city={city}")
+
+    places = []
     seen = set()
 
-    queries = get_queries(region, city)
-    dprint("=== get_places START ===")
-    dprint("region:", region, "city:", city)
-    dprint("queries:", queries)
+    def add_place(item, score=0):
+        title = (item.get("title") or "").strip()
+        if not title:
+            return
+        key = title.lower().strip()
+        if key in seen:
+            return
+        seen.add(key)
+        places.append({
+            "contentId": (item.get("contentid") or item.get("contentId") or "").strip(),
+            "title": title,
+            "addr": (item.get("addr1") or item.get("addr") or "").strip(),
+            "image": (item.get("firstimage") or item.get("image") or "").strip(),
+            "raw": item,
+            "score": score
+        })
 
-    for q in queries:
-        results = google_text_search(q, city=city, region=region)
-        dprint(f"[PLACES QUERY] {q} -> {len(results)} results")
+    def score_tour_item(item):
+        s = 0
+        if (item.get("title") or "").strip():
+            s += 10
+        if (item.get("addr1") or "").strip():
+            s += 4
+        if (item.get("firstimage") or "").strip():
+            s += 6
+        if (item.get("contentid") or "").strip():
+            s += 3
+        return s
 
-        for idx, r in enumerate(results, start=1):
-            name = (r.get("name") or "").strip()
-            types = r.get("types", [])
-            rating = r.get("rating", None)
-            total = r.get("user_ratings_total", None)
-            addr = r.get("formatted_address", "")
+    def fetch_json(url, params):
+        try:
+            res = requests.get(url, params=params, timeout=30)
+            data = res.json()
+            return data
+        except Exception as e:
+            print(f"❌ 요청 실패: {url} / {e}")
+            return {}
 
-            if not name:
-                dprint(f"  - skip no name idx={idx}")
-                continue
+    def parse_items(data):
+        items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+        if isinstance(items, dict):
+            items = [items]
+        if not isinstance(items, list):
+            items = []
+        return items
 
-            key = name.lower().strip()
-            if key in seen:
-                dprint(f"  - skip duplicate: {name}")
-                continue
+    # 1차: TourAPI 키워드 검색
+    keywords = [
+        f"{region} {city}",
+        f"{city}",
+        f"{region} {city} 관광지",
+        f"{city} 관광지",
+        f"{city} 명소",
+        f"{city} 가볼만한곳",
+        f"{city} 여행지",
+    ]
 
-            valid = is_valid_place(r)
-            dprint(f"  - candidate idx={idx} name={name} valid={valid} types={types} rating={rating} total={total} addr={addr}")
+    for kw in keywords:
+        url = "https://apis.data.go.kr/B551011/KorService2/searchKeyword1"
+        params = {
+            "serviceKey": TOUR_API_KEY,
+            "MobileOS": "ETC",
+            "MobileApp": "travel_blog",
+            "_type": "json",
+            "numOfRows": 30,
+            "pageNo": 1,
+            "listYN": "Y",
+            "arrange": "P",
+            "contentTypeId": 12,
+            "keyword": kw,
+        }
+        data = fetch_json(url, params)
+        items = parse_items(data)
+        print(f"[TourAPI keyword] {kw} -> {len(items)}개")
 
-            if not valid:
-                continue
-
-            seen.add(key)
-            pool.append({
-                "title": name,
-                "addr": addr or "주소 없음",
-                "raw": r,
-                "score": score_place(r)
-            })
-
-        if len(pool) >= 10:
-            dprint("enough places collected:", len(pool))
+        for item in items:
+            add_place(item, score=score_tour_item(item))
+            if len(places) >= 10:
+                break
+        if len(places) >= 10:
             break
 
-    if not pool:
-        dprint("[PLACES FALLBACK] no valid place found, using fallback names")
-        pool = get_fallback_places(region, city)
+    # 2차: areaBasedList2로 보강
+    if len(places) < 10:
+        url = "https://apis.data.go.kr/B551011/KorService2/areaBasedList2"
+        params = {
+            "serviceKey": TOUR_API_KEY,
+            "MobileOS": "ETC",
+            "MobileApp": "travel_blog",
+            "_type": "json",
+            "numOfRows": 30,
+            "pageNo": 1,
+            "listYN": "Y",
+            "arrange": "P",
+            "contentTypeId": 12,
+        }
+        data = fetch_json(url, params)
+        items = parse_items(data)
+        print(f"[TourAPI areaBasedList2] -> {len(items)}개")
 
-    pool = sorted(pool, key=lambda x: x["score"], reverse=True)
-    dprint("[PLACES FINAL]", [p["title"] for p in pool[:10]])
-    dprint("=== get_places END ===")
-    return pool[:10]
+        for item in items:
+            add_place(item, score=score_tour_item(item))
+            if len(places) >= 10:
+                break
+
+    # 3차: Google 보조
+    if len(places) < 10 and GOOGLE_MAPS_API_KEY:
+        print("🔄 Google Places 보조 수집 시작")
+        for q in get_queries(city):
+            results = google_text_search(q)
+            print(f"[Google] {q} -> {len(results)}개")
+            for r in results:
+                name = (r.get("name") or "").strip()
+                if not name:
+                    continue
+                key = name.lower().strip()
+                if key in seen:
+                    continue
+                if not is_valid_place(r):
+                    continue
+                seen.add(key)
+                places.append({
+                    "contentId": "",
+                    "title": name,
+                    "addr": (r.get("formatted_address") or "").strip(),
+                    "image": "",
+                    "raw": r,
+                    "score": score_place(r)
+                })
+                if len(places) >= 10:
+                    break
+            if len(places) >= 10:
+                break
+
+    places = sorted(places, key=lambda x: x["score"], reverse=True)[:10]
+
+    print(f"✅ 최종 수집 완료: {len(places)}개")
+    for idx, p in enumerate(places, start=1):
+        print(f"  [{idx}] {p['title']} | {p.get('addr', '')} | {p.get('image', '')[:60]}")
+
+    return places
+
+    def fetch_tourapi_places(keyword):
+        url = "https://apis.data.go.kr/B551011/KorService2/searchKeyword1"
+        params = {
+            "serviceKey": TOUR_API_KEY,
+            "MobileOS": "ETC",
+            "MobileApp": "travel_blog",
+            "_type": "json",
+            "numOfRows": 30,
+            "pageNo": 1,
+            "listYN": "Y",
+            "arrange": "P",
+            "contentTypeId": 12,
+            "keyword": keyword,
+        }
+        try:
+            res = requests.get(url, params=params, timeout=30)
+            data = res.json()
+            items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+            if isinstance(items, dict):
+                items = [items]
+            print(f"[TourAPI] {keyword} -> {len(items)}개")
+            return items
+        except Exception as e:
+            print(f"❌ TourAPI 실패: {keyword} / {e}")
+            return []
+
+    def fetch_area_places():
+        url = "https://apis.data.go.kr/B551011/KorService2/areaBasedList2"
+        params = {
+            "serviceKey": TOUR_API_KEY,
+            "MobileOS": "ETC",
+            "MobileApp": "travel_blog",
+            "_type": "json",
+            "numOfRows": 30,
+            "pageNo": 1,
+            "listYN": "Y",
+            "arrange": "P",
+            "contentTypeId": 12,
+        }
+        try:
+            res = requests.get(url, params=params, timeout=30)
+            data = res.json()
+            items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+            if isinstance(items, dict):
+                items = [items]
+            print(f"[TourAPI areaBasedList2] -> {len(items)}개")
+            return items
+        except Exception as e:
+            print(f"❌ areaBasedList2 실패: {e}")
+            return []
+
+    def score_tour_item(item):
+        s = 0
+        title = (item.get("title") or "").lower()
+        addr = (item.get("addr1") or "")
+        if title:
+            s += 10
+        if addr:
+            s += 5
+        if item.get("firstimage"):
+            s += 5
+        if item.get("contentid"):
+            s += 3
+        return s
+
+    # 1차: 키워드 검색
+    keywords = [
+        f"{region} {city}",
+        f"{city}",
+        f"{region} {city} 관광지",
+        f"{city} 관광지",
+        f"{city} 명소",
+        f"{city} 가볼만한곳",
+        f"{city} 여행지",
+    ]
+
+    for kw in keywords:
+        items = fetch_tourapi_places(kw)
+        for item in items:
+            title = item.get("title", "").strip()
+            addr = item.get("addr1", "").strip()
+            image = item.get("firstimage", "").strip()
+            content_id = item.get("contentid", "").strip()
+            if not title:
+                continue
+            add_place(
+                title=title,
+                addr=addr,
+                image=image,
+                content_id=content_id,
+                raw=item,
+                score=score_tour_item(item)
+            )
+            if len(places) >= 10:
+                break
+        if len(places) >= 10:
+            break
+
+    # 2차: 부족하면 areaBasedList2로 보강
+    if len(places) < 10:
+        print("🔄 TourAPI 보강 수집 시작")
+        items = fetch_area_places()
+        for item in items:
+            title = item.get("title", "").strip()
+            addr = item.get("addr1", "").strip()
+            image = item.get("firstimage", "").strip()
+            content_id = item.get("contentid", "").strip()
+            if not title:
+                continue
+            add_place(
+                title=title,
+                addr=addr,
+                image=image,
+                content_id=content_id,
+                raw=item,
+                score=score_tour_item(item)
+            )
+            if len(places) >= 10:
+                break
+
+    # 3차: 그래도 부족하면 Google Places 보조
+    if len(places) < 10 and GOOGLE_MAPS_API_KEY:
+        print("🔄 Google Places 보조 수집 시작")
+        for q in get_queries(city):
+            results = google_text_search(q)
+            print(f"[Google] {q} -> {len(results)}개")
+            for r in results:
+                name = (r.get("name") or "").strip()
+                if not name:
+                    continue
+                key = name.lower().strip()
+                if key in seen:
+                    continue
+                if not is_valid_place(r):
+                    continue
+                seen.add(key)
+                add_place(
+                    title=name,
+                    addr=r.get("formatted_address", ""),
+                    image="",
+                    content_id="",
+                    raw=r,
+                    score=score_place(r)
+                )
+                if len(places) >= 10:
+                    break
+            if len(places) >= 10:
+                break
+
+    places = sorted(places, key=lambda x: x["score"], reverse=True)[:10]
+    print(f"✅ 최종 수집 완료: {len(places)}개")
+    for idx, p in enumerate(places, start=1):
+        print(f"  [{idx}] {p['title']} | {p.get('addr', '')} | {p.get('image', '')[:60]}")
+
+    return places
 
 def get_overview_from_place(place):
     return place.get("raw", {}).get("formatted_address", "상세 설명이 제공되지 않습니다.")
 
 def is_valid_image_url(url):
     if not url or not isinstance(url, str):
-        return False, "empty_url"
+        return False
 
     url = url.strip()
     if not url.startswith(("http://", "https://")):
-        return False, "invalid_scheme"
+        return False
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    headers = {"User-Agent": "Mozilla/5.0"}
 
     try:
-        # 1차: HEAD로 가볍게 확인
+        # 1차: HEAD로 상태 확인
         try:
             head = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
-            ctype = (head.headers.get("content-type") or "").lower()
             if head.status_code >= 400:
-                return False, f"head_status_{head.status_code}"
-            if ctype and not ctype.startswith("image/"):
-                return False, f"head_not_image_{ctype}"
+                print(f"[IMG HEAD FAIL] {head.status_code} | {url}")
+                return False
+
+            ctype = (head.headers.get("content-type") or "").lower()
+            if ctype and "image" not in ctype:
+                print(f"[IMG HEAD NOT IMAGE] {ctype} | {url}")
+                return False
         except Exception as e:
-            dprint("HEAD check failed:", url, e)
+            print(f"[IMG HEAD WARN] {e} | {url}")
 
         # 2차: GET으로 실제 바이트 확인
-        res = requests.get(url, headers=headers, timeout=15, allow_redirects=True, stream=True)
+        res = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
         if res.status_code != 200:
-            return False, f"get_status_{res.status_code}"
+            print(f"[IMG GET FAIL] {res.status_code} | {url}")
+            return False
 
-        content_type = (res.headers.get("content-type") or "").lower()
-        if not content_type.startswith("image/"):
-            return False, f"get_not_image_{content_type}"
+        ctype = (res.headers.get("content-type") or "").lower()
+        if "image" not in ctype:
+            print(f"[IMG GET NOT IMAGE] {ctype} | {url}")
+            return False
 
         content = res.content
         if not content or len(content) < 100:
-            return False, "too_small"
+            print(f"[IMG TOO SMALL] {len(content) if content else 0} | {url}")
+            return False
 
-        # 3차: PIL로 진짜 이미지인지 검증
+        # 3차: PIL로 실제 이미지 검증
+        from io import BytesIO
         try:
-            from io import BytesIO
             img = Image.open(BytesIO(content))
             img.verify()
         except Exception as e:
-            return False, f"pil_verify_failed_{type(e).__name__}"
+            print(f"[IMG VERIFY FAIL] {type(e).__name__} | {url}")
+            return False
 
-        return True, "ok"
+        return True
 
     except Exception as e:
-        return False, f"exception_{type(e).__name__}"
+        print(f"[IMG VALIDATE ERROR] {type(e).__name__}: {e} | {url}")
+        return False
 
 
 def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""):
@@ -560,132 +815,157 @@ def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""
 def get_best_place_image(place):
     candidates = []
     title = str(place.get("title", "")).strip()
-    region = str(place.get("region", "")).strip()
-    city = str(place.get("city", "")).strip()
+    addr = str(place.get("addr", "")).strip()
+    content_id = str(place.get("contentId", "")).strip()
+    raw = place.get("raw", {}) or {}
 
-    dprint("=== get_best_place_image START ===")
-    dprint("place title:", title)
-    dprint("region:", region, "city:", city)
+    print("=== get_best_place_image START ===")
+    print(f"title={title}")
+    print(f"contentId={content_id}")
+    print(f"addr={addr}")
 
-    if title:
-        photo_urls = get_google_place_photos_by_name(title, max_photos=5, region=region, city=city)
-        dprint(f"[PHOTO CANDIDATES] {title} -> {len(photo_urls)}")
-        for i, u in enumerate(photo_urls, start=1):
-            dprint(f"  candidate {i}: {u}")
-        candidates.extend(photo_urls)
+    # 1차: TourAPI firstimage 우선
+    first_image = str(place.get("image", "")).strip()
+    if first_image:
+        candidates.append(first_image)
+        print(f"[TourAPI image] place.image = {first_image}")
 
-    cleaned = []
+    raw_first = str(raw.get("firstimage", "")).strip()
+    if raw_first and raw_first not in candidates:
+        candidates.append(raw_first)
+        print(f"[TourAPI image] raw.firstimage = {raw_first}")
+
+    # 2차: 상세 이미지 보강 시도
+    if content_id and TOUR_API_KEY:
+        try:
+            img_url = "https://apis.data.go.kr/B551011/KorService2/detailImage2"
+            params = {
+                "serviceKey": TOUR_API_KEY,
+                "MobileOS": "ETC",
+                "MobileApp": "travel_blog",
+                "_type": "json",
+                "contentId": content_id,
+                "imageYN": "Y",
+                "subImageYN": "Y",
+                "numOfRows": 10,
+                "pageNo": 1,
+            }
+            res = requests.get(img_url, params=params, timeout=30)
+            data = res.json()
+            items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+            if isinstance(items, dict):
+                items = [items]
+            print(f"[TourAPI detailImage2] {len(items)}개")
+            for item in items:
+                u = (item.get("originimgurl") or item.get("smallimageurl") or "").strip()
+                if u and u not in candidates:
+                    candidates.append(u)
+                    print(f"  - detail image: {u}")
+        except Exception as e:
+            print(f"⚠️ TourAPI 상세 이미지 실패: {e}")
+
+    # 3차: Google Photos 보조
+    if len(candidates) < 3 and title and GOOGLE_MAPS_API_KEY:
+        try:
+            google_imgs = get_google_place_photos_by_name(title, max_photos=3)
+            for u in google_imgs:
+                if u and u not in candidates:
+                    candidates.append(u)
+            print(f"[Google image] title search -> {len(google_imgs)}개")
+        except Exception as e:
+            print(f"⚠️ Google 이미지 실패: {e}")
+
+    if len(candidates) < 3 and title and addr and GOOGLE_MAPS_API_KEY:
+        try:
+            google_imgs = get_google_place_photos_by_name(f"{addr} {title}", max_photos=3)
+            for u in google_imgs:
+                if u and u not in candidates:
+                    candidates.append(u)
+            print(f"[Google image] addr+title search -> {len(google_imgs)}개")
+        except Exception as e:
+            print(f"⚠️ Google 주소+이름 이미지 실패: {e}")
+
+    # 검증
+    verified = []
     seen = set()
-    for url in candidates:
+    for idx, url in enumerate(candidates, start=1):
         if not url or not isinstance(url, str):
             continue
         url = url.strip()
         if url in seen:
             continue
         seen.add(url)
-        cleaned.append(url)
 
-    dprint("[PHOTO CLEANED]", cleaned)
-
-    verified = []
-    for idx, url in enumerate(cleaned, start=1):
-        ok, reason = is_valid_image_url(url)
-        dprint(f"[PHOTO VERIFY] idx={idx} ok={ok} reason={reason} url={url}")
+        ok = is_valid_image_url(url)
+        print(f"[VERIFY] {idx}: {ok} -> {url}")
         if ok:
             verified.append(url)
+
         if len(verified) >= 3:
             break
-
-    if len(verified) < 3:
-        dprint("[PHOTO EXTRA SEARCH] start")
-        extra_queries = []
-        base = f"{region} {city} {title}".strip()
-        if city and title:
-            extra_queries += [
-                f"{city} {title} 맛집",
-                f"{city} {title}",
-                f"{base} 사진",
-                f"{base} 음식점",
-                f"{city} restaurant {title}",
-            ]
-
-        for q in extra_queries:
-            if len(verified) >= 3:
-                break
-
-            try:
-                search_url = "https://www.google.com/search"
-                params = {"q": q, "tbm": "isch", "hl": "ko"}
-                headers = {"User-Agent": "Mozilla/5.0"}
-                res = requests.get(search_url, params=params, headers=headers, timeout=15)
-                html = res.text
-
-                urls = re.findall(r'https?://[^"\']+\.(?:jpg|jpeg|png|webp)(?:\?[^"\']*)?', html, re.I)
-                dprint(f"[PHOTO EXTRA QUERY] {q} -> {len(urls)} urls")
-
-                for u in urls:
-                    u = u.replace("\\u003d", "=").replace("\\u0026", "&")
-                    if u in seen:
-                        continue
-                    seen.add(u)
-                    ok, reason = is_valid_image_url(u)
-                    dprint(f"[PHOTO EXTRA VERIFY] ok={ok} reason={reason} url={u}")
-                    if ok:
-                        verified.append(u)
-                    if len(verified) >= 3:
-                        break
-            except Exception as e:
-                dprint("[PHOTO EXTRA ERROR]", q, e)
 
     fallback = "https://via.placeholder.com/800x500?text=No+Image"
     while len(verified) < 3:
         verified.append(fallback)
 
-    dprint("[PHOTO FINAL]", verified[:3])
-    dprint("=== get_best_place_image END ===")
+    print(f"[FINAL IMAGE] {verified[:3]}")
+    print("=== get_best_place_image END ===")
     return verified[:3]
 
-def make_intro_prompt(region, city, title):
-    return f"""너는 한국 맛집 블로그 전문 작성자다.
+def make_intro_prompt(region, city, title, place_names=None):
+    place_hint = ""
+    if place_names:
+        if isinstance(place_names, list):
+            place_hint = ", ".join(place_names[:10])
+        else:
+            place_hint = str(place_names)
+
+    return f"""너는 한국 여행 블로그 전문 작성자다.
 
 아래 정보를 바탕으로 서론만 작성해라.
 - 지역: {region}
 - 도시: {city}
 - 글 제목: {title}
+- 주요 명소: {place_hint}
 
 조건:
-- 5 문장
-- 핵심 키워드 자연스럽게 포함
-- 첫 문장에서 독자의 흥미를 끌 것
-- 너무 짧지 않게, 그러나 장황하지 않게
-- 지역 분위기, 식당 탐방 기대감, 추천 이유가 느껴지게
+- 5문장
+- 자연스러운 한국어
+- 여행 기대감이 느껴지게
+- 지역 분위기와 대표 명소가 함께 느껴지게
+- 너무 광고처럼 쓰지 말 것
 - 마크다운 금지
 - <p>와 <br> 태그만 사용 가능
 - <p> 로 시작할 것
+- 제목 태그 금지
 - 중국어/일본어 금지
 """
 
 def make_section_prompt(region, city, place_title, addr, overview):
-    return f"""너는 한국 맛집 블로그 전문 작성자다.
+    return f"""너는 한국 여행 블로그 전문 작성자다.
 
-맛집 정보:
+아래 관광지 정보를 바탕으로 본문만 작성해라.
 - 지역: {region}
 - 도시: {city}
 - 장소명: {place_title}
 - 주소: {addr}
-- 참고설명: {overview}
+- 소개정보: {overview}
 
 작성 조건:
 - 자연스러운 한국어
-- 맛집 블로그 스타일
+- 여행 블로그 스타일
 - 4문단
 - 350자 이상
-- 음식, 분위기, 추천 포인트, 방문 팁을 포함
+- 장소의 분위기, 특징, 방문 포인트, 추천 이유를 포함
+- 실제로 방문한 듯한 자연스러운 표현
+- 과장된 광고 문구는 피할 것
 - 마크다운 금지
 - <p>와 <br> 태그만 사용 가능
-- <p> 로 시작
+- <p> 로 시작할 것
 - 제목 태그 금지
 - 중국어/일본어 금지
+- ```html, ``` 같은 코드블록 금지
+- ** 같은 강조 기호 금지
 """
 
 def clean_place_title(title, region, city):
@@ -805,31 +1085,53 @@ def make_last(region, city):
     return "\n\n".join([s1, s2, s3, s4, s5])
 
 def build_markdown_post(region, city, title, places, thumb_url, date_str):
-    intro = generate_ai_review(make_intro_prompt(region, city, title), title)
+    place_names = [clean_place_title(p.get("title", ""), region, city) for p in places]
+    intro = generate_ai_review(make_intro_prompt(region, city, title, place_names), title)
+
     sections = []
     for idx, item in enumerate(places, start=1):
-        clean_title = clean_place_title(item["title"], region, city)
-        section_title = f"{region} {city} 맛집추천 - {clean_title}"
-        images = item.get("images", [])
-        overview = item.get("overview", "")
-        body = generate_ai_review(make_section_prompt(region, city, clean_title, item.get("addr", ""), overview), clean_title)
+        clean_title = clean_place_title(item.get("title", ""), region, city)
+        section_title = f"{region} {city} 가볼만한곳 - {clean_title}"
+        images = item.get("images", []) or []
+        overview = item.get("overview", "") or item.get("raw", {}).get("overview", "") or ""
+        addr = item.get("addr", "") or item.get("raw", {}).get("addr1", "") or ""
+        body = generate_ai_review(
+            make_section_prompt(region, city, clean_title, addr, overview),
+            clean_title
+        )
+
         sec = []
         sec.append(f"## {idx}. {section_title}")
         sec.append("")
-        for img in images[:3]:
-            sec.append(f"![{clean_title}]({img})")
+
+        valid_images = [u for u in images if isinstance(u, str) and u.strip()]
+        if valid_images:
+            for img in valid_images[:3]:
+                img = img.strip()
+                sec.append(f"![{clean_title}]({img})")
+                sec.append("")
+            map_url = "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(f"{region} {city} {clean_title}")
+            sec.append(f"[구글 지도에서 위치 확인하기]({map_url})")
             sec.append("")
-        if images:
-            sec.append(f"[구글 지도에서 위치 확인하기](https://www.google.com/maps/search/?api=1&query={urllib.parse.quote(region + ' ' + city + ' ' + clean_title)})")
+        else:
+            sec.append(f"![{clean_title}]({thumb_url})")
             sec.append("")
-        if item.get("addr"):
-            sec.append(f"- 주소: {item['addr']}")
+
+        if addr:
+            sec.append(f"- 주소: {addr}")
             sec.append("")
-        sec.append(body)
+
+        if overview and overview.strip():
+            sec.append(f"- 소개: {overview.strip()}")
+            sec.append("")
+
+        sec.append(body or f"<p>{clean_title}에 대한 상세 설명을 불러오지 못했습니다.</p>")
         sec.append("")
         sections.append("\n".join(sec))
+
     last_text = make_last(region, city)
     cat = "맛집추천"
+
     md = f"""---
 title: "{title}"
 date: {date_str}
@@ -844,7 +1146,7 @@ image: {thumb_url}
 
 {chr(10).join(sections)}
 
-## {city} 맛집 총평
+## {city} 총평
 
 {last_text}
 """
