@@ -523,27 +523,38 @@ def clean_place_title(title, region, city):
     return t or title
 
 def make_title(region, city):
-    adj = [
-        "꼭가봐야할",
-        "다시 가고싶은",
-        "현지인 추천",
-        "줄서서 먹는",
-        "입소문난",
-        "후회없는",
-        "재방문하고 싶은",
+    endings = ["BEST10", "TOP10", "추천 리스트10"]
+
+    patterns = [
+        "{region} {city} 맛집 {phrase} {ending}",
+        "{region} {city} {phrase} 맛집 {ending}",
+        "{region} {city} 맛집 추천 {phrase} {ending}",
+        "{region} {city} 맛집 {phrase} 추천 {ending}",
     ]
-    endings = ["TOP10", "BEST10"]
-    food_words = ["맛집", "식당"]
 
-    first = random.choice([True, False])
-    adj_word = random.choice(adj)
+    phrases = [
+        "유명한 식당",
+        "인기 식당",
+        "현지인이 추천하는 식당",
+        "음식점 추천 순위",
+        "가성비 추천 음식점",
+        "내돈내산 식당 순위",
+        "내돈내산 식당 추천",
+    ]
+
+    phrase = random.choice(phrases)
     ending = random.choice(endings)
-    food_word = random.choice(food_words)
+    pattern = random.choice(patterns)
 
-    if first:
-        return f"{region} {city} {food_word} {adj_word} {ending}"
-    else:
-        return f"{region} {city} {adj_word} {food_word} {ending}"
+    title = pattern.format(region=region, city=city, phrase=phrase, ending=ending)
+    title = re.sub(r"\s+", " ", title).strip()
+
+    # "추천" 중복 방지: 같은 제목 안에서 2번 이상 나오면 뒤쪽 것을 제거
+    if title.count("추천") > 1:
+        title = title.replace("추천 ", "", 1).strip()
+        title = re.sub(r"\s+", " ", title).strip()
+
+    return title
 
 def generate_random_title(region, city):
     return make_title(region, city)
@@ -623,7 +634,7 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
     sections = []
     for idx, item in enumerate(places, start=1):
         clean_title = clean_place_title(item["title"], region, city)
-        section_title = f"{city} {clean_title}"
+        section_title = f"{region} {city} 맛집추천 - {clean_title}"
         images = item.get("images", [])
         overview = item.get("overview", "")
         body = generate_ai_review(make_section_prompt(region, city, clean_title, item.get("addr", ""), overview), clean_title)
