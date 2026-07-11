@@ -974,12 +974,29 @@ def make_section_prompt(region, city, place_title, addr, overview):
 
 def clean_place_title(title, region, city):
     t = str(title or "").strip()
-    t = re.sub(r"\s+", " ", t)
     if not t:
         return ""
-    t = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    return t or title
+
+    t = re.sub(r"\s+", " ", t)
+    t = t.replace("\n", " ").strip()
+
+    # 다국어/긴 상호명 분리
+    for sep in ["|", "/", "·", "•", ","]:
+        if sep in t:
+            parts = [p.strip() for p in t.split(sep) if p.strip()]
+            if parts:
+                t = parts[0]
+                break
+
+    # 괄호 정보 제거
+    t = re.sub(r"\([^)]*\)", "", t).strip()
+
+    # 도시명 중복 정리
+    if city and t.count(city) > 1:
+        t = re.sub(rf"(^|\s+){re.escape(city)}(?=\s+|$)", "", t, count=1).strip()
+        t = re.sub(r"\s+", " ", t).strip()
+
+    return t
 
 def make_title(region, city):
     endings = ["BEST10", "TOP10", "추천 리스트10"]
@@ -1125,9 +1142,7 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
             sec.append(f"- 주소: {addr}")
             sec.append("")
 
-        if overview and overview.strip():
-            sec.append(f"- 소개: {overview.strip()}")
-            sec.append("")
+        
 
         sec.append(body or f"<p>{clean_title}에 대한 상세 설명을 불러오지 못했습니다.</p>")
         sec.append("")
