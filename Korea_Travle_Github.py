@@ -329,32 +329,26 @@ def generate_ai_review(prompt, keyword):
 def get_queries(region, city):
     region_city = normalize_region_city(region, city)
 
-    base_terms = []
-    if region_city:
-        base_terms.extend([
-            f"{region_city} 여행명소",
-            f"{region_city} 관광지",
-            f"{region_city} 명소",
-            f"{region_city} 가볼만한곳",
-            f"{region_city} 여행지",
-        ])
-
-    if city and city != region:
-        base_terms.extend([
-            f"{city} 여행명소",
-            f"{city} 관광지",
-            f"{city} 명소",
-            f"{city} 가볼만한곳",
-            f"{city} 여행지",
-        ])
-
-    return base_terms[:10]
+    return [
+        f"{region_city} 관광지",
+        f"{region_city} 명소",
+        f"{region_city} 핫플레이스",
+        f"{region_city} 가볼만한곳",
+        f"{region_city} 여행지",
+        f"{region_city} 여행명소",
+        f"{city} 관광지",
+        f"{city} 명소",
+        f"{city} 핫플레이스",
+        f"{city} 가볼만한곳",
+        f"{city} 여행지",
+        f"{city} 여행명소",
+    ]
 
 def google_text_search(query, city="", region=""):
     if not GOOGLE_MAPS_API_KEY:
         return []
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "ko", "type": "restaurant"}
+    params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "ko"}
     try:
         res = requests.get(url, params=params, timeout=15)
         data = res.json()
@@ -422,7 +416,7 @@ def get_fallback_places(region, city):
     return places
 
 def get_places(region, city):
-    print("🔄 여행명소 목록 수집 시작")
+    print("🔄 관광지/장소 목록 수집 시작")
     print(f"📍 region={region}, city={city}")
 
     region_city = normalize_region_city(region, city)
@@ -461,6 +455,7 @@ def get_places(region, city):
     def fetch_json(url, params):
         try:
             res = requests.get(url, params=params, timeout=30)
+            res.raise_for_status()
             return res.json()
         except Exception as e:
             print(f"❌ 요청 실패: {url} / {e}")
@@ -475,21 +470,19 @@ def get_places(region, city):
         return items
 
     keywords = [
-        f"{region_city} 여행명소",
         f"{region_city} 관광지",
         f"{region_city} 명소",
+        f"{region_city} 핫플레이스",
         f"{region_city} 가볼만한곳",
         f"{region_city} 여행지",
+        f"{region_city} 여행명소",
+        f"{city} 관광지",
+        f"{city} 명소",
+        f"{city} 핫플레이스",
+        f"{city} 가볼만한곳",
+        f"{city} 여행지",
+        f"{city} 여행명소",
     ]
-
-    if city and city != region:
-        keywords.extend([
-            f"{city} 여행명소",
-            f"{city} 관광지",
-            f"{city} 명소",
-            f"{city} 가볼만한곳",
-            f"{city} 여행지",
-        ])
 
     for kw in keywords:
         url = "https://apis.data.go.kr/B551011/KorService2/searchKeyword1"
@@ -523,7 +516,7 @@ def get_places(region, city):
             "MobileOS": "ETC",
             "MobileApp": "travel_blog",
             "_type": "json",
-            "numOfRows": 30,
+            "numOfRows": 50,
             "pageNo": 1,
             "listYN": "Y",
             "arrange": "P",
@@ -1028,7 +1021,7 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
         sections.append("\n".join(sec))
 
     last_text = make_last(region, city)
-    cat = "여행명소추천"
+    cat = "국내여행"
 
     md = f"""---
 title: "{title}"
