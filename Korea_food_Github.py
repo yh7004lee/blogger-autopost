@@ -1139,7 +1139,7 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
             sec.append("")
 
         if addr:
-            sec.append(f"- 주소: {addr}")
+            sec.append(f"주소: {addr}")
             sec.append("")
 
         
