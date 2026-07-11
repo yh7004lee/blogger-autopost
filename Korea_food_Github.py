@@ -352,41 +352,95 @@ def score_place(item):
     return s
 
 def get_fallback_places(region, city):
+    dprint("=== get_fallback_places START ===")
     candidates = [
-        f"{city} 맛집", f"{city} 식당", f"{city} 한식당", f"{city} 고기집",
-        f"{city} 찌개집", f"{city} 국밥집", f"{city} 분식집", f"{city} 밥집"
+        f"{city} 맛집",
+        f"{city} 식당",
+        f"{city} 한식당",
+        f"{city} 고기집",
+        f"{city} 찌개집",
+        f"{city} 국밥집",
+        f"{city} 분식집",
+        f"{city} 밥집"
     ]
+
     places = []
     seen = set()
-    for name in candidates:
+
+    for idx, name in enumerate(candidates, start=1):
         key = name.lower().strip()
         if key in seen:
+            dprint(f"  - skip duplicate fallback: {name}")
             continue
         seen.add(key)
-        places.append({"title": name, "addr": f"{region} {city}", "raw": {}, "score": 0})
+
+        item = {
+            "title": name,
+            "addr": f"{region} {city}",
+            "raw": {},
+            "score": 0
+        }
+        places.append(item)
+        dprint(f"  - fallback added idx={idx} title={name}")
+
+    dprint("[FALLBACK FINAL]", [p["title"] for p in places])
+    dprint("=== get_fallback_places END ===")
     return places
 
 def get_places(region, city):
     pool = []
     seen = set()
-    for q in get_queries(region, city):
+
+    queries = get_queries(region, city)
+    dprint("=== get_places START ===")
+    dprint("region:", region, "city:", city)
+    dprint("queries:", queries)
+
+    for q in queries:
         results = google_text_search(q, city=city, region=region)
-        for r in results:
-            name = r.get("name")
+        dprint(f"[PLACES QUERY] {q} -> {len(results)} results")
+
+        for idx, r in enumerate(results, start=1):
+            name = (r.get("name") or "").strip()
+            types = r.get("types", [])
+            rating = r.get("rating", None)
+            total = r.get("user_ratings_total", None)
+            addr = r.get("formatted_address", "")
+
             if not name:
+                dprint(f"  - skip no name idx={idx}")
                 continue
+
             key = name.lower().strip()
             if key in seen:
+                dprint(f"  - skip duplicate: {name}")
                 continue
+
+            valid = is_valid_place(r)
+            dprint(f"  - candidate idx={idx} name={name} valid={valid} types={types} rating={rating} total={total} addr={addr}")
+
+            if not valid:
+                continue
+
             seen.add(key)
-            if not is_valid_place(r):
-                continue
-            pool.append({"title": name, "addr": r.get("formatted_address", "주소 없음"), "raw": r, "score": score_place(r)})
+            pool.append({
+                "title": name,
+                "addr": addr or "주소 없음",
+                "raw": r,
+                "score": score_place(r)
+            })
+
         if len(pool) >= 10:
+            dprint("enough places collected:", len(pool))
             break
+
     if not pool:
+        dprint("[PLACES FALLBACK] no valid place found, using fallback names")
         pool = get_fallback_places(region, city)
+
     pool = sorted(pool, key=lambda x: x["score"], reverse=True)
+    dprint("[PLACES FINAL]", [p["title"] for p in pool[:10]])
+    dprint("=== get_places END ===")
     return pool[:10]
 
 def get_overview_from_place(place):
@@ -509,10 +563,17 @@ def get_best_place_image(place):
     region = str(place.get("region", "")).strip()
     city = str(place.get("city", "")).strip()
 
-    if title:
-        candidates.extend(get_google_place_photos_by_name(title, max_photos=5, region=region, city=city))
+    dprint("=== get_best_place_image START ===")
+    dprint("place title:", title)
+    dprint("region:", region, "city:", city)
 
-    # 후보 중복 제거
+    if title:
+        photo_urls = get_google_place_photos_by_name(title, max_photos=5, region=region, city=city)
+        dprint(f"[PHOTO CANDIDATES] {title} -> {len(photo_urls)}")
+        for i, u in enumerate(photo_urls, start=1):
+            dprint(f"  candidate {i}: {u}")
+        candidates.extend(photo_urls)
+
     cleaned = []
     seen = set()
     for url in candidates:
@@ -524,17 +585,19 @@ def get_best_place_image(place):
         seen.add(url)
         cleaned.append(url)
 
+    dprint("[PHOTO CLEANED]", cleaned)
+
     verified = []
     for idx, url in enumerate(cleaned, start=1):
         ok, reason = is_valid_image_url(url)
-        dprint(f"[IMAGE CHECK] {title} #{idx} ok={ok} reason={reason} url={url}")
+        dprint(f"[PHOTO VERIFY] idx={idx} ok={ok} reason={reason} url={url}")
         if ok:
             verified.append(url)
         if len(verified) >= 3:
             break
 
-    # 검증된 이미지가 부족하면 다른 후보를 더 탐색
     if len(verified) < 3:
+        dprint("[PHOTO EXTRA SEARCH] start")
         extra_queries = []
         base = f"{region} {city} {title}".strip()
         if city and title:
@@ -543,6 +606,7 @@ def get_best_place_image(place):
                 f"{city} {title}",
                 f"{base} 사진",
                 f"{base} 음식점",
+                f"{city} restaurant {title}",
             ]
 
         for q in extra_queries:
@@ -557,25 +621,28 @@ def get_best_place_image(place):
                 html = res.text
 
                 urls = re.findall(r'https?://[^"\']+\.(?:jpg|jpeg|png|webp)(?:\?[^"\']*)?', html, re.I)
+                dprint(f"[PHOTO EXTRA QUERY] {q} -> {len(urls)} urls")
+
                 for u in urls:
                     u = u.replace("\\u003d", "=").replace("\\u0026", "&")
                     if u in seen:
                         continue
                     seen.add(u)
                     ok, reason = is_valid_image_url(u)
-                    dprint(f"[IMAGE EXTRA CHECK] {q} ok={ok} reason={reason} url={u}")
+                    dprint(f"[PHOTO EXTRA VERIFY] ok={ok} reason={reason} url={u}")
                     if ok:
                         verified.append(u)
                     if len(verified) >= 3:
                         break
             except Exception as e:
-                dprint("extra image search failed:", q, e)
+                dprint("[PHOTO EXTRA ERROR]", q, e)
 
     fallback = "https://via.placeholder.com/800x500?text=No+Image"
     while len(verified) < 3:
         verified.append(fallback)
 
-    dprint(f"[IMAGE FINAL] {title} => {verified[:3]}")
+    dprint("[PHOTO FINAL]", verified[:3])
+    dprint("=== get_best_place_image END ===")
     return verified[:3]
 
 def make_intro_prompt(region, city, title):
