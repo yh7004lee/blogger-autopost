@@ -100,18 +100,18 @@ def ensure_gitignore(repo_path):
         with open(path, "w", encoding="utf-8") as f:
             f.write(GITIGNORE_CONTENT)
 
-def get_sheet7():
+def get_sheet3():
     service_account_file = "sheetapi.json"
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
     creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
     for ws in sh.worksheets():
-        if ws.title == "Sheet7":
+        if ws.id == SHEET_GID:
             return ws
-    raise RuntimeError("Sheet7 시트를 찾지 못했습니다.")
+    raise RuntimeError(f"gid={SHEET_GID} 시트를 찾지 못했습니다.")
 
-ws7 = get_sheet7()
+ws3 = get_sheet3()
 
 def get_drive_service():
     token_path = "drive_token_2nd.pickle"
@@ -175,8 +175,8 @@ def save_processed_region(region, city):
 
 def log_step(row, msg: str):
     try:
-        prev = ws7.cell(row, 16).value or ""
-        ws7.update_cell(row, 16, f"{prev} | {msg}" if prev else msg)
+        prev = ws3.cell(row, 16).value or ""
+        ws3.update_cell(row, 16, f"{prev} | {msg}" if prev else msg)
     except Exception as e:
         print("⚠️ 로그 기록 실패:", e)
 
@@ -304,25 +304,23 @@ def generate_ai_review(prompt, keyword):
 
 def get_queries(region, city):
     return [
-        f"{region} {city} 관광지",
-        f"{region} {city} 명소",
-        f"{region} {city} 여행 명소",
-        f"{region} {city} 가볼만한 곳",
-        f"{region} {city} things to do",
-        f"{region} {city} point of interest",
-        f"{city} 관광지",
-        f"{city} 명소",
-        f"{city} 여행 명소",
-        f"{city} 가볼만한 곳",
-        f"{city} things to do",
-        f"{city} point of interest",
+        f"{region} {city} 맛집",
+        f"{region} {city} 식당",
+        f"{region} {city} 추천 맛집",
+        f"{region} {city} 인기 식당",
+        f"{region} {city} 가볼만한 맛집",
+        f"{city} 맛집",
+        f"{city} 식당",
+        f"{city} 추천 맛집",
+        f"{city} 인기 식당",
+        f"{city} 가볼만한 맛집",
     ]
 
 def google_text_search(query, city="", region=""):
     if not GOOGLE_MAPS_API_KEY:
         return []
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "ko", "type": "tourist_attraction"}
+    params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "ko", "type": "restaurant"}
     try:
         res = requests.get(url, params=params, timeout=15)
         data = res.json()
@@ -336,8 +334,8 @@ def google_text_search(query, city="", region=""):
 
 def is_valid_place(place):
     types = place.get("types", [])
-    bad_types = ["school", "university", "gym", "hospital", "lodging", "real_estate_agency", "bank", "shopping_mall", "store", "restaurant", "meal_takeaway", "cafe", "bar"]
-    good_types = ["tourist_attraction", "museum", "park", "point_of_interest", "landmark", "amusement_park", "natural_feature", "zoo", "church", "aquarium"]
+    bad_types = ["school", "university", "gym", "hospital", "lodging", "real_estate_agency", "bank", "shopping_mall", "store"]
+    good_types = ["restaurant", "meal_takeaway", "meal_delivery", "point_of_interest", "food", "cafe"]
     return any(t in good_types for t in types) and not any(t in bad_types for t in types)
 
 def score_place(item):
@@ -345,18 +343,19 @@ def score_place(item):
     reviews = item.get("user_ratings_total", 0) or 0
     s = rating * 10
     s += min(reviews / 100, 20)
-    if "tourist_attraction" in item.get("types", []):
+    if "restaurant" in item.get("types", []):
         s += 10
-    if "point_of_interest" in item.get("types", []):
+    if "food" in item.get("types", []):
         s += 6
-    if "museum" in item.get("types", []):
-        s += 5
-    if "park" in item.get("types", []):
-        s += 5
+    if "meal_takeaway" in item.get("types", []):
+        s += 4
     return s
 
 def get_fallback_places(region, city):
-    candidates = [f"{city} 관광지", f"{city} 명소", f"{city} 전망대", f"{city} 박물관", f"{city} 공원", f"{city} 랜드마크", f"{city} 문화유적", f"{city} 여행 명소"]
+    candidates = [
+        f"{city} 맛집", f"{city} 식당", f"{city} 한식당", f"{city} 고기집",
+        f"{city} 찌개집", f"{city} 국밥집", f"{city} 분식집", f"{city} 밥집"
+    ]
     places = []
     seen = set()
     for name in candidates:
@@ -472,7 +471,7 @@ def get_best_place_image(place):
     return final_images[:3]
 
 def make_intro_prompt(region, city, title):
-    return f"""너는 한국 여행 블로그 전문 작성자다.
+    return f"""너는 한국 맛집 블로그 전문 작성자다.
 
 아래 정보를 바탕으로 서론만 작성해라.
 - 지역: {region}
@@ -484,7 +483,7 @@ def make_intro_prompt(region, city, title):
 - 핵심 키워드 자연스럽게 포함
 - 첫 문장에서 독자의 흥미를 끌 것
 - 너무 짧지 않게, 그러나 장황하지 않게
-- 지역 분위기, 여행 기대감, 추천 이유가 느껴지게
+- 지역 분위기, 식당 탐방 기대감, 추천 이유가 느껴지게
 - 마크다운 금지
 - <p>와 <br> 태그만 사용 가능
 - <p> 로 시작할 것
@@ -492,9 +491,9 @@ def make_intro_prompt(region, city, title):
 """
 
 def make_section_prompt(region, city, place_title, addr, overview):
-    return f"""너는 한국 여행 블로그 전문 작성자다.
+    return f"""너는 한국 맛집 블로그 전문 작성자다.
 
-여행 정보:
+맛집 정보:
 - 지역: {region}
 - 도시: {city}
 - 장소명: {place_title}
@@ -503,10 +502,10 @@ def make_section_prompt(region, city, place_title, addr, overview):
 
 작성 조건:
 - 자연스러운 한국어
-- 여행 블로그 스타일
+- 맛집 블로그 스타일
 - 4문단
 - 350자 이상
-- 장소의 특징, 분위기, 추천 포인트, 방문 팁을 포함
+- 음식, 분위기, 추천 포인트, 방문 팁을 포함
 - 마크다운 금지
 - <p>와 <br> 태그만 사용 가능
 - <p> 로 시작
@@ -524,23 +523,27 @@ def clean_place_title(title, region, city):
     return t or title
 
 def make_title(region, city):
-    prefixes = [
-        "현지인 추천", "요즘 핫한", "가성비 좋은", "재방문각", "로컬이 인정한",
-        "숨은", "인기", "꼭 가봐야 할", "요즘 뜨는", "후회 없는",
-        "줄 서는", "분위기 좋은", "실패 없는", "찐", "믿고 가는",
-        "한 번쯤 가볼", "SNS에서 핫한", "주말에 가기 좋은", "입소문 난"
+    adj = [
+        "꼭가봐야할",
+        "다시 가고싶은",
+        "현지인 추천",
+        "줄서서 먹는",
+        "입소문난",
+        "후회없는",
+        "재방문하고 싶은",
     ]
+    endings = ["TOP10", "BEST10"]
+    food_words = ["맛집", "식당"]
 
-    mids = [
-        "숨은", "핵심", "대표", "핫플", "감성", "베스트", "추천"
-    ]
+    first = random.choice([True, False])
+    adj_word = random.choice(adj)
+    ending = random.choice(endings)
+    food_word = random.choice(food_words)
 
-    ending = random.choice(["TOP10", "BEST10", "핫플레이스10"])
-
-    if random.choice([True, False]):
-        return f"{region} {city} 여행명소 {random.choice(prefixes)} {random.choice(mids)} 가볼만한곳 {ending}"
+    if first:
+        return f"{region} {city} {food_word} {adj_word} {ending}"
     else:
-        return f"{region} {city} 가볼만한곳 {random.choice(prefixes)} {random.choice(mids)} 여행명소 {ending}"
+        return f"{region} {city} {adj_word} {food_word} {ending}"
 
 def generate_random_title(region, city):
     return make_title(region, city)
@@ -549,68 +552,68 @@ import random
 
 def make_last(region, city):
     s1 = random.choice([
-        f"{city} 여행은 계절마다 다른 매력을 느낄 수 있어 언제 방문해도 만족도가 높은 지역입니다.",
-        f"{city}에는 다양한 여행명소가 모여 있어 하루 일정으로도 알차게 둘러볼 수 있습니다.",
-        f"{city} 여행을 계획하고 있다면 대표 명소와 숨은 명소를 함께 둘러보는 것을 추천합니다.",
-        f"{city}은(는) 자연과 문화가 조화를 이루는 여행지로 많은 여행객이 찾는 곳입니다.",
-        f"{city}에는 가족, 연인, 친구와 함께 즐기기 좋은 여행지가 다양하게 있습니다.",
-        f"{city} 여행은 짧은 일정으로도 충분히 만족스러운 추억을 만들 수 있습니다.",
-        f"{city}은(는) 사계절 내내 색다른 풍경을 만날 수 있는 인기 여행지입니다.",
-        f"{city}에는 사진 찍기 좋은 명소와 힐링 장소가 많아 만족도가 높습니다.",
-        f"{city}은(는) 지역만의 분위기를 느낄 수 있는 여행 코스로 유명합니다.",
-        f"{city} 여행은 누구와 함께 가도 좋은 다양한 관광지를 만나볼 수 있습니다."
+        f"{city} 맛집은 지역마다 개성이 달라서 취향에 맞는 식당을 찾는 재미가 있습니다.",
+        f"{city}에는 분위기 좋은 맛집과 식당이 많아 외식 코스로도 만족도가 높습니다.",
+        f"{city} 맛집을 찾고 있다면 이번 리스트를 기준으로 동선을 짜보는 것을 추천합니다.",
+        f"{city}은(는) 먹거리 선택지가 다양해 한 끼 식사부터 특별한 외식까지 즐기기 좋습니다.",
+        f"{city}에는 가족, 연인, 친구와 함께 방문하기 좋은 식당이 다양하게 있습니다.",
+        f"{city} 맛집 여행은 짧은 일정으로도 충분히 만족스러운 식도락을 즐길 수 있습니다.",
+        f"{city}은(는) 사계절 내내 다양한 메뉴를 맛볼 수 있는 인기 지역입니다.",
+        f"{city}에는 사진 찍기 좋은 식당과 분위기 좋은 맛집이 많아 만족도가 높습니다.",
+        f"{city}은(는) 지역만의 맛과 분위기를 함께 느낄 수 있는 식도락 코스로 유명합니다.",
+        f"{city} 맛집은 누구와 함께 가도 좋은 다양한 식당을 만나볼 수 있습니다."
     ])
 
     s2 = random.choice([
-        "대표 관광지뿐 아니라 숨은 명소도 함께 방문하면 더욱 알찬 여행이 됩니다.",
-        "유명한 여행명소와 로컬 명소를 함께 둘러보면 더욱 만족도가 높습니다.",
+        "대표 식당뿐 아니라 숨은 맛집도 함께 방문하면 더욱 알찬 외식이 됩니다.",
+        "유명한 맛집과 로컬 식당을 함께 둘러보면 더욱 만족도가 높습니다.",
         "동선을 미리 계획하면 하루 동안 여러 곳을 효율적으로 방문할 수 있습니다.",
-        "계절에 따라 색다른 분위기를 즐길 수 있는 것도 큰 장점입니다.",
-        "주말 나들이나 당일치기 여행으로도 부담 없이 다녀오기 좋습니다.",
-        "사진 촬영 명소도 많아 추억을 남기기에도 좋습니다.",
-        "맛집과 카페를 함께 방문하면 더욱 풍성한 여행이 됩니다.",
-        "아이들과 함께 방문하기 좋은 장소도 다양하게 준비되어 있습니다.",
-        "연인들의 데이트 코스로도 꾸준히 인기를 얻고 있습니다.",
-        "가족 여행 코스로도 만족도가 높은 지역입니다."
+        "계절에 따라 색다른 메뉴와 분위기를 즐길 수 있는 것도 큰 장점입니다.",
+        "주말 외식이나 당일치기 식도락 코스로도 부담 없이 다녀오기 좋습니다.",
+        "사진 촬영하기 좋은 식당도 많아 추억을 남기기에도 좋습니다.",
+        "카페와 함께 방문하면 더욱 풍성한 하루가 됩니다.",
+        "아이들과 함께 방문하기 좋은 식당도 다양하게 준비되어 있습니다.",
+        "연인들의 데이트 식당으로도 꾸준히 인기를 얻고 있습니다.",
+        "가족 외식 코스로도 만족도가 높은 지역입니다."
     ])
 
     s3 = random.choice([
-        f"이번에 소개한 {city} 가볼만한곳은 실제 방문 만족도가 높은 장소를 중심으로 선정했습니다.",
-        f"이번 {city} 여행명소 추천 리스트는 많은 사람들이 찾는 인기 장소를 담았습니다.",
-        f"소개한 {city} 명소들은 처음 방문하는 분들에게도 추천할 만한 곳들입니다.",
-        f"{city} 대표 관광지를 중심으로 여행 계획을 세우면 더욱 편리합니다.",
-        f"여행 일정을 짤 때 이번 리스트를 참고하면 도움이 될 것입니다.",
-        f"여행 코스를 계획하는 분들에게 도움이 되는 장소만 엄선했습니다.",
-        f"현지에서도 많이 찾는 여행지를 중심으로 정리했습니다.",
-        f"다양한 취향을 고려하여 인기 명소를 골고루 소개했습니다.",
-        f"짧은 일정에도 둘러보기 좋은 장소를 중심으로 구성했습니다.",
-        f"재방문 만족도가 높은 명소를 우선적으로 선정했습니다."
+        f"이번에 소개한 {city} 맛집은 실제 방문 만족도가 높은 장소를 중심으로 선정했습니다.",
+        f"이번 {city} 식당 추천 리스트는 많은 사람들이 찾는 인기 장소를 담았습니다.",
+        f"소개한 {city} 맛집들은 처음 방문하는 분들에게도 추천할 만한 곳들입니다.",
+        f"{city} 대표 식당을 중심으로 외식 계획을 세우면 더욱 편리합니다.",
+        f"식도락 일정을 짤 때 이번 리스트를 참고하면 도움이 될 것입니다.",
+        f"여행과 외식을 함께 계획하는 분들에게 도움이 되는 장소만 엄선했습니다.",
+        f"현지에서도 많이 찾는 식당을 중심으로 정리했습니다.",
+        f"다양한 취향을 고려하여 인기 맛집을 골고루 소개했습니다.",
+        f"짧은 일정에도 둘러보기 좋은 식당을 중심으로 구성했습니다.",
+        f"재방문 만족도가 높은 맛집을 우선적으로 선정했습니다."
     ])
 
     s4 = random.choice([
-        "취향에 맞는 여행 코스를 선택해 여유롭게 둘러보시기 바랍니다.",
-        "여행 일정에 맞춰 원하는 장소를 자유롭게 선택해 보세요.",
-        "여유 있는 일정이라면 주변 명소도 함께 방문하는 것을 추천합니다.",
-        "가까운 맛집과 카페를 함께 둘러보면 더욱 만족스러운 여행이 됩니다.",
+        "취향에 맞는 식당을 선택해 여유롭게 둘러보시기 바랍니다.",
+        "외식 일정에 맞춰 원하는 장소를 자유롭게 선택해 보세요.",
+        "여유 있는 일정이라면 주변 식당도 함께 방문하는 것을 추천합니다.",
+        "가까운 카페와 함께 둘러보면 더욱 만족스러운 하루가 됩니다.",
         "사진 촬영 포인트도 함께 찾아보면 더욱 즐거운 시간이 됩니다.",
         "계절에 따라 전혀 다른 분위기를 느낄 수 있습니다.",
-        "날씨가 좋은 날 방문하면 더욱 아름다운 풍경을 감상할 수 있습니다.",
-        "주변 관광지와 함께 코스를 구성하면 더욱 알찬 일정이 됩니다.",
-        "당일치기 여행으로도 충분히 만족할 수 있습니다.",
-        "여행 동선을 미리 계획하면 시간을 더욱 효율적으로 사용할 수 있습니다."
+        "날씨가 좋은 날 방문하면 더욱 좋은 경험이 됩니다.",
+        "주변 맛집과 함께 코스를 구성하면 더욱 알찬 일정이 됩니다.",
+        "당일치기 식도락 여행으로도 충분히 만족할 수 있습니다.",
+        "동선을 미리 계획하면 시간을 더욱 효율적으로 사용할 수 있습니다."
     ])
 
     s5 = random.choice([
-        f"즐거운 {city} 여행 되시길 바랍니다.",
-        f"{city}에서 좋은 추억 많이 만들어 보시기 바랍니다.",
-        f"이번 여행이 오래 기억에 남는 시간이 되길 바랍니다.",
-        f"소중한 사람과 함께 행복한 여행을 즐겨보세요.",
-        f"알찬 여행 코스로 멋진 하루를 보내시기 바랍니다.",
-        f"다음 여행에도 도움이 되는 정보로 찾아뵙겠습니다.",
-        f"여행 계획에 이번 정보가 도움이 되었기를 바랍니다.",
-        f"안전하고 즐거운 여행 되시기 바랍니다.",
-        f"행복한 여행과 멋진 추억을 만들어 보세요.",
-        f"만족스러운 여행이 되기를 응원합니다."
+        f"즐거운 {city} 맛집 탐방 되시길 바랍니다.",
+        f"{city}에서 좋은 식당 많이 발견하시기 바랍니다.",
+        f"이번 외식이 오래 기억에 남는 시간이 되길 바랍니다.",
+        f"소중한 사람과 함께 행복한 식사를 즐겨보세요.",
+        f"알찬 맛집 코스로 멋진 하루를 보내시기 바랍니다.",
+        f"다음 맛집 정보로 다시 찾아뵙겠습니다.",
+        f"식사 계획에 이번 정보가 도움이 되었기를 바랍니다.",
+        f"맛있고 즐거운 하루 되시기 바랍니다.",
+        f"행복한 식도락과 멋진 추억을 만들어 보세요.",
+        f"만족스러운 외식이 되기를 응원합니다."
     ])
 
     return "\n\n".join([s1, s2, s3, s4, s5])
@@ -640,7 +643,7 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
         sec.append("")
         sections.append("\n".join(sec))
     last_text = make_last(region, city)
-    cat = "국내여행" if "해외" not in region else "해외여행"
+    cat = "맛집추천"
     md = f"""---
 title: "{title}"
 date: {date_str}
@@ -655,7 +658,7 @@ image: {thumb_url}
 
 {chr(10).join(sections)}
 
-## {city} 여행 총평
+## {city} 맛집 총평
 
 {last_text}
 """
@@ -702,7 +705,7 @@ def push_post_to_github(file_path, repo_path):
     return f"pushed to {TARGET_BRANCH}"
 
 def main():
-    row_idx, region, city = find_next_row(ws7)
+    row_idx, region, city = find_next_row(ws3)
     if not row_idx:
         print("처리할 행이 없습니다.")
         return
@@ -734,9 +737,9 @@ def main():
         f.write(markdown_content)
     log_step(row_idx, "5단계: Markdown 파일 생성 완료")
     push_state = push_post_to_github(post_path, REPO_PATH)
-    ws7.update_cell(row_idx, 6, "완")
+    ws3.update_cell(row_idx, 6, "완")
     try:
-        ws7.update_cell(row_idx, 15, f"https://github.com/{TARGET_REPO}/blob/{TARGET_BRANCH}/{POSTS_DIR}/{post_filename}")
+        ws3.update_cell(row_idx, 15, f"https://github.com/{TARGET_REPO}/blob/{TARGET_BRANCH}/{POSTS_DIR}/{post_filename}")
     except Exception as e:
         dprint("link write failed:", e)
     log_step(row_idx, f"6단계: GitHub 업로드 {push_state}")
