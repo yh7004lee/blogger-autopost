@@ -1063,17 +1063,16 @@ def find_next_row(ws):
     dprint(f"header={header}")
 
     for i, row in enumerate(rows[1:], start=2):
-        city = row[0].strip() if len(row) > 0 and row[0] else ""
-        region = row[1].strip() if len(row) > 1 and row[1] else ""
-        code = row[2].strip() if len(row) > 2 and row[2] else ""
-        status = row[5].strip() if len(row) > 5 and row[5] else ""
+        a = row[0].strip() if len(row) > 0 and row[0] else ""
+        b = row[1].strip() if len(row) > 1 and row[1] else ""
+        complete = row[2].strip() if len(row) > 2 and row[2] else ""
 
         dprint(f"row={i} raw={row}")
-        dprint(f"row={i} parsed city='{city}', region='{region}', code='{code}', status='{status}'")
+        dprint(f"row={i} parsed a='{a}', b='{b}', complete='{complete}'")
 
-        if city and region and code and status != "완":
+        if complete != "완":
             dprint(f"selected row={i}")
-            return i, region, city
+            return i, a, b
 
     dprint("조건에 맞는 행을 찾지 못했습니다.")
     return None, None, None
@@ -1155,7 +1154,7 @@ def main():
     log_step(row_idx, "5단계: Markdown 파일 생성 완료")
     push_state = push_post_to_github(post_path, REPO_PATH)
 
-    ws7.update_cell(row_idx, 6, "완")
+    ws7.update_cell(row_idx, 3, "완")
     try:
         ws7.update_cell(row_idx, 15, f"https://github.com/{TARGET_REPO}/blob/{TARGET_BRANCH}/{POSTS_DIR}/{post_filename}")
     except Exception as e:
