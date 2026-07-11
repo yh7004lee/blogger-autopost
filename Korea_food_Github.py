@@ -470,6 +470,26 @@ def get_best_place_image(place):
         final_images.append(fallback)
     return final_images[:3]
 
+ADJS = [
+    "꼭가봐야할",
+    "후회없는",
+    "다시 가고싶은",
+    "현지인 추천",
+    "줄서서 먹는",
+    "입소문난",
+    "재방문하고 싶은",
+]
+
+ENDING_WORDS = ["TOP10", "BEST10"]
+
+def make_title(region, city, place_name):
+    adj = random.choice(ADJS)
+    ending = random.choice(ENDING_WORDS)
+    return f"{region} {city} {place_name} 식당 {adj} 맛집 {ending}"
+
+def generate_random_title(region, city, place_name):
+    return make_title(region, city, place_name)
+
 def make_intro_prompt(region, city, title):
     return f"""너는 한국 맛집 블로그 전문 작성자다.
 
@@ -522,34 +542,6 @@ def clean_place_title(title, region, city):
     t = re.sub(r"\s+", " ", t).strip()
     return t or title
 
-def make_title(region, city):
-    adj = [
-        "꼭가봐야할",
-        "다시 가고싶은",
-        "현지인 추천",
-        "줄서서 먹는",
-        "입소문난",
-        "후회없는",
-        "재방문하고 싶은",
-    ]
-    endings = ["TOP10", "BEST10"]
-    food_words = ["맛집", "식당"]
-
-    first = random.choice([True, False])
-    adj_word = random.choice(adj)
-    ending = random.choice(endings)
-    food_word = random.choice(food_words)
-
-    if first:
-        return f"{region} {city} {food_word} {adj_word} {ending}"
-    else:
-        return f"{region} {city} {adj_word} {food_word} {ending}"
-
-def generate_random_title(region, city):
-    return make_title(region, city)
-
-import random
-
 def make_last(region, city):
     s1 = random.choice([
         f"{city} 맛집은 지역마다 개성이 달라서 취향에 맞는 식당을 찾는 재미가 있습니다.",
@@ -563,7 +555,6 @@ def make_last(region, city):
         f"{city}은(는) 지역만의 맛과 분위기를 함께 느낄 수 있는 식도락 코스로 유명합니다.",
         f"{city} 맛집은 누구와 함께 가도 좋은 다양한 식당을 만나볼 수 있습니다."
     ])
-
     s2 = random.choice([
         "대표 식당뿐 아니라 숨은 맛집도 함께 방문하면 더욱 알찬 외식이 됩니다.",
         "유명한 맛집과 로컬 식당을 함께 둘러보면 더욱 만족도가 높습니다.",
@@ -576,7 +567,6 @@ def make_last(region, city):
         "연인들의 데이트 식당으로도 꾸준히 인기를 얻고 있습니다.",
         "가족 외식 코스로도 만족도가 높은 지역입니다."
     ])
-
     s3 = random.choice([
         f"이번에 소개한 {city} 맛집은 실제 방문 만족도가 높은 장소를 중심으로 선정했습니다.",
         f"이번 {city} 식당 추천 리스트는 많은 사람들이 찾는 인기 장소를 담았습니다.",
@@ -589,7 +579,6 @@ def make_last(region, city):
         f"짧은 일정에도 둘러보기 좋은 식당을 중심으로 구성했습니다.",
         f"재방문 만족도가 높은 맛집을 우선적으로 선정했습니다."
     ])
-
     s4 = random.choice([
         "취향에 맞는 식당을 선택해 여유롭게 둘러보시기 바랍니다.",
         "외식 일정에 맞춰 원하는 장소를 자유롭게 선택해 보세요.",
@@ -602,7 +591,6 @@ def make_last(region, city):
         "당일치기 식도락 여행으로도 충분히 만족할 수 있습니다.",
         "동선을 미리 계획하면 시간을 더욱 효율적으로 사용할 수 있습니다."
     ])
-
     s5 = random.choice([
         f"즐거운 {city} 맛집 탐방 되시길 바랍니다.",
         f"{city}에서 좋은 식당 많이 발견하시기 바랍니다.",
@@ -615,7 +603,6 @@ def make_last(region, city):
         f"행복한 식도락과 멋진 추억을 만들어 보세요.",
         f"만족스러운 외식이 되기를 응원합니다."
     ])
-
     return "\n\n".join([s1, s2, s3, s4, s5])
 
 def build_markdown_post(region, city, title, places, thumb_url, date_str):
@@ -623,7 +610,7 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
     sections = []
     for idx, item in enumerate(places, start=1):
         clean_title = clean_place_title(item["title"], region, city)
-        section_title = f"{city} {clean_title}"
+        section_title = f"{region} {city} {clean_title} 맛집 추천"
         images = item.get("images", [])
         overview = item.get("overview", "")
         body = generate_ai_review(make_section_prompt(region, city, clean_title, item.get("addr", ""), overview), clean_title)
@@ -710,8 +697,6 @@ def main():
         print("처리할 행이 없습니다.")
         return
     log_step(row_idx, "1단계: 대상 행 선택")
-    title = generate_random_title(region, city)
-    log_step(row_idx, f"2단계: 제목 생성 ({title})")
     places = get_places(region, city)
     if not places:
         places = get_fallback_places(region, city)
@@ -722,20 +707,29 @@ def main():
         p["images"] = get_best_place_image(p)
         p["overview"] = get_overview_from_place(p)
         time.sleep(0.4)
+
+    primary_place = clean_place_title(places[0]["title"], region, city) if places else city
+    title = generate_random_title(region, city, primary_place)
+    log_step(row_idx, f"2단계: 제목 생성 ({title})")
+
     safe_title = re.sub(r'[\\/:*?"<>|.]', "_", title)
     date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S +0900")
     post_filename = f"{datetime.now().strftime('%Y-%m-%d')}-{safe_title}.md"
     post_path = os.path.join(REPO_PATH, POSTS_DIR, post_filename)
     os.makedirs(os.path.dirname(post_path), exist_ok=True)
+
     thumb_path = os.path.join(THUMB_DIR, f"{safe_title}.png")
     make_thumb(thumb_path, title)
     log_step(row_idx, "3단계: 썸네일 생성 완료")
+
     thumb_url = upload_to_drive(thumb_path, f"{safe_title}.png")
     log_step(row_idx, "4단계: 썸네일 Drive 업로드 완료")
+
     markdown_content = build_markdown_post(region, city, title, places, thumb_url, date_str)
     with open(post_path, "w", encoding="utf-8") as f:
         f.write(markdown_content)
     log_step(row_idx, "5단계: Markdown 파일 생성 완료")
+
     push_state = push_post_to_github(post_path, REPO_PATH)
     ws3.update_cell(row_idx, 6, "완")
     try:
