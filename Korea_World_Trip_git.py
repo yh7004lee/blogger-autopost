@@ -1069,17 +1069,33 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
     sections = []
     for idx, item in enumerate(places, start=1):
         clean_title = clean_place_title(item.get("title", ""), region, city)
-        # 소제목에 맛집 대신 관광명소명 명시
         section_title = f"{region} {city} 가볼만한곳 관광명소 - {clean_title}"
         images = item.get("images", []) or []
         overview = item.get("overview", "") or item.get("raw", {}).get("overview", "") or ""
-        addr = item.get("addr", "") or item.get("raw", {}).get("addr1", "") or ""
+        
+        # 주소 상세 정보 추출 (formatted_address 또는 vicinity가 있으면 우선 사용)
+        addr = (
+            item.get("addr", "") 
+            or item.get("raw", {}).get("formatted_address", "") 
+            or item.get("raw", {}).get("vicinity", "") 
+            or item.get("raw", {}).get("addr1", "")
+        ).strip()
+        
+        # 만약 주소가 단순 지역명(예: "일본 오사카") 수준이면 raw 데이터에서 한 번 더 상세 주소 탐색
+        if addr == f"{region} {city}" or len(addr) < 4:
+            raw_addr = item.get("raw", {}).get("formatted_address") or item.get("raw", {}).get("vicinity")
+            if raw_addr:
+                addr = raw_addr.strip()
+
         body = generate_ai_review(
             make_section_prompt(region, city, clean_title, addr, overview),
             clean_title
         )
 
         sec = []
+        # 요청하신 대로 소제목 상단에 빈 줄 2줄 이상 확보
+        sec.append("")
+        sec.append("")
         sec.append(f"## {idx}. {section_title}")
         sec.append("")
 
