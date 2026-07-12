@@ -103,7 +103,7 @@ def ensure_gitignore(rep_path):
 def get_sheet():
     serviceaccountfile = "sheetapi.json"
     scopes = ["https://www.googleapis.com/auth/spreadsheets"]
-    creds = SACredentials.from_service_account_file(serviceaccountfile, scopes=scopes)
+    creds = SA_Credentials.from_service_account_file(serviceaccountfile, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEETID)
     for ws in sh.worksheets():
