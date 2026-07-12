@@ -17,7 +17,7 @@ import requests
 from PIL import Image, ImageDraw, ImageFont
 
 import gspread
-from google.oauth2.serviceaccount import Credentials as SACredentials
+from google.oauth2.service_account import Credentials as SACredentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
@@ -197,7 +197,7 @@ def textwrap_kor(text, width):
         return []
     words = text.split()
     if not words:
-        return [text[i:i+width] for i in range(0, len(text), width)]
+        return [text[i:i + width] for i in range(0, len(text), width)]
     lines, cur = [], ""
     for w in words:
         test = f"{cur} {w}".strip()
@@ -261,6 +261,8 @@ def generate_ai_text(prompt, keyword=""):
                 return text.strip()
         except Exception as e:
             lasterr = e
+            dprint("AI 1:", e)
+
     if genaiclient:
         try:
             response = genaiclient.models.generate_content(
@@ -272,6 +274,8 @@ def generate_ai_text(prompt, keyword=""):
                 return text.strip()
         except Exception as e:
             lasterr = e
+            dprint("AI 2:", e)
+
     if client:
         try:
             res = client.chat.completions.create(
@@ -285,10 +289,12 @@ def generate_ai_text(prompt, keyword=""):
                 return text
         except Exception as e:
             lasterr = e
+            dprint("AI 3:", e)
+
     return f"{keyword} {lasterr}"
 
 
-def google_places_search(query, region, city):
+def google_places_search(query):
     if not GOOGLEMAPSAPIKEY:
         return []
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
@@ -405,7 +411,7 @@ def fetch_overseas_places(region, city):
     ]
 
     for q in queries:
-        results = google_places_search(q, region, city)
+        results = google_places_search(q)
         for r in results:
             name = (r.get("name") or "").strip()
             pid = (r.get("place_id") or "").strip()
@@ -423,7 +429,7 @@ def fetch_overseas_places(region, city):
                 "overview": (detail.get("editorial_summary") or {}).get("overview", ""),
                 "rating": detail.get("rating", r.get("rating", 0)),
                 "reviews": detail.get("user_ratings_total", r.get("user_ratings_total", 0)),
-                "images": google_photo_urls(detail) if detail else [],
+                "images": get_best_place_image(detail) if detail else [],
                 "raw": detail or r,
             }
             places.append(item)
@@ -433,9 +439,8 @@ def fetch_overseas_places(region, city):
             break
 
     if len(places) < 10:
-        # fallback: duplicates less likely, but keep content flowing
         extra_q = f"{city} {region} landmarks"
-        results = google_places_search(extra_q, region, city)
+        results = google_places_search(extra_q)
         for r in results:
             name = (r.get("name") or "").strip()
             if not name:
@@ -512,33 +517,32 @@ def build_markdown_post(region, city, title, places, thumburl, datestr):
             make_section_prompt(region, city, cleantitle, item.get("addr", ""), overview),
             cleantitle,
         )
+
         sec = []
         sec.append(f"## {sectiontitle}")
-        for img in images[:1]:
-            sec.append(f'<p><img src="{img}" alt="{cleantitle}" /></p>')
-            break
+        if images:
+            sec.append(f'<p><img src="{images[0]}" alt="{cleantitle}" /></p>')
         if item.get("addr"):
             sec.append(f"<p><strong>주소:</strong> {item['addr']}</p>")
         if body:
             sec.append(body)
         sections.append("\n".join(sec))
-
         time.sleep(0.2)
 
     joined_sections = "\n\n".join(sections)
 
     md = f"""---
-    title: "{title}"
-    date: {datestr}
-    categories: [travel]
-    tags: [{region}, {city}, overseas, travel]
-    image: {thumburl}
-    ---
-    
-    {intro}
-    
-    {joined_sections}
-    """
+title: "{title}"
+date: {datestr}
+categories: [해외여행]
+tags: [{region}, {city}, overseas, travel]
+image: {thumburl}
+---
+
+{intro}
+
+{joined_sections}
+"""
     return md
 
 
@@ -556,7 +560,15 @@ def find_next_row_sheet4():
 
 
 def git_run(cmd, cwd=None, env=None):
-    result = subprocess.run(cmd, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    result = subprocess.run(
+        cmd,
+        cwd=cwd,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    )
     return result
 
 
@@ -580,7 +592,15 @@ def push_post_to_github(filepath, repopath):
     git_run(["git", "reset", "--hard", f"origin/{TARGETBRANCH}"], cwd=repopath, env=env)
     git_run(["git", "add", relpath], cwd=repopath, env=env)
 
-    status = subprocess.run(["git", "status", "--porcelain"], cwd=repopath, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env).stdout.strip()
+    status = subprocess.run(
+        ["git", "status", "--porcelain"],
+        cwd=repopath,
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=env,
+    ).stdout.strip()
     if not status:
         return "no changes"
 
