@@ -525,18 +525,20 @@ def build_markdown_post(region, city, title, places, thumburl, datestr):
 
         time.sleep(0.2)
 
+    joined_sections = "\n\n".join(sections)
+
     md = f"""---
-title: "{title}"
-date: {datestr}
-categories: [travel]
-tags: [{region}, {city}, overseas, travel]
-image: {thumburl}
----
-
-{intro}
-
-{"\n\n".join(sections)}
-"""
+    title: "{title}"
+    date: {datestr}
+    categories: [travel]
+    tags: [{region}, {city}, overseas, travel]
+    image: {thumburl}
+    ---
+    
+    {intro}
+    
+    {joined_sections}
+    """
     return md
 
 
