@@ -1121,7 +1121,7 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
         sections.append("\n".join(sec))
 
     last_text = make_last(region, city)
-    cat = "여행정보"
+    cat = "해외여행"
 
     md = f"""---
 title: "{title}"
