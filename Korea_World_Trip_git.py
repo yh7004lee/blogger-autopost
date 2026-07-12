@@ -947,21 +947,12 @@ def clean_place_title(title, region, city):
     t = re.sub(r"\s+", " ", t)
     t = t.replace("\n", " ").strip()
 
-    # 다국어/긴 상호명 분리
-    for sep in ["|", "/", "·", "•", ","]:
+    for sep in ["|", "/", "·", "•"]:
         if sep in t:
             parts = [p.strip() for p in t.split(sep) if p.strip()]
             if parts:
                 t = parts[0]
                 break
-
-    # 괄호 정보 제거
-    t = re.sub(r"\([^)]*\)", "", t).strip()
-
-    # 도시명 중복 정리
-    if city and t.count(city) > 1:
-        t = re.sub(rf"(^|\s+){re.escape(city)}(?=\s+|$)", "", t, count=1).strip()
-        t = re.sub(r"\s+", " ", t).strip()
 
     return t
 
@@ -1097,9 +1088,8 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
             or item.get("raw", {}).get("formatted_address", "") 
             or item.get("raw", {}).get("vicinity", "") 
             or item.get("raw", {}).get("addr1", "")
-        ).strip()
-        
-        # 만약 주소가 단순 지역명(예: "일본 오사카") 수준이면 raw 데이터에서 한 번 더 상세 주소 탐색
+        ).strip()        
+         
         if addr == f"{region} {city}" or len(addr) < 4:
             raw_addr = item.get("raw", {}).get("formatted_address") or item.get("raw", {}).get("vicinity")
             if raw_addr:
