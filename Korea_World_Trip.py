@@ -1,0 +1,1164 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+import sys
+sys.stdout.reconfigure(encoding="utf-8")
+
+import os
+import json
+import re
+import time
+import random
+import traceback
+import urllib.parse
+import glob
+import pickle
+import subprocess
+from datetime import datetime
+import requests
+from PIL import Image, ImageDraw, ImageFont
+
+import gspread
+from google.oauth2.service_account import Credentials as SA_Credentials
+from google.auth.transport.requests import Request
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+#Korea_Travle_Github
+try:
+    from openai import OpenAI
+except Exception:
+    OpenAI = None
+
+try:
+    from google import genai
+except Exception:
+    genai = None
+
+import feedparser
+
+DEBUG_MODE = True
+
+def dprint(*args):
+    if DEBUG_MODE:
+        print("[DEBUG]", *args)
+
+API_KEYS_JSON = os.getenv("API_KEYS_JSON")
+if not API_KEYS_JSON:
+    raise RuntimeError("API_KEYS_JSON 환경변수가 없습니다. GitHub Secrets 를 확인하세요.")
+
+try:
+    secrets = json.loads(API_KEYS_JSON)
+except Exception as e:
+    raise RuntimeError(f"API_KEYS_JSON 파싱 실패: {e}")
+
+OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
+OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
+GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
+SHEET_ID = "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs"
+DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "")
+GOOGLE_MAPS_API_KEY = "AIzaSyBiLiWI4rTtdk_IW-f26uEIkhnKjEBHI1w"
+TOUR_API_KEY = secrets.get("TOUR_API_KEY", "")
+
+TARGET_GITHUB_PAT = os.getenv("TARGET_GITHUB_PAT", "")
+TARGET_REPO = "jm7004lee/jm7004lee.github.io"
+TARGET_BRANCH = "main"
+REPO_PATH = os.getenv("TARGET_REPO_PATH", os.getcwd())
+POSTS_DIR = "_posts"
+
+client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
+genai_client = None
+if GEMINI_API_KEY and genai:
+    try:
+        genai_client = genai.Client(api_key=GEMINI_API_KEY)
+    except Exception as e:
+        dprint("genai init failed:", e)
+        genai_client = None
+
+HISTORY_PATH = "processed_regions_blogger.json"
+SHEET_GID = 2131907983
+
+ASSETS_BG_DIR = "assets/backgrounds"
+ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
+THUMB_DIR = "thumbnails"
+
+GITIGNORE_CONTENT = """2nd.json
+2nd.json.b64
+blogger_token.json
+cc.json
+cc.json.b64
+drive_token_2nd.pickle
+drive_token_2nd.pickle.b64
+openai.json
+openai.json.b64
+sheetapi.json
+sheetapi.json.b64
+thumbnails/
+"""
+
+def ensure_gitignore(repo_path):
+    path = os.path.join(repo_path, ".gitignore")
+    if not os.path.exists(path):
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(GITIGNORE_CONTENT)
+
+def get_sheet7():
+    service_account_file = "sheetapi.json"
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
+    gc = gspread.authorize(creds)
+    sh = gc.open_by_key(SHEET_ID)
+
+    # Sheet7 이름 우선 탐색
+    try:
+        return sh.worksheet("Sheet7")
+    except Exception:
+        pass
+
+    # 혹시 이름이 아니라 gid로 관리 중이면 Sheet7 후보를 다시 찾음
+    for ws in sh.worksheets():
+        if ws.title == "Sheet7":
+            return ws
+
+    raise RuntimeError("Sheet7 시트를 찾지 못했습니다.")
+
+ws7 = get_sheet7()
+
+def normalize_region_city(region, city):
+    r = str(region or "").strip()
+    c = str(city or "").strip()
+
+    if not r and not c:
+        return ""
+
+    if r == c:
+        return r
+
+    if r and c:
+        return f"{r} {c}"
+
+    return r or c
+    
+def get_drive_service():
+    token_path = "drive_token_2nd.pickle"
+    if not os.path.exists(token_path):
+        raise RuntimeError("drive_token_2nd.pickle 없음 — Drive API 사용자 토큰이 필요합니다.")
+    with open(token_path, "rb") as f:
+        creds = pickle.load(f)
+    if not creds.valid and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        with open(token_path, "wb") as f:
+            pickle.dump(creds, f)
+    return build("drive", "v3", credentials=creds)
+
+def ensure_drive_folder(drive_service, folder_name):
+    q = f"mimeType='application/vnd.google-apps.folder' and name='{folder_name}' and trashed=false"
+    res = drive_service.files().list(q=q, fields="files(id, name)").execute()
+    files = res.get("files", [])
+    if files:
+        return files[0]["id"]
+    folder_metadata = {"name": folder_name, "mimeType": "application/vnd.google-apps.folder"}
+    folder = drive_service.files().create(body=folder_metadata, fields="id").execute()
+    return folder.get("id")
+
+def upload_to_drive(file_path, file_name):
+    drive_service = get_drive_service()
+    folder_id = (DRIVE_FOLDER_ID or "").strip()
+    if not folder_id or folder_id == "YOUR_DRIVE_FOLDER_ID":
+        folder_id = ensure_drive_folder(drive_service, "blogger")
+    media = MediaFileUpload(file_path, mimetype="image/png", resumable=True)
+    meta = {"name": file_name, "parents": [folder_id]}
+    try:
+        uploaded = drive_service.files().create(body=meta, media_body=media, fields="id").execute()
+    except Exception as e:
+        dprint("drive upload first attempt failed:", e)
+        folder_id = ensure_drive_folder(drive_service, "blogger")
+        meta = {"name": file_name, "parents": [folder_id]}
+        uploaded = drive_service.files().create(body=meta, media_body=media, fields="id").execute()
+    drive_service.permissions().create(
+        fileId=uploaded["id"],
+        body={"type": "anyone", "role": "reader", "allowFileDiscovery": False}
+    ).execute()
+    return f"https://lh3.googleusercontent.com/d/{uploaded['id']}"
+
+def load_processed_regions():
+    if not os.path.exists(HISTORY_PATH):
+        return []
+    try:
+        with open(HISTORY_PATH, "r", encoding="utf-8") as f:
+            return json.load(f).get("regions", [])
+    except Exception as e:
+        dprint("load_processed_regions failed:", e)
+        return []
+
+def save_processed_region(region, city):
+    processed = load_processed_regions()
+    key = f"{region} {city}"
+    if key not in processed:
+        processed.append(key)
+    with open(HISTORY_PATH, "w", encoding="utf-8") as f:
+        json.dump({"regions": processed}, f, ensure_ascii=False, indent=2)
+
+def log_step(row, msg: str):
+    try:
+        prev = ws7.cell(row, 16).value or ""
+        ws7.update_cell(row, 16, f"{prev} | {msg}" if prev else msg)
+    except Exception as e:
+        print("⚠️ 로그 기록 실패:", e)
+
+def pick_random_background() -> str:
+    files = []
+    for ext in ("*.png", "*.jpg", "*.jpeg"):
+        files.extend(glob.glob(os.path.join(ASSETS_BG_DIR, ext)))
+    return random.choice(files) if files else ""
+
+def textwrap_wrap_kor(text, width):
+    if not text:
+        return [""]
+    words = text.split()
+    if not words:
+        return [text[i:i + width] for i in range(0, len(text), width)]
+    lines, cur = [], ""
+    for w in words:
+        test = (cur + " " + w).strip()
+        if len(test) <= width:
+            cur = test
+        else:
+            if cur:
+                lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+def make_thumb(save_path: str, var_title: str):
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    bg_path = pick_random_background()
+    if bg_path and os.path.exists(bg_path):
+        bg = Image.open(bg_path).convert("RGBA").resize((500, 500))
+    else:
+        bg = Image.new("RGBA", (500, 500), (255, 255, 255, 255))
+    try:
+        font = ImageFont.truetype(ASSETS_FONT_TTF, 48)
+    except:
+        font = ImageFont.load_default()
+    canvas = Image.new("RGBA", (500, 500), (255, 255, 255, 0))
+    canvas.paste(bg, (0, 0))
+    rectangle = Image.new("RGBA", (500, 250), (0, 0, 0, 200))
+    canvas.paste(rectangle, (0, 125), rectangle)
+    draw = ImageDraw.Draw(canvas)
+    var_title_wrap = textwrap_wrap_kor(var_title, 12)
+    bbox = font.getbbox("가")
+    line_height = (bbox[3] - bbox[1]) + 12
+    total_text_height = len(var_title_wrap) * line_height
+    var_y_point = 500 / 2 - total_text_height / 2
+    for line in var_title_wrap:
+        text_bbox = draw.textbbox((0, 0), line, font=font)
+        text_width = text_bbox[2] - text_bbox[0]
+        x = (500 - text_width) / 2
+        draw.text((x, var_y_point), line, "#FFEECB", font=font)
+        var_y_point += line_height
+    canvas = canvas.resize((400, 400))
+    canvas.save(save_path, "PNG")
+
+def generate_ai_review(prompt, keyword):
+    last_err = None
+    if genai_client:
+        try:
+            response = genai_client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            text = getattr(response, "text", "") or ""
+            if text.strip():
+                return text.strip()
+        except Exception as e:
+            last_err = e
+            dprint("AI 실패 1:", e)
+    if genai_client:
+        try:
+            response = genai_client.models.generate_content(model="gemini-2.5-flash-lite", contents=prompt)
+            text = getattr(response, "text", "") or ""
+            if text.strip():
+                return text.strip()
+        except Exception as e:
+            last_err = e
+            dprint("AI 실패 2:", e)
+    try:
+        res = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+            json={"model": "openrouter/auto", "messages": [{"role": "user", "content": prompt}]},
+            timeout=40
+        )
+        data = res.json()
+        choices = data.get("choices", [])
+        if choices:
+            text = choices[0].get("message", {}).get("content", "")
+            if text.strip():
+                return text.strip()
+        raise RuntimeError(f"OpenRouter 응답 구조 이상: {data}")
+    except Exception as e:
+        last_err = e
+        dprint("AI 실패 3:", e)
+    if client:
+        try:
+            res = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=1200
+            )
+            text = res.choices[0].message.content.strip()
+            if text:
+                return text
+        except Exception as e:
+            last_err = e
+            dprint("AI 실패 4:", e)
+    if client:
+        try:
+            res = client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7,
+                max_tokens=1200
+            )
+            text = res.choices[0].message.content.strip()
+            if text:
+                return text
+        except Exception as e:
+            last_err = e
+            dprint("AI 실패 5:", e)
+    return f"{keyword} 설명 생성 실패: {last_err}"
+
+def get_queries(region, city):
+    region_city = normalize_region_city(region, city)
+
+    return [
+        f"{region_city} 관광지",
+        f"{region_city} 명소",
+        f"{region_city} 핫플레이스",
+        f"{region_city} 가볼만한곳",
+        f"{region_city} 여행지",
+        f"{region_city} 여행명소",
+        f"{city} 관광지",
+        f"{city} 명소",
+        f"{city} 핫플레이스",
+        f"{city} 가볼만한곳",
+        f"{city} 여행지",
+        f"{city} 여행명소",
+    ]
+
+def google_text_search(query, city="", region=""):
+    if not GOOGLE_MAPS_API_KEY:
+        return []
+    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+    params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "ko"}
+    try:
+        res = requests.get(url, params=params, timeout=15)
+        data = res.json()
+        status = data.get("status", "")
+        if status in ["ZERO_RESULTS", "INVALID_REQUEST", "OVER_QUERY_LIMIT", "REQUEST_DENIED"]:
+            return []
+        return data.get("results", [])
+    except Exception as e:
+        dprint("google_text_search failed:", query, e)
+        return []
+
+def is_valid_place(place):
+    types = place.get("types", [])
+    bad_types = ["school", "university", "gym", "hospital", "lodging", "real_estate_agency", "bank", "shopping_mall", "store"]
+    good_types = ["restaurant", "meal_takeaway", "meal_delivery", "point_of_interest", "food", "cafe"]
+    return any(t in good_types for t in types) and not any(t in bad_types for t in types)
+
+def score_place(item):
+    rating = item.get("rating", 0) or 0
+    reviews = item.get("user_ratings_total", 0) or 0
+    s = rating * 10
+    s += min(reviews / 100, 20)
+    if "restaurant" in item.get("types", []):
+        s += 10
+    if "food" in item.get("types", []):
+        s += 6
+    if "meal_takeaway" in item.get("types", []):
+        s += 4
+    return s
+
+def get_fallback_places(region, city):
+    dprint("=== get_fallback_places START ===")
+    candidates = [
+        f"{city} 맛집",
+        f"{city} 식당",
+        f"{city} 한식당",
+        f"{city} 고기집",
+        f"{city} 찌개집",
+        f"{city} 국밥집",
+        f"{city} 분식집",
+        f"{city} 밥집"
+    ]
+
+    places = []
+    seen = set()
+
+    for idx, name in enumerate(candidates, start=1):
+        key = name.lower().strip()
+        if key in seen:
+            dprint(f"  - skip duplicate fallback: {name}")
+            continue
+        seen.add(key)
+
+        item = {
+            "title": name,
+            "addr": f"{region} {city}",
+            "raw": {},
+            "score": 0
+        }
+        places.append(item)
+        dprint(f"  - fallback added idx={idx} title={name}")
+
+    dprint("[FALLBACK FINAL]", [p["title"] for p in places])
+    dprint("=== get_fallback_places END ===")
+    return places
+
+def get_places(region, city):
+    print("🔄 관광지/장소 목록 수집 시작")
+    print(f"📍 region={region}, city={city}")
+
+    region_city = normalize_region_city(region, city)
+    places = []
+    seen = set()
+
+    def add_place(item, score=0):
+        title = (item.get("title") or "").strip()
+        if not title:
+            return
+        key = title.lower().strip()
+        if key in seen:
+            return
+        seen.add(key)
+        places.append({
+            "contentId": (item.get("contentid") or item.get("contentId") or "").strip(),
+            "title": title,
+            "addr": (item.get("addr1") or item.get("addr") or "").strip(),
+            "image": (item.get("firstimage") or item.get("image") or "").strip(),
+            "raw": item,
+            "score": score
+        })
+
+    def score_tour_item(item):
+        s = 0
+        if (item.get("title") or "").strip():
+            s += 10
+        if (item.get("addr1") or "").strip():
+            s += 4
+        if (item.get("firstimage") or "").strip():
+            s += 6
+        if (item.get("contentid") or "").strip():
+            s += 3
+        return s
+
+    def fetch_json(url, params):
+        try:
+            res = requests.get(url, params=params, timeout=30)
+            res.raise_for_status()
+            return res.json()
+        except Exception as e:
+            print(f"❌ 요청 실패: {url} / {e}")
+            return {}
+
+    def parse_items(data):
+        items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+        if isinstance(items, dict):
+            items = [items]
+        if not isinstance(items, list):
+            items = []
+        return items
+
+    keywords = [
+        f"{region_city} 관광지",
+        f"{region_city} 명소",
+        f"{region_city} 핫플레이스",
+        f"{region_city} 가볼만한곳",
+        f"{region_city} 여행지",
+        f"{region_city} 여행명소",
+        f"{city} 관광지",
+        f"{city} 명소",
+        f"{city} 핫플레이스",
+        f"{city} 가볼만한곳",
+        f"{city} 여행지",
+        f"{city} 여행명소",
+    ]
+
+    for kw in keywords:
+        url = "https://apis.data.go.kr/B551011/KorService2/searchKeyword1"
+        params = {
+            "serviceKey": TOUR_API_KEY,
+            "MobileOS": "ETC",
+            "MobileApp": "travel_blog",
+            "_type": "json",
+            "numOfRows": 30,
+            "pageNo": 1,
+            "listYN": "Y",
+            "arrange": "P",
+            "contentTypeId": 12,
+            "keyword": kw,
+        }
+        data = fetch_json(url, params)
+        items = parse_items(data)
+        print(f"[TourAPI keyword] {kw} -> {len(items)}개")
+
+        for item in items:
+            add_place(item, score=score_tour_item(item))
+            if len(places) >= 10:
+                break
+        if len(places) >= 10:
+            break
+
+    if len(places) < 10:
+        url = "https://apis.data.go.kr/B551011/KorService2/areaBasedList2"
+        params = {
+            "serviceKey": TOUR_API_KEY,
+            "MobileOS": "ETC",
+            "MobileApp": "travel_blog",
+            "_type": "json",
+            "numOfRows": 50,
+            "pageNo": 1,
+            "listYN": "Y",
+            "arrange": "P",
+            "contentTypeId": 12,
+        }
+        data = fetch_json(url, params)
+        items = parse_items(data)
+        print(f"[TourAPI areaBasedList2] -> {len(items)}개")
+
+        for item in items:
+            add_place(item, score=score_tour_item(item))
+            if len(places) >= 10:
+                break
+
+    if len(places) < 10 and GOOGLE_MAPS_API_KEY:
+        print("🔄 Google Places 보조 수집 시작")
+        for q in get_queries(region, city):
+            results = google_text_search(q)
+            print(f"[Google] {q} -> {len(results)}개")
+            for r in results:
+                name = (r.get("name") or "").strip()
+                if not name:
+                    continue
+                key = name.lower().strip()
+                if key in seen:
+                    continue
+                if not is_valid_place(r):
+                    continue
+                seen.add(key)
+                places.append({
+                    "contentId": "",
+                    "title": name,
+                    "addr": (r.get("formatted_address") or "").strip(),
+                    "image": "",
+                    "raw": r,
+                    "score": score_place(r)
+                })
+                if len(places) >= 10:
+                    break
+            if len(places) >= 10:
+                break
+
+    places = sorted(places, key=lambda x: x["score"], reverse=True)[:10]
+
+    print(f"✅ 최종 수집 완료: {len(places)}개")
+    for idx, p in enumerate(places, start=1):
+        print(f"  [{idx}] {p['title']} | {p.get('addr', '')} | {p.get('image', '')[:60]}")
+
+    return places
+
+def get_overview_from_place(place):
+    return place.get("raw", {}).get("formatted_address", "상세 설명이 제공되지 않습니다.")
+
+def is_valid_image_url(url):
+    if not url or not isinstance(url, str):
+        return False
+
+    url = url.strip()
+    if not url.startswith(("http://", "https://")):
+        return False
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    try:
+        # 1차: HEAD로 상태 확인
+        try:
+            head = requests.head(url, headers=headers, timeout=10, allow_redirects=True)
+            if head.status_code >= 400:
+                print(f"[IMG HEAD FAIL] {head.status_code} | {url}")
+                return False
+
+            ctype = (head.headers.get("content-type") or "").lower()
+            if ctype and "image" not in ctype:
+                print(f"[IMG HEAD NOT IMAGE] {ctype} | {url}")
+                return False
+        except Exception as e:
+            print(f"[IMG HEAD WARN] {e} | {url}")
+
+        # 2차: GET으로 실제 바이트 확인
+        res = requests.get(url, headers=headers, timeout=15, allow_redirects=True)
+        if res.status_code != 200:
+            print(f"[IMG GET FAIL] {res.status_code} | {url}")
+            return False
+
+        ctype = (res.headers.get("content-type") or "").lower()
+        if "image" not in ctype:
+            print(f"[IMG GET NOT IMAGE] {ctype} | {url}")
+            return False
+
+        content = res.content
+        if not content or len(content) < 100:
+            print(f"[IMG TOO SMALL] {len(content) if content else 0} | {url}")
+            return False
+
+        # 3차: PIL로 실제 이미지 검증
+        from io import BytesIO
+        try:
+            img = Image.open(BytesIO(content))
+            img.verify()
+        except Exception as e:
+            print(f"[IMG VERIFY FAIL] {type(e).__name__} | {url}")
+            return False
+
+        return True
+
+    except Exception as e:
+        print(f"[IMG VALIDATE ERROR] {type(e).__name__}: {e} | {url}")
+        return False
+
+
+def get_google_place_photos_by_name(place_name, max_photos=3, region="", city=""):
+    if not GOOGLE_MAPS_API_KEY:
+        return []
+
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        q = " ".join([x for x in [region, city, place_name] if x]).strip()
+
+        search_url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+        search_params = {
+            "query": q,
+            "key": GOOGLE_MAPS_API_KEY,
+            "language": "ko"
+        }
+
+        res = requests.get(search_url, params=search_params, headers=headers, timeout=15)
+        data = res.json()
+        if not data.get("results"):
+            dprint("photo search no results:", q)
+            return []
+
+        place_id = data["results"][0].get("place_id")
+        if not place_id:
+            dprint("photo search no place_id:", q)
+            return []
+
+        details_url = "https://maps.googleapis.com/maps/api/place/details/json"
+        details_params = {
+            "place_id": place_id,
+            "fields": "photos",
+            "key": GOOGLE_MAPS_API_KEY,
+            "language": "ko"
+        }
+
+        res2 = requests.get(details_url, params=details_params, headers=headers, timeout=15)
+        data2 = res2.json()
+
+        photos = data2.get("result", {}).get("photos", [])
+        if isinstance(photos, dict):
+            photos = [photos]
+
+        photo_urls = []
+        for p in photos[:max_photos]:
+            ref = p.get("photo_reference")
+            if not ref:
+                continue
+            url = (
+                "https://maps.googleapis.com/maps/api/place/photo"
+                f"?maxwidth=1600&photo_reference={ref}&key={GOOGLE_MAPS_API_KEY}"
+            )
+            photo_urls.append(url)
+
+        dprint("photo candidates:", q, len(photo_urls))
+        return photo_urls
+
+    except Exception as e:
+        dprint("place photo lookup failed:", place_name, e)
+        return []
+
+
+def get_best_place_image(place):
+    candidates = []
+    title = str(place.get("title", "")).strip()
+    addr = str(place.get("addr", "")).strip()
+    content_id = str(place.get("contentId", "")).strip()
+    raw = place.get("raw", {}) or {}
+
+    print("=== get_best_place_image START ===")
+    print(f"title={title}")
+    print(f"contentId={content_id}")
+    print(f"addr={addr}")
+
+    # 1차: TourAPI firstimage 우선
+    first_image = str(place.get("image", "")).strip()
+    if first_image:
+        candidates.append(first_image)
+        print(f"[TourAPI image] place.image = {first_image}")
+
+    raw_first = str(raw.get("firstimage", "")).strip()
+    if raw_first and raw_first not in candidates:
+        candidates.append(raw_first)
+        print(f"[TourAPI image] raw.firstimage = {raw_first}")
+
+    # 2차: 상세 이미지 보강 시도
+    if content_id and TOUR_API_KEY:
+        try:
+            img_url = "https://apis.data.go.kr/B551011/KorService2/detailImage2"
+            params = {
+                "serviceKey": TOUR_API_KEY,
+                "MobileOS": "ETC",
+                "MobileApp": "travel_blog",
+                "_type": "json",
+                "contentId": content_id,
+                "imageYN": "Y",
+                "subImageYN": "Y",
+                "numOfRows": 10,
+                "pageNo": 1,
+            }
+            res = requests.get(img_url, params=params, timeout=30)
+            data = res.json()
+            items = data.get("response", {}).get("body", {}).get("items", {}).get("item", [])
+            if isinstance(items, dict):
+                items = [items]
+            print(f"[TourAPI detailImage2] {len(items)}개")
+            for item in items:
+                u = (item.get("originimgurl") or item.get("smallimageurl") or "").strip()
+                if u and u not in candidates:
+                    candidates.append(u)
+                    print(f"  - detail image: {u}")
+        except Exception as e:
+            print(f"⚠️ TourAPI 상세 이미지 실패: {e}")
+
+    # 3차: Google Photos 보조
+    if len(candidates) < 3 and title and GOOGLE_MAPS_API_KEY:
+        try:
+            google_imgs = get_google_place_photos_by_name(title, max_photos=3)
+            for u in google_imgs:
+                if u and u not in candidates:
+                    candidates.append(u)
+            print(f"[Google image] title search -> {len(google_imgs)}개")
+        except Exception as e:
+            print(f"⚠️ Google 이미지 실패: {e}")
+
+    if len(candidates) < 3 and title and addr and GOOGLE_MAPS_API_KEY:
+        try:
+            google_imgs = get_google_place_photos_by_name(f"{addr} {title}", max_photos=3)
+            for u in google_imgs:
+                if u and u not in candidates:
+                    candidates.append(u)
+            print(f"[Google image] addr+title search -> {len(google_imgs)}개")
+        except Exception as e:
+            print(f"⚠️ Google 주소+이름 이미지 실패: {e}")
+
+    # 검증
+    verified = []
+    seen = set()
+    for idx, url in enumerate(candidates, start=1):
+        if not url or not isinstance(url, str):
+            continue
+        url = url.strip()
+        if url in seen:
+            continue
+        seen.add(url)
+
+        ok = is_valid_image_url(url)
+        print(f"[VERIFY] {idx}: {ok} -> {url}")
+        if ok:
+            verified.append(url)
+
+        if len(verified) >= 3:
+            break
+
+    fallback = "https://via.placeholder.com/800x500?text=No+Image"
+    while len(verified) < 3:
+        verified.append(fallback)
+
+    print(f"[FINAL IMAGE] {verified[:3]}")
+    print("=== get_best_place_image END ===")
+    return verified[:3]
+
+def make_intro_prompt(region, city, title, place_names=None):
+    place_hint = ""
+    if place_names:
+        if isinstance(place_names, list):
+            place_hint = ", ".join(place_names[:10])
+        else:
+            place_hint = str(place_names)
+
+    region_city = normalize_region_city(region, city)
+
+    return f"""너는 한국 여행 블로그 전문 작성자다.
+
+아래 정보를 바탕으로 서론만 작성해라.
+- 지역: {region_city}
+- 글 제목: {title}
+- 주요 여행명소: {place_hint}
+
+조건:
+- 5문장
+- 자연스러운 한국어
+- 여행 기대감이 느껴지게
+- 지역 분위기와 대표 명소가 함께 느껴지게
+- 너무 광고처럼 쓰지 말 것
+- 마크다운 금지
+- <p>와 <br> 태그만 사용 가능
+- <p> 로 시작할 것
+- 제목 태그 금지
+- 중국어/일본어 금지
+"""
+
+def make_section_prompt(region, city, place_title, addr, overview):
+    region_city = normalize_region_city(region, city)
+
+    return f"""너는 한국 여행 블로그 전문 작성자다.
+
+아래 관광지 정보를 바탕으로 본문만 작성해라.
+- 지역: {region_city}
+- 장소명: {place_title}
+- 주소: {addr}
+- 소개정보: {overview}
+
+작성 조건:
+- 자연스러운 한국어
+- 여행 블로그 스타일
+- 4문단
+- 350자 이상
+- 장소의 분위기, 특징, 방문 포인트, 추천 이유를 포함
+- 실제로 방문한 듯한 자연스러운 표현
+- 과장된 광고 문구는 피할 것
+- 마크다운 금지
+- <p>와 <br> 태그만 사용 가능
+- <p> 로 시작할 것
+- 제목 태그 금지
+- 중국어/일본어 금지
+- ```html, ``` 같은 코드블록 금지
+- ** 같은 강조 기호 금지
+"""
+
+def clean_place_title(title, region, city):
+    t = str(title or "").strip()
+    if not t:
+        return ""
+
+    t = re.sub(r"\s+", " ", t)
+    t = t.replace("\n", " ").strip()
+
+    for sep in ["|", "/", "·", "•", ","]:
+        if sep in t:
+            parts = [p.strip() for p in t.split(sep) if p.strip()]
+            if parts:
+                t = parts[0]
+                break
+
+    t = re.sub(r"\([^)]*\)", "", t).strip()
+
+    region_city = normalize_region_city(region, city)
+    if region_city and t.count(region_city) > 1:
+        t = re.sub(rf"(^|\s+){re.escape(region_city)}(?=\s+|$)", "", t, count=1).strip()
+        t = re.sub(r"\s+", " ", t).strip()
+
+    if region and city and region == city:
+        t = re.sub(rf"(^|\s+){re.escape(region)}\s+{re.escape(city)}(?=\s+|$)", region, t, count=1).strip()
+        t = re.sub(r"\s+", " ", t).strip()
+
+    return t
+
+def make_title(region, city):
+    region_city = normalize_region_city(region, city)
+
+    endings = ["BEST10", "TOP10", "추천 리스트10"]
+
+    patterns = [
+        "{region_city} 여행명소 추천 {phrase} {ending}",
+        "{region_city} 여행명소 {phrase} 추천 {ending}",
+        "{region_city} 여행명소 추천 {phrase} {ending}",
+        "{region_city} 여행명소 {phrase} BEST {ending}",
+    ]
+
+    phrases = [
+        "유명 명소",
+        "인기 명소",
+        "현지인이 추천하는 명소",
+        "가볼만한 여행지",
+        "사진 찍기 좋은 명소",
+        "내돈내산 여행지",
+        "숨은 명소",
+    ]
+
+    phrase = random.choice(phrases)
+    ending = random.choice(endings)
+    pattern = random.choice(patterns)
+
+    title = pattern.format(region_city=region_city, phrase=phrase, ending=ending)
+    title = re.sub(r"\s+", " ", title).strip()
+
+    return title
+
+def generate_random_title(region, city):
+    return make_title(region, city)
+
+import random
+
+def make_last(region, city):
+    s1 = random.choice([
+        f"{city} 맛집은 지역마다 개성이 달라서 취향에 맞는 식당을 찾는 재미가 있습니다.",
+        f"{city}에는 분위기 좋은 맛집과 식당이 많아 외식 코스로도 만족도가 높습니다.",
+        f"{city} 맛집을 찾고 있다면 이번 리스트를 기준으로 동선을 짜보는 것을 추천합니다.",
+        f"{city}은(는) 먹거리 선택지가 다양해 한 끼 식사부터 특별한 외식까지 즐기기 좋습니다.",
+        f"{city}에는 가족, 연인, 친구와 함께 방문하기 좋은 식당이 다양하게 있습니다.",
+        f"{city} 맛집 여행은 짧은 일정으로도 충분히 만족스러운 식도락을 즐길 수 있습니다.",
+        f"{city}은(는) 사계절 내내 다양한 메뉴를 맛볼 수 있는 인기 지역입니다.",
+        f"{city}에는 사진 찍기 좋은 식당과 분위기 좋은 맛집이 많아 만족도가 높습니다.",
+        f"{city}은(는) 지역만의 맛과 분위기를 함께 느낄 수 있는 식도락 코스로 유명합니다.",
+        f"{city} 맛집은 누구와 함께 가도 좋은 다양한 식당을 만나볼 수 있습니다."
+    ])
+
+    s2 = random.choice([
+        "대표 식당뿐 아니라 숨은 맛집도 함께 방문하면 더욱 알찬 외식이 됩니다.",
+        "유명한 맛집과 로컬 식당을 함께 둘러보면 더욱 만족도가 높습니다.",
+        "동선을 미리 계획하면 하루 동안 여러 곳을 효율적으로 방문할 수 있습니다.",
+        "계절에 따라 색다른 메뉴와 분위기를 즐길 수 있는 것도 큰 장점입니다.",
+        "주말 외식이나 당일치기 식도락 코스로도 부담 없이 다녀오기 좋습니다.",
+        "사진 촬영하기 좋은 식당도 많아 추억을 남기기에도 좋습니다.",
+        "카페와 함께 방문하면 더욱 풍성한 하루가 됩니다.",
+        "아이들과 함께 방문하기 좋은 식당도 다양하게 준비되어 있습니다.",
+        "연인들의 데이트 식당으로도 꾸준히 인기를 얻고 있습니다.",
+        "가족 외식 코스로도 만족도가 높은 지역입니다."
+    ])
+
+    s3 = random.choice([
+        f"이번에 소개한 {city} 맛집은 실제 방문 만족도가 높은 장소를 중심으로 선정했습니다.",
+        f"이번 {city} 식당 추천 리스트는 많은 사람들이 찾는 인기 장소를 담았습니다.",
+        f"소개한 {city} 맛집들은 처음 방문하는 분들에게도 추천할 만한 곳들입니다.",
+        f"{city} 대표 식당을 중심으로 외식 계획을 세우면 더욱 편리합니다.",
+        f"식도락 일정을 짤 때 이번 리스트를 참고하면 도움이 될 것입니다.",
+        f"여행과 외식을 함께 계획하는 분들에게 도움이 되는 장소만 엄선했습니다.",
+        f"현지에서도 많이 찾는 식당을 중심으로 정리했습니다.",
+        f"다양한 취향을 고려하여 인기 맛집을 골고루 소개했습니다.",
+        f"짧은 일정에도 둘러보기 좋은 식당을 중심으로 구성했습니다.",
+        f"재방문 만족도가 높은 맛집을 우선적으로 선정했습니다."
+    ])
+
+    s4 = random.choice([
+        "취향에 맞는 식당을 선택해 여유롭게 둘러보시기 바랍니다.",
+        "외식 일정에 맞춰 원하는 장소를 자유롭게 선택해 보세요.",
+        "여유 있는 일정이라면 주변 식당도 함께 방문하는 것을 추천합니다.",
+        "가까운 카페와 함께 둘러보면 더욱 만족스러운 하루가 됩니다.",
+        "사진 촬영 포인트도 함께 찾아보면 더욱 즐거운 시간이 됩니다.",
+        "계절에 따라 전혀 다른 분위기를 느낄 수 있습니다.",
+        "날씨가 좋은 날 방문하면 더욱 좋은 경험이 됩니다.",
+        "주변 맛집과 함께 코스를 구성하면 더욱 알찬 일정이 됩니다.",
+        "당일치기 식도락 여행으로도 충분히 만족할 수 있습니다.",
+        "동선을 미리 계획하면 시간을 더욱 효율적으로 사용할 수 있습니다."
+    ])
+
+    s5 = random.choice([
+        f"즐거운 {city} 맛집 탐방 되시길 바랍니다.",
+        f"{city}에서 좋은 식당 많이 발견하시기 바랍니다.",
+        f"이번 외식이 오래 기억에 남는 시간이 되길 바랍니다.",
+        f"소중한 사람과 함께 행복한 식사를 즐겨보세요.",
+        f"알찬 맛집 코스로 멋진 하루를 보내시기 바랍니다.",
+        f"다음 맛집 정보로 다시 찾아뵙겠습니다.",
+        f"식사 계획에 이번 정보가 도움이 되었기를 바랍니다.",
+        f"맛있고 즐거운 하루 되시기 바랍니다.",
+        f"행복한 식도락과 멋진 추억을 만들어 보세요.",
+        f"만족스러운 외식이 되기를 응원합니다."
+    ])
+
+    return "\n\n".join([s1, s2, s3, s4, s5])
+
+def build_markdown_post(region, city, title, places, thumb_url, date_str):
+    region_city = normalize_region_city(region, city)
+    place_names = [clean_place_title(p.get("title", ""), region, city) for p in places]
+    intro = generate_ai_review(make_intro_prompt(region, city, title, place_names), title)
+
+    sections = []
+    for idx, item in enumerate(places, start=1):
+        clean_title = clean_place_title(item.get("title", ""), region, city)
+        section_title = f"{region_city} 여행명소 추천 - {clean_title}" if region_city else f"여행명소 추천 - {clean_title}"
+        images = item.get("images", []) or []
+        overview = item.get("overview", "") or item.get("raw", {}).get("overview", "") or ""
+        addr = item.get("addr", "") or item.get("raw", {}).get("addr1", "") or ""
+        body = generate_ai_review(
+            make_section_prompt(region, city, clean_title, addr, overview),
+            clean_title
+        )
+
+        sec = []
+        sec.append(f"## {idx}. {section_title}")
+        sec.append("")
+
+        valid_images = [u for u in images if isinstance(u, str) and u.strip()]
+        if valid_images:
+            for img in valid_images[:3]:
+                img = img.strip()
+                sec.append(f"![{clean_title}]({img})")
+                sec.append("")
+            map_query = f"{region_city} {clean_title}" if region_city else clean_title
+            map_url = "https://www.google.com/maps/search/?api=1&query=" + urllib.parse.quote(map_query)
+            sec.append(f"[구글 지도에서 위치 확인하기]({map_url})")
+            sec.append("")
+        else:
+            sec.append(f"![{clean_title}]({thumb_url})")
+            sec.append("")
+
+        if addr:
+            sec.append(f"주소: {addr}")
+            sec.append("")
+
+        sec.append(body or f"<p>{clean_title}에 대한 상세 설명을 불러오지 못했습니다.</p>")
+        sec.append("")
+        sections.append("\n".join(sec))
+
+    last_text = make_last(region, city)
+    cat = "국내여행"
+
+    md = f"""---
+title: "{title}"
+date: {date_str}
+categories: [{cat}]
+tags: [{cat}, {city}, {region}]
+image: {thumb_url}
+---
+
+{intro}
+
+![{title}]({thumb_url})
+
+{chr(10).join(sections)}
+
+## {region_city} 여행명소 추천 총평 및 마무리
+
+{last_text}
+"""
+    return md
+
+def find_next_row(ws):
+    rows = ws.get_all_values()
+    dprint(f"sheet title={getattr(ws, 'title', '')}")
+    dprint(f"total rows={len(rows)}")
+
+    if not rows:
+        dprint("시트에 행이 없습니다.")
+        return None, None, None
+
+    header = rows[0]
+    dprint(f"header={header}")
+
+    for i, row in enumerate(rows[1:], start=2):
+        a = row[0].strip() if len(row) > 0 and row[0] else ""
+        b = row[1].strip() if len(row) > 1 and row[1] else ""
+        complete = row[2].strip() if len(row) > 2 and row[2] else ""
+
+        dprint(f"row={i} raw={row}")
+        dprint(f"row={i} parsed a='{a}', b='{b}', complete='{complete}'")
+
+        if complete != "완":
+            dprint(f"selected row={i}")
+            return i, a, b
+
+    dprint("조건에 맞는 행을 찾지 못했습니다.")
+    return None, None, None
+
+def git_run(cmd, cwd=None, env=None):
+    dprint("git cmd:", " ".join(cmd))
+    result = subprocess.run(cmd, cwd=cwd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
+    return result
+
+def push_post_to_github(file_path, repo_path):
+    if not TARGET_GITHUB_PAT:
+        raise RuntimeError("TARGET_GITHUB_PAT 환경변수가 없습니다.")
+    if not os.path.exists(os.path.join(repo_path, ".git")):
+        raise RuntimeError(f"Git 저장소가 아닙니다: {repo_path}")
+    ensure_gitignore(repo_path)
+    env = os.environ.copy()
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    rel_path = os.path.relpath(file_path, repo_path)
+    git_run(["git", "config", "user.name", "github-actions[bot]"], cwd=repo_path, env=env)
+    git_run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], cwd=repo_path, env=env)
+    remote_url = f"https://x-access-token:{TARGET_GITHUB_PAT}@github.com/{TARGET_REPO}.git"
+    git_run(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path, env=env)
+    git_run(["git", "fetch", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
+    git_run(["git", "switch", "main"], cwd=repo_path, env=env)
+    git_run(["git", "reset", "--hard", f"origin/{TARGET_BRANCH}"], cwd=repo_path, env=env)
+    git_run(["git", "add", rel_path], cwd=repo_path, env=env)
+    status = subprocess.run(["git", "status", "--porcelain"], cwd=repo_path, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env).stdout.strip()
+    if not status:
+        return "no changes"
+    git_run(["git", "commit", "-m", f"Add post: {os.path.basename(file_path)}"], cwd=repo_path, env=env)
+    git_run(["git", "push", "origin", TARGET_BRANCH], cwd=repo_path, env=env)
+    return f"pushed to {TARGET_BRANCH}"
+
+def main():
+    dprint("=== MAIN START ===")
+    dprint(f"ws title={getattr(ws7, 'title', '')}")
+    dprint(f"ws id={getattr(ws7, 'id', '')}")
+
+    row_idx, region, city = find_next_row(ws7)
+
+    dprint(f"find_next_row result -> row_idx={row_idx}, region={region}, city={city}")
+
+    if not row_idx:
+        print("처리할 행이 없습니다.")
+        return
+
+    log_step(row_idx, "1단계: 대상 행 선택")
+    title = generate_random_title(region, city)
+    log_step(row_idx, f"2단계: 제목 생성 ({title})")
+
+    places = get_places(region, city)
+    if not places:
+        places = get_fallback_places(region, city)
+
+    for p in places:
+        p["region"] = region
+        p["city"] = city
+        p["title"] = clean_place_title(p["title"], region, city)
+        p["images"] = get_best_place_image(p)
+        p["overview"] = get_overview_from_place(p)
+        time.sleep(0.4)
+
+    safe_title = re.sub(r'[\\/:*?"<>|.]', "_", title)
+    date_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S +0900")
+    post_filename = f"{datetime.now().strftime('%Y-%m-%d')}-{safe_title}.md"
+    post_path = os.path.join(REPO_PATH, POSTS_DIR, post_filename)
+    os.makedirs(os.path.dirname(post_path), exist_ok=True)
+
+    thumb_path = os.path.join(THUMB_DIR, f"{safe_title}.png")
+    make_thumb(thumb_path, title)
+    log_step(row_idx, "3단계: 썸네일 생성 완료")
+    thumb_url = upload_to_drive(thumb_path, f"{safe_title}.png")
+    log_step(row_idx, "4단계: 썸네일 Drive 업로드 완료")
+
+    markdown_content = build_markdown_post(region, city, title, places, thumb_url, date_str)
+    with open(post_path, "w", encoding="utf-8") as f:
+        f.write(markdown_content)
+
+    log_step(row_idx, "5단계: Markdown 파일 생성 완료")
+    push_state = push_post_to_github(post_path, REPO_PATH)
+
+    ws7.update_cell(row_idx, 3, "완")
+    try:
+        ws7.update_cell(row_idx, 15, f"https://github.com/{TARGET_REPO}/blob/{TARGET_BRANCH}/{POSTS_DIR}/{post_filename}")
+    except Exception as e:
+        dprint("link write failed:", e)
+
+    log_step(row_idx, f"6단계: GitHub 업로드 {push_state}")
+    print(f"[완료] {post_path}")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        traceback.print_exc()
+        raise
