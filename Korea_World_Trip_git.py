@@ -1096,6 +1096,7 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
         # 요청하신 대로 소제목 상단에 빈 줄 2줄 이상 확보
         sec.append("")
         sec.append("")
+        sec.append("")
         sec.append(f"## {idx}. {section_title}")
         sec.append("")
 
