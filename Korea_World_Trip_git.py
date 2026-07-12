@@ -305,23 +305,24 @@ def generate_ai_review(prompt, keyword):
 
 def get_queries(region, city):
     return [
-        f"{region} {city} 맛집",
-        f"{region} {city} 식당",
-        f"{region} {city} 추천 맛집",
-        f"{region} {city} 인기 식당",
-        f"{region} {city} 가볼만한 맛집",
-        f"{city} 맛집",
-        f"{city} 식당",
-        f"{city} 추천 맛집",
-        f"{city} 인기 식당",
-        f"{city} 가볼만한 맛집",
+        f"{region} {city} 관광명소",
+        f"{region} {city} 가볼만한곳",
+        f"{region} {city} 핫플레이스",
+        f"{region} {city} 인기 명소",
+        f"{region} {city} 랜드마크",
+        f"{city} attractions",
+        f"{city} sightseeing",
+        f"{city} landmarks",
+        f"{region} {city} 여행코스",
+        f"{region} {city} 필수 방문"
     ]
 
 def google_text_search(query, city="", region=""):
     if not GOOGLE_MAPS_API_KEY:
         return []
     url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-    params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "ko", "type": "restaurant"}
+    # 맛집 타입 대신 관광명소 타입(tourist_attraction) 지정
+    params = {"query": query, "key": GOOGLE_MAPS_API_KEY, "language": "ko", "type": "tourist_attraction"}
     try:
         res = requests.get(url, params=params, timeout=15)
         data = res.json()
@@ -335,9 +336,43 @@ def google_text_search(query, city="", region=""):
 
 def is_valid_place(place):
     types = place.get("types", [])
-    bad_types = ["school", "university", "gym", "hospital", "lodging", "real_estate_agency", "bank", "shopping_mall", "store"]
-    good_types = ["restaurant", "meal_takeaway", "meal_delivery", "point_of_interest", "food", "cafe"]
+    bad_types = ["school", "university", "gym", "hospital", "lodging", "real_estate_agency", "bank", "shopping_mall", "store", "restaurant", "food", "cafe"]
+    good_types = ["tourist_attraction", "point_of_interest", "natural_feature", "park", "establishment"]
     return any(t in good_types for t in types) and not any(t in bad_types for t in types)
+
+def get_fallback_places(region, city):
+    dprint("=== get_fallback_places START ===")
+    candidates = [
+        f"{city} 대표 랜드마크",
+        f"{city} 중앙공원",
+        f"{city} 역사 박물관",
+        f"{city} 전망대",
+        f"{city} 문화거리",
+        f"{city} 관광 타워",
+        f"{city} 시민 광장",
+        f"{city} 유적지"
+    ]
+
+    places = []
+    seen = set()
+
+    for idx, name in enumerate(candidates, start=1):
+        key = name.lower().strip()
+        if key in seen:
+            continue
+        seen.add(key)
+
+        item = {
+            "title": name,
+            "addr": f"{region} {city}",
+            "raw": {},
+            "score": 0
+        }
+        places.append(item)
+
+    dprint("[FALLBACK FINAL]", [p["title"] for p in places])
+    dprint("=== get_fallback_places END ===")
+    return places
 
 def score_place(item):
     rating = item.get("rating", 0) or 0
@@ -352,41 +387,7 @@ def score_place(item):
         s += 4
     return s
 
-def get_fallback_places(region, city):
-    dprint("=== get_fallback_places START ===")
-    candidates = [
-        f"{city} 맛집",
-        f"{city} 식당",
-        f"{city} 한식당",
-        f"{city} 고기집",
-        f"{city} 찌개집",
-        f"{city} 국밥집",
-        f"{city} 분식집",
-        f"{city} 밥집"
-    ]
 
-    places = []
-    seen = set()
-
-    for idx, name in enumerate(candidates, start=1):
-        key = name.lower().strip()
-        if key in seen:
-            dprint(f"  - skip duplicate fallback: {name}")
-            continue
-        seen.add(key)
-
-        item = {
-            "title": name,
-            "addr": f"{region} {city}",
-            "raw": {},
-            "score": 0
-        }
-        places.append(item)
-        dprint(f"  - fallback added idx={idx} title={name}")
-
-    dprint("[FALLBACK FINAL]", [p["title"] for p in places])
-    dprint("=== get_fallback_places END ===")
-    return places
 
 def get_places(region, city):
     print("🔄 해외 여행 명소/관광지 목록 수집 시작 (Google API 중심)")
@@ -1068,7 +1069,8 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
     sections = []
     for idx, item in enumerate(places, start=1):
         clean_title = clean_place_title(item.get("title", ""), region, city)
-        section_title = f"{region} {city} 맛집 추천 - {clean_title}"
+        # 소제목에 맛집 대신 관광명소명 명시
+        section_title = f"{region} {city} 가볼만한곳 관광명소 - {clean_title}"
         images = item.get("images", []) or []
         overview = item.get("overview", "") or item.get("raw", {}).get("overview", "") or ""
         addr = item.get("addr", "") or item.get("raw", {}).get("addr1", "") or ""
@@ -1098,14 +1100,12 @@ def build_markdown_post(region, city, title, places, thumb_url, date_str):
             sec.append(f"주소: {addr}")
             sec.append("")
 
-        
-
         sec.append(body or f"<p>{clean_title}에 대한 상세 설명을 불러오지 못했습니다.</p>")
         sec.append("")
         sections.append("\n".join(sec))
 
     last_text = make_last(region, city)
-    cat = "맛집추천"
+    cat = "여행정보"
 
     md = f"""---
 title: "{title}"
@@ -1121,7 +1121,7 @@ image: {thumb_url}
 
 {chr(10).join(sections)}
 
-## {region} {city} 맛집 추천 총평 및 마무리
+## {region} {city} 관광명소 추천 총평 및 마무리
 
 {last_text}
 """
