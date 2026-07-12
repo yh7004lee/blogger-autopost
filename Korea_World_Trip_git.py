@@ -22,7 +22,7 @@ from google.oauth2.service_account import Credentials as SA_Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-
+#Korea_food_Github
 try:
     from openai import OpenAI
 except Exception:
@@ -33,64 +33,45 @@ try:
 except Exception:
     genai = None
 
-DEBUGMODE = True
+import feedparser
+
+DEBUG_MODE = True
 
 def dprint(*args):
-    if DEBUGMODE:
-        print("DEBUG:", *args)
+    if DEBUG_MODE:
+        print("[DEBUG]", *args)
 
-APIKEYSJSON = os.getenv("APIKEYSJSON")
-if not APIKEYSJSON:
-    raise RuntimeError("APIKEYSJSON is missing. Set it in GitHub Secrets.")
+API_KEYS_JSON = os.getenv("API_KEYS_JSON")
+if not API_KEYS_JSON:
+    raise RuntimeError("API_KEYS_JSON 환경변수가 없습니다. GitHub Secrets 를 확인하세요.")
 
 try:
-    secrets = json.loads(APIKEYSJSON)
+    secrets = json.loads(API_KEYS_JSON)
 except Exception as e:
-    raise RuntimeError(f"APIKEYSJSON parse failed: {e}")
+    raise RuntimeError(f"API_KEYS_JSON 파싱 실패: {e}")
 
-OPENROUTERAPIKEY = secrets.get("OPENROUTERAPIKEY")
-OPENAIAPIKEY = secrets.get("OPENAIAPIKEY")
-GEMINIAPIKEY = secrets.get("GEMINIAPIKEY")
-SHEETID = secrets.get("SHEETID", "1V6ZVb2NMlqjIobJqV5BBSr9o7bF8WNjSIwMzQekRs")
-DRIVEFOLDERID = secrets.get("DRIVEFOLDERID")
-GOOGLEMAPSAPIKEY = secrets.get("GOOGLEMAPSAPIKEY")
-TOURAPIKEY = secrets.get("TOURAPIKEY")
+OPENROUTER_API_KEY = secrets.get("OPENROUTER_API_KEY", "")
+OPENAI_API_KEY = secrets.get("OPENAI_API_KEY", "")
+GEMINI_API_KEY = secrets.get("GEMINI_API_KEY", "")
+SHEET_ID = "1V6ZV_b2NMlqjIobJqV5BBSr9o7_bF8WNjSIwMzQekRs"
+DRIVE_FOLDER_ID = secrets.get("DRIVE_FOLDER_ID", "")
+GOOGLE_MAPS_API_KEY = "AIzaSyBiLiWI4rTtdk_IW-f26uEIkhnKjEBHI1w"
+TOUR_API_KEY = secrets.get("TOUR_API_KEY", "")
 
-TARGETGITHUBPAT = os.getenv("TARGETGITHUBPAT")
-TARGETREPO = "jm7004lee/jm7004lee.github.io"
-TARGETBRANCH = "main"
-REPOPATH = os.getenv("TARGETREPOPATH", os.getcwd())
-POSTSDIR = "posts"
+TARGET_GITHUB_PAT = os.getenv("TARGET_GITHUB_PAT", "")
+TARGET_REPO = "jm7004lee/jm7004lee.github.io"
+TARGET_BRANCH = "main"
+REPO_PATH = os.getenv("TARGET_REPO_PATH", os.getcwd())
+POSTS_DIR = "_posts"
 
-HISTORYPATH = "processedregionsblogger.json"
-SHEETGID = 2131907983
-
-ASSETSBGDIR = "assets/backgrounds"
-ASSETSFONTTTF = "assets/fonts/KimNamyun.ttf"
-THUMBDIR = "thumbnails"
-
-GITIGNORECONTENT = """2nd.json
-2nd.json.b64
-bloggertoken.json
-cc.json
-cc.json.b64
-drivetoken2nd.pickle
-drivetoken2nd.pickle.b64
-openai.json
-openai.json.b64
-sheetapi.json
-sheetapi.json.b64
-thumbnails
-"""
-
-client = OpenAI(api_key=OPENAIAPIKEY) if OpenAI and OPENAIAPIKEY else None
-genaiclient = None
-if GEMINIAPIKEY and genai:
+client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
+genai_client = None
+if GEMINI_API_KEY and genai:
     try:
-        genaiclient = genai.Client(api_key=GEMINIAPIKEY)
+        genai_client = genai.Client(api_key=GEMINI_API_KEY)
     except Exception as e:
         dprint("genai init failed:", e)
-        genaiclient = None
+        genai_client = None
 
 
 def ensure_gitignore(rep_path):
