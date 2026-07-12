@@ -64,6 +64,27 @@ TARGET_BRANCH = "main"
 REPO_PATH = os.getenv("TARGET_REPO_PATH", os.getcwd())
 POSTS_DIR = "_posts"
 
+HISTORYPATH = "processedregionsblogger.json"
+SHEETGID = 2131907983
+ASSETSBGDIR = "assets/backgrounds"
+ASSETSFONTTTF = "assets/fonts/KimNamyun.ttf"
+THUMBDIR = "thumbnails"
+GITIGNORECONTENT = """2nd.json
+2nd.json.b64
+bloggertoken.json
+cc.json
+cc.json.b64
+drivetoken2nd.pickle
+drivetoken2nd.pickle.b64
+openai.json
+openai.json.b64
+sheetapi.json
+sheetapi.json.b64
+thumbnails
+"""
+
+
+
 client = OpenAI(api_key=OPENAI_API_KEY) if (OpenAI and OPENAI_API_KEY) else None
 genai_client = None
 if GEMINI_API_KEY and genai:
