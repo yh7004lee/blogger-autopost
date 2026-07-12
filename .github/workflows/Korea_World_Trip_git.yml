@@ -1,11 +1,11 @@
-name: 06_Korea_World_Trip_git..py
+name: 06_Korea_World_Trip_git
 
 
 on:
   workflow_dispatch:
 
   schedule:
-    - cron: '0 0,6,12 * * *'
+    - cron: '0 9 * * *'
 
 
 jobs:
