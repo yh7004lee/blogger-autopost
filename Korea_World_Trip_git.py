@@ -74,7 +74,7 @@ if GEMINI_API_KEY and genai:
         genai_client = None
 
 HISTORY_PATH = "processed_regions_blogger.json"
-SHEET_GID = 2131907983
+SHEET_GID = "Sheet4"
 
 ASSETS_BG_DIR = "assets/backgrounds"
 ASSETS_FONT_TTF = "assets/fonts/KimNamyun.ttf"
@@ -106,12 +106,9 @@ def get_sheet4():
     creds = SA_Credentials.from_service_account_file(service_account_file, scopes=scopes)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
-    
-    # Sheet4 (또는 대상 GID/이름) 워크시트 객체 반환
-    # GID가 변경되었다면 해당 GID 값으로 매칭하거나 타이틀로 찾도록 수정합니다.
     for ws in sh.worksheets():
-        # Sheet4에 해당하는 GID 또는 시트 이름 지정 (여기서는 예시로 gid 혹은 title 체크)
-        if ws.title == "Sheet4" or ws.id == SHEET_GID:
+        # GID가 숫자인 경우 ws.id == int(SHEET_GID) 또는 탭 이름이 "Sheet4"인 경우 모두 대응
+        if ws.title == "Sheet4" or (str(ws.id) == str(SHEET_GID)):
             return ws
     raise RuntimeError("Sheet4 시트를 찾지 못했습니다.")
 
