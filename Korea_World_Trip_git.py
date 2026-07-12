@@ -343,32 +343,32 @@ def is_valid_place(place):
 def get_fallback_places(region, city):
     dprint("=== get_fallback_places START ===")
     candidates = [
-        f"{city} 대표 랜드마크",
-        f"{city} 중앙공원",
-        f"{city} 역사 박물관",
-        f"{city} 전망대",
-        f"{city} 문화거리",
-        f"{city} 관광 타워",
-        f"{city} 시민 광장",
-        f"{city} 유적지"
+        f"{city} top attractions",
+        f"{city} must see",
+        f"{city} things to do",
+        f"{city} sightseeing",
+        f"{city} landmarks",
+        f"{city} tourist attractions",
+        f"{city} viewpoint",
+        f"{city} park",
+        f"{city} museum",
+        f"{city} travel spot",
     ]
 
     places = []
     seen = set()
 
-    for idx, name in enumerate(candidates, start=1):
+    for name in candidates:
         key = name.lower().strip()
         if key in seen:
             continue
         seen.add(key)
-
-        item = {
+        places.append({
             "title": name,
             "addr": f"{region} {city}",
             "raw": {},
-            "score": 0
-        }
-        places.append(item)
+            "score": 0,
+        })
 
     dprint("[FALLBACK FINAL]", [p["title"] for p in places])
     dprint("=== get_fallback_places END ===")
@@ -387,7 +387,23 @@ def score_place(item):
         s += 4
     return s
 
+def is_valid_place(place):
+    types = place.get("types", []) or []
 
+    bad_types = {
+        "school", "university", "gym", "hospital", "lodging",
+        "real_estate_agency", "bank", "shopping_mall", "store",
+        "restaurant", "food", "cafe", "meal_takeaway", "bar", "night_club"
+    }
+
+    good_types = {
+        "tourist_attraction", "point_of_interest", "landmark",
+        "museum", "park", "natural_feature", "amusement_park",
+        "zoo", "aquarium", "viewpoint", "church", "hindu_temple",
+        "mosque", "art_gallery"
+    }
+
+    return any(t in good_types for t in types) and not any(t in bad_types for t in types)
 
 def get_places(region, city):
     print("🔄 해외 여행 명소/관광지 목록 수집 시작 (Google API 중심)")
@@ -400,17 +416,18 @@ def get_places(region, city):
         title = (item.get("name") or item.get("title") or "").strip()
         if not title:
             return
-        key = title.lower().strip()
+
+        addr = (item.get("formatted_address") or item.get("vicinity") or f"{region} {city}").strip()
+        key = f"{title.lower().strip()}|{addr.lower().strip()}"
         if key in seen:
             return
         seen.add(key)
-        
-        # 구글 포토 참조 처리
+
         photos = item.get("photos", [])
         photo_reference = ""
         if photos and isinstance(photos, list):
             photo_reference = photos[0].get("photo_reference", "")
-            
+
         image_url = ""
         if photo_reference and GOOGLE_MAPS_API_KEY:
             image_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=1600&photo_reference={photo_reference}&key={GOOGLE_MAPS_API_KEY}"
@@ -418,7 +435,7 @@ def get_places(region, city):
         places.append({
             "contentId": "",
             "title": title,
-            "addr": (item.get("formatted_address") or item.get("vicinity") or f"{region} {city}").strip(),
+            "addr": addr,
             "image": image_url,
             "raw": item,
             "score": score
@@ -429,57 +446,58 @@ def get_places(region, city):
         reviews = item.get("user_ratings_total", 0) or 0
         s = rating * 10
         s += min(reviews / 100, 20)
-        if "tourist_attraction" in item.get("types", []):
+
+        types = item.get("types", []) or []
+        if "tourist_attraction" in types:
             s += 15
-        if "point_of_interest" in item.get("types", []):
+        if "point_of_interest" in types:
             s += 10
         if item.get("photos"):
             s += 5
+
+        bad_types = {
+            "school", "university", "gym", "hospital", "lodging",
+            "real_estate_agency", "bank", "shopping_mall", "store",
+            "restaurant", "food", "cafe", "meal_takeaway", "bar", "night_club"
+        }
+        if any(t in bad_types for t in types):
+            s -= 30
+
         return s
 
-    # 해외 여행 명소 검색 쿼리 다변화
-    queries = [
-        f"{region} {city} 가볼만한곳",
-        f"{region} {city} 관광명소",
-        f"{region} {city} 핫플레이스",
-        f"{region} {city} 인기 명소",
-        f"{region} {city} 필수 여행지",
-        f"{city} attractions",
-        f"{city} sightseeing",
-        f"{city} landmarks"
-    ]
+    queries = get_queries(region, city)
 
     for q in queries:
-        url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
-        params = {
-            "query": q,
-            "key": GOOGLE_MAPS_API_KEY,
-            "language": "ko",
-            "type": "tourist_attraction"
-        }
-        try:
-            res = requests.get(url, params=params, timeout=15)
-            data = res.json()
-            results = data.get("results", [])
-            print(f"[Google Places] {q} -> {len(results)}개")
-            
-            for r in results:
-                name = (r.get("name") or "").strip()
-                if not name:
-                    continue
-                key = name.lower().strip()
-                if key in seen:
-                    continue
-                seen.add(key)
-                
-                add_place(r, score=score_google_place(r))
-                if len(places) >= 10:
-                    break
-        except Exception as e:
-            print(f"❌ 구글 장소 검색 실패: {q} / {e}")
-            
+        results = google_text_search(q, city, region)
+        print(f"[Google Places] {q} -> {len(results)}개")
+
+        for r in results:
+            name = (r.get("name") or "").strip()
+            if not name:
+                continue
+            if not is_valid_place(r):
+                continue
+            key = name.lower().strip()
+            if key in seen:
+                continue
+            seen.add(key)
+        
+            add_place(r, score=score_google_place(r))
+            if len(places) >= 10:
+                break
+
         if len(places) >= 10:
             break
+
+    if len(places) < 10:
+        for fb in get_fallback_places(region, city):
+            key = fb["title"].lower().strip()
+            if key in seen:
+                continue
+            seen.add(key)
+            places.append(fb)
+            if len(places) >= 10:
+                break
 
     places = sorted(places, key=lambda x: x["score"], reverse=True)[:10]
 
