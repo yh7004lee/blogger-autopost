@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-# coding: utf-8
+# -*- coding: utf-8 -*-
+import sys
+sys.stdout.reconfigure(encoding="utf-8")
 
 import os
 import json
@@ -12,12 +14,11 @@ import glob
 import pickle
 import subprocess
 from datetime import datetime
-
 import requests
 from PIL import Image, ImageDraw, ImageFont
 
 import gspread
-from google.oauth2.service_account import Credentials as SACredentials
+from google.oauth2.service_account import Credentials as SA_Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
