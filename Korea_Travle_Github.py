@@ -22,7 +22,7 @@ from google.oauth2.service_account import Credentials as SA_Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-
+#Korea_Travle_Github
 try:
     from openai import OpenAI
 except Exception:
