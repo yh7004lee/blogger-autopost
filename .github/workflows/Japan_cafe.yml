@@ -2,7 +2,7 @@ name: 11_Japan_Cafe
 
 on:
   workflow_dispatch:
-  schedule:
+  # schedule:
     # - cron: "36 1 * * *"
 
 
