@@ -813,9 +813,7 @@ def make_intro_prompt(region, city, title, place_names=None):
 - 여행 기대감이 느껴지게
 - 지역 분위기와 대표 명소가 함께 느껴지게
 - 너무 광고처럼 쓰지 말 것
-- 마크다운 금지
-- <p>와 <br> 태그만 사용 가능
-- <p> 로 시작할 것
+- 마크다운 으로 작성
 - 제목 태그 금지
 - 중국어/일본어 금지
 """
@@ -839,13 +837,9 @@ def make_section_prompt(region, city, place_title, addr, overview):
 - 장소의 분위기, 특징, 방문 포인트, 추천 이유를 포함
 - 실제로 방문한 듯한 자연스러운 표현
 - 과장된 광고 문구는 피할 것
-- 마크다운 금지
-- <p>와 <br> 태그만 사용 가능
-- <p> 로 시작할 것
+- 마크다운 으로 작성
 - 제목 태그 금지
 - 중국어/일본어 금지
-- ```html, ``` 같은 코드블록 금지
-- ** 같은 강조 기호 금지
 """
 
 def clean_place_title(title, region, city):
