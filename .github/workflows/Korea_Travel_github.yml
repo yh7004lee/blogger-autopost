@@ -4,8 +4,8 @@ name: 06_Korea_Travel_git.py
 on:
   workflow_dispatch:
 
-  schedule:
-    - cron: '30 6 * * *'
+  # schedule:
+  #   - cron: '30 6 * * *'
 
 
 jobs:
