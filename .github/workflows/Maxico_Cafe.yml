@@ -2,8 +2,8 @@ name: 10_Maxico_Cafe
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "24 6 * * *"
+  # schedule:
+  #   - cron: "24 6 * * *"
 
 jobs:
   autopost:
