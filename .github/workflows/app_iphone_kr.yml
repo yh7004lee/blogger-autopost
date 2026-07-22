@@ -3,15 +3,15 @@ name: 01 Blogger Autopost iphone kr
 on:
   workflow_dispatch:
 
-  schedule:
-    # 한국시간 09:00
-    - cron: "0 0 * * *"
+  # schedule:
+  #   # 한국시간 09:00
+  #   - cron: "0 0 * * *"
 
-    # 한국시간 15:00
-    - cron: "0 6 * * *"
+  #   # 한국시간 15:00
+  #   - cron: "0 6 * * *"
 
-    # 한국시간 21:00
-    - cron: "0 12 * * *"
+  #   # 한국시간 21:00
+  #   - cron: "0 12 * * *"
 
 jobs:
   autopost:
