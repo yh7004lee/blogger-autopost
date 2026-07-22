@@ -2,10 +2,10 @@ name: 02 Blogger Autopost googleplay kr
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 1 * * *"
-    - cron: "0 7 * * *"
-    - cron: "0 13 * * *"
+  # schedule:
+  #   - cron: "0 1 * * *"
+  #   - cron: "0 7 * * *"
+  #   - cron: "0 13 * * *"
 
 jobs:
   autopost:
